@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    tools:context=".Activities.LoginActivity"
+    tools:deviceIds="tv"
+    android:background="@color/major_color_blue">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:layout_centerVertical="true"
+        android:layout_centerInParent="true"
+        android:layout_marginEnd="200dp"
+        android:layout_marginStart="200dp">
+
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="200dp"
+            android:layout_gravity="center_horizontal"
+            android:src="@mipmap/app_icon_tv_no_background"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/profile_name"
+            android:textColor="@android:color/white"/>
+
+        <EditText
+            android:id="@+id/editTextProfileName"
+            android:layout_width="match_parent"
+            android:layout_height="30dp"
+            android:background="@android:color/white"
+            android:textColor="@android:color/black"
+            android:layout_marginTop="10dp"
+            android:paddingHorizontal="10dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="20dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_weight="1"
+                android:layout_marginEnd="5dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/username"
+                    android:textColor="@android:color/white"/>
+
+                <EditText
+                    android:id= "@+id/editTextUserName"
+                    android:layout_width="match_parent"
+                    android:layout_height="30dp"
+                    android:background="@android:color/white"
+                    android:textColor="@android:color/black"
+                    android:layout_marginTop="10dp"
+                    android:paddingHorizontal="10dp"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginStart="5dp"
+                android:layout_weight="1">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/password"
+                    android:textColor="@android:color/white"/>
+
+                <EditText
+                    android:id= "@+id/editTextPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="30dp"
+                    android:background="@android:color/white"
+                    android:textColor="@android:color/black"
+                    android:layout_marginTop="10dp"
+                    android:paddingHorizontal="10dp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/server_url"
+            android:textColor="@android:color/white"
+            android:layout_marginTop="20dp"/>
+
+        <EditText
+            android:id= "@+id/editTextServerURL"
+            android:layout_width="match_parent"
+            android:layout_height="30dp"
+            android:background="@android:color/white"
+            android:textColor="@android:color/black"
+            android:layout_marginTop="10dp"
+            android:paddingHorizontal="10dp"/>
+
+        <Button
+            android:id= "@+id/btnLogin"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="40dp"
+            android:background="@drawable/action_button_selector"
+            android:textColor="@android:color/black"
+            android:text="@string/login"
+            android:textAllCaps="false"/>
+    </LinearLayout>
+
+    <RelativeLayout
+        android:id="@+id/viewLottie"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:translationZ="1dp"
+        android:background="#BB000000"
+        android:visibility="gone">
+
+        <com.airbnb.lottie.LottieAnimationView
+            android:id="@+id/animationView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            app:lottie_rawRes="@raw/loading_lottie"
+            app:lottie_speed="1.5"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true" />
+
+
+    </RelativeLayout>
+</RelativeLayout>

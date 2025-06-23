@@ -1,0 +1,44 @@
+<resources>
+    <string name="app_name">OpenTV</string>
+    <string name="browse_title">Videos by Your Company</string>
+    <string name="related_movies">Related Videos</string>
+    <string name="grid_view">Grid View</string>
+    <string name="error_fragment">Error Fragment</string>
+    <string name="personal_settings">Personal Settings</string>
+    <string name="watch_trailer_1">Watch trailer</string>
+    <string name="watch_trailer_2">FREE</string>
+    <string name="rent_1">Rent By Day</string>
+    <string name="rent_2">From $1.99</string>
+    <string name="buy_1">Buy and Own</string>
+    <string name="buy_2">AT $9.99</string>
+    <string name="movie">Movie</string>
+
+    <!-- Error messages -->
+    <string name="error_fragment_message">An error occurred</string>
+    <string name="dismiss_error">Dismiss</string>
+    <string name="title_activity_login">LoginActivity</string>
+    <string name="profile_name">Profile Name</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="server_url">Server URL</string>
+    <string name="login">Login</string>
+    <string name="one_or_more_fields_are_empty_cannot_login">One or more fields are empty. Cannot Login.</string>
+    <string name="something_went_wrong_cannot_login">Something went wrong. Cannot Login</string>
+    <string name="title_activity_splash">SplashActivity</string>
+    <string name="live_streams">Live Streams</string>
+    <string name="logged_user">Logged User:</string>
+    <string name="title_activity_caching">CachingActivity</string>
+    <string name="updating_live_streams">Updating Live Streams</string>
+    <string name="could_not_fetch_data">Could not fetch data!</string>
+    <string name="title_activity_list_all_live_streams">ListAllLiveStreamsActivity</string>
+    <string name="updating_live_stream_categories">Updating Live Stream Categories</string>
+    <string name="more">More</string>
+    <string name="updating_movies">Updating Movies</string>
+    <string name="updates_movies_categories">Updates Movies Categories</string>
+    <string name="updating_series">Updating Series</string>
+    <string name="updating_series_categories">Updating Series Categories</string>
+    <string name="series">Series</string>
+    <string name="movies">Movies</string>
+    <string name="view_all">View All</string>
+    <string name="title_activity_list_all_movies">ListAllMoviesActivity</string>
+</resources>

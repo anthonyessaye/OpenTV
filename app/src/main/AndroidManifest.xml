@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"
+        tools:ignore="ScopedStorage" />
+
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="true" />
+
+    <application
+        android:name=".OpenTVApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:requestLegacyExternalStorage="true"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.OpenTV"
+        android:usesCleartextTraffic="true">
+        <activity
+            android:name=".Activities.ListAllActivities.ListAllMoviesActivity"
+            android:exported="false"
+            android:label="@string/title_activity_list_all_movies"
+            android:theme="@style/Theme.OpenTV" />
+        <activity
+            android:name=".Activities.ListAllActivities.ListAllLiveStreamsActivity"
+            android:exported="false"
+            android:label="@string/title_activity_list_all_live_streams"
+            android:theme="@style/Theme.OpenTV"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustPan" />
+        <activity
+            android:name=".Activities.CachingActivity"
+            android:exported="false"
+            android:label="@string/title_activity_caching"
+            android:theme="@style/Theme.OpenTV" />
+        <activity
+            android:name=".Activities.LoginActivity"
+            android:exported="false"
+            android:label="@string/title_activity_login"
+            android:theme="@style/Theme.OpenTV"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustPan" />
+        <activity
+            android:name=".Activities.MainActivity"
+            android:exported="false"
+            android:theme="@style/Theme.OpenTV" />
+        <activity
+            android:name=".Activities.SplashActivity"
+            android:banner="@drawable/app_icon_tv"
+            android:exported="true"
+            android:icon="@drawable/app_icon_tv"
+            android:label="@string/app_name"
+            android:logo="@drawable/app_icon_tv"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".Activities.DetailsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".Player.PlayerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.OpenTV" />
+        <activity
+            android:name=".BrowseErrorActivity"
+            android:exported="false" />
+    </application>
+
+</manifest>
