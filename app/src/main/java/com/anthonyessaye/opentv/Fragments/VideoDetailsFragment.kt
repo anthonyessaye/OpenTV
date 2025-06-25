@@ -24,15 +24,21 @@ import androidx.leanback.widget.OnItemViewClickedListener
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.Row
 import androidx.leanback.widget.RowPresenter
+import androidx.lifecycle.lifecycleScope
+import app.moviebase.tmdb.Tmdb3
+import app.moviebase.tmdb.model.AppendResponse
 import com.anthonyessaye.opentv.Activities.DetailsActivity
 import com.anthonyessaye.opentv.Activities.MainActivity
 import com.anthonyessaye.opentv.Adapters.CardPresenter
 import com.anthonyessaye.opentv.DetailsDescriptionPresenter
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.R
+import com.anthonyessaye.opentv.REST.APIKeys
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.Collections
 
 
@@ -63,6 +69,10 @@ class VideoDetailsFragment : DetailsSupportFragment() {
         } else {
             val intent = Intent(requireContext(), MainActivity::class.java)
             startActivity(intent)
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            doTMDBCall(mSelectedMovie.tmdb!!.toInt())
         }
     }
 
@@ -129,6 +139,19 @@ class VideoDetailsFragment : DetailsSupportFragment() {
         row.actionsAdapter = actionAdapter
 
         mAdapter.add(row)
+    }
+
+    suspend fun doTMDBCall(movieId: Int) {
+        val tmdb = Tmdb3(APIKeys.TMDB_API_KEY)
+        val movieDetail = tmdb.movies.getDetails(
+            movieId = movieId,
+            language = "EN",
+            appendResponses = listOf(AppendResponse.IMAGES,
+                AppendResponse.TV_CREDITS,
+                AppendResponse.VIDEOS)
+        )
+
+        Log.i("TMDB", movieDetail.toString())
     }
 
     private fun setupDetailsOverviewRowPresenter() {

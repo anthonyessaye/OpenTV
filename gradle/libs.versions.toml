@@ -42,6 +42,7 @@ timber = "5.0.1"
 universalChardet = "2.5.0"
 navigationCommonAndroid = "2.9.0"
 navigationRuntimeAndroid = "2.9.0"
+palette = "1.0.0"
 
 
 [libraries]
@@ -106,6 +107,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 androidx-navigation-common-android = { group = "androidx.navigation", name = "navigation-common-android", version.ref = "navigationCommonAndroid" }
 androidx-navigation-runtime-android = { group = "androidx.navigation", name = "navigation-runtime-android", version.ref = "navigationRuntimeAndroid" }
+androidx-palette = { group = "androidx.palette", name = "palette", version.ref = "palette" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

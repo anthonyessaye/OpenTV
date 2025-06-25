@@ -57,6 +57,7 @@ android {
 dependencies {
     implementation(libs.androidx.navigation.common.android)
     implementation(libs.androidx.navigation.runtime.android)
+    implementation(libs.androidx.palette)
     val media3Version = "1.8.0-alpha01"
     val fuelVersion = "2.3.1"
 
