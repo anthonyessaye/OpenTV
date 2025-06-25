@@ -4,6 +4,7 @@ import androidx.leanback.widget.Presenter;
 
 import android.view.ViewGroup;
 
+import com.anthonyessaye.opentv.Models.MovieDetails;
 import com.anthonyessaye.opentv.Persistence.Movie.Movie;
 
 public class MoviePresenter extends Presenter {
@@ -17,7 +18,7 @@ public class MoviePresenter extends Presenter {
 
     @Override
     public void onBindViewHolder(ViewHolder viewHolder, Object item) {
-        ((MovieCardView) viewHolder.view).bind((Movie) item);
+        ((MovieCardView) viewHolder.view).bind((MovieDetails) item);
     }
 
     @Override

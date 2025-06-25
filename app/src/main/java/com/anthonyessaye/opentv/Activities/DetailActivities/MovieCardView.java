@@ -6,13 +6,16 @@ import android.content.Context;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.anthonyessaye.opentv.Models.MovieDetails;
 import com.anthonyessaye.opentv.Persistence.Movie.Movie;
 import com.anthonyessaye.opentv.R;
 import com.anthonyessaye.opentv.TMDBHelper;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 
-public class MovieCardView extends BindableCardView<Movie> {
+import app.moviebase.tmdb.model.TmdbMovieDetail;
+
+public class MovieCardView extends BindableCardView<MovieDetails> {
 
     ImageView mPosterIV;
     TextView title_tv;
@@ -24,8 +27,8 @@ public class MovieCardView extends BindableCardView<Movie> {
     }
 
     @Override
-    protected void bind(Movie movie) {
-        String posterPath = null;// movie.getPosterPath();
+    protected void bind(MovieDetails movie) {
+        String posterPath = movie.getPoster_path();
         if (posterPath == null || posterPath.isEmpty()) {
             Glide.with(getContext())
                     .load(R.drawable.popcorn)
@@ -38,7 +41,7 @@ public class MovieCardView extends BindableCardView<Movie> {
                     .placeholder(R.drawable.popcorn)
                     .into(mPosterIV);
         }
-        title_tv.setText(movie.getName());
+        title_tv.setText(movie.getTitle());
     }
 
     public ImageView getPosterIV() {

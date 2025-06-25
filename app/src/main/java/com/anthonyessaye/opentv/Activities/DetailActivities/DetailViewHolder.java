@@ -11,7 +11,11 @@ import com.anthonyessaye.opentv.Models.Genre;
 import com.anthonyessaye.opentv.Models.MovieDetails;
 import com.anthonyessaye.opentv.R;
 
+import java.util.List;
 import java.util.Locale;
+
+import app.moviebase.tmdb.model.TmdbGenre;
+import app.moviebase.tmdb.model.TmdbMovieDetail;
 
 
 public class DetailViewHolder extends Presenter.ViewHolder {
@@ -47,20 +51,23 @@ public class DetailViewHolder extends Presenter.ViewHolder {
             mRuntimeTV.setText(String.format(Locale.getDefault(), "%d minutes", movie.getRuntime()));
             mTaglineTV.setText(movie.getTagline());
             movieTitleTV.setText(movie.getTitle());
-            //movieYearTV.setText(String.format(Locale.getDefault(), "(%s)", movie.getReleaseDate().substring(0, 4)));
-            //mRatingTv.setText(String.format(Locale.getDefault(), "%.1f/10", movie.getVoteAverage()));
-            movieYearTV.setText("NEED TO ADD YEAR");
-            mRatingTv.setText("NEED TO ADD RATING");
+
+            if (movie.getRelease_date() != null) {
+                movieYearTV.setText(String.format(Locale.getDefault(), "(%s)", movie.getRelease_date().toString().substring(0, 4)));
+            }
+            mRatingTv.setText(String.format(Locale.getDefault(), "%.1f / 10", movie.getVote_average()));
+
             movieOverview.setText(movie.getOverview());
             mGenresLayout.removeAllViews();
 
-            if (movie.getDirector() != null) {
+            /*if (movie.getDirector() != null) {
                 mDirectorTv.setText(String.format(Locale.getDefault(), "Director: %s", movie.getDirector()));
-            }
+            }*/
 
             int _16dp = (int) itemView.getResources().getDimension(R.dimen.full_padding);
             int _8dp = (int) itemView.getResources().getDimension(R.dimen.half_padding);
             float corner = itemView.getResources().getDimension(R.dimen.genre_corner);
+
 
             if (movie.getPaletteColors() != null) {
                 movieTitleTV.setTextColor(movie.getPaletteColors().getTitleColor());
@@ -73,7 +80,7 @@ public class DetailViewHolder extends Presenter.ViewHolder {
                 mRatingTv.setTextColor(movie.getPaletteColors().getTextColor());
                 int primaryDarkColor = movie.getPaletteColors().getStatusBarColor();
 
-                for (Genre genre : movie.getGenres()) {
+                for (TmdbGenre genre : movie.getGenres()) {
                     TextView textView = new TextView(itemView.getContext());
                     textView.setText(genre.getName());
                     GradientDrawable shape = new GradientDrawable();

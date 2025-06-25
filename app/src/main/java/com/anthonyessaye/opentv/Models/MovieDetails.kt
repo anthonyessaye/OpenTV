@@ -1,5 +1,16 @@
 package com.anthonyessaye.opentv.Models
 
+import app.moviebase.tmdb.model.TmdbCompany
+import app.moviebase.tmdb.model.TmdbCountry
+import app.moviebase.tmdb.model.TmdbCredits
+import app.moviebase.tmdb.model.TmdbGenre
+import app.moviebase.tmdb.model.TmdbImages
+import app.moviebase.tmdb.model.TmdbReleaseDates
+import app.moviebase.tmdb.model.TmdbResult
+import app.moviebase.tmdb.model.TmdbVideo
+import app.moviebase.tmdb.model.TmdbWatchProviderResult
+import kotlinx.serialization.SerialName
+
 class MovieDetails {
     var isAdult: Boolean = false
         private set
@@ -7,23 +18,23 @@ class MovieDetails {
         private set
     var isVideo: Boolean = false
         private set
-    var genres: MutableList<Genre?>? = null
+    var genres: List<TmdbGenre>? = null
         private set
     var title: String? = null
         private set
     var popularity: Float = 0f
         private set
-    var budget: Int = 0
+    var budget: Long = 0
         private set
-    var runtime: Int = 0
+    var runtime: Int? = 0
         private set
-    var revenue: Int = 0
+    var revenue: Long = 0
         private set
     var tagline: String? = null
         private set
     var status: String? = null
         private set
-    var release_date: String? = null
+    var release_date: TmdbResult<TmdbReleaseDates>? = null
         private set
     var poster_path: String? = null
         private set
@@ -40,9 +51,24 @@ class MovieDetails {
     var imdb_id: String? = null
         private set
 
+    var credits: TmdbCredits? = null
+        private set
+    var videos: TmdbResult<TmdbVideo>? = null
+        private set
+
     private var paletteColors: PaletteColors? = null
     var director: String? = null
         private set
+
+    fun setVideos(videos: TmdbResult<TmdbVideo>?): MovieDetails {
+        this.videos = videos
+        return this
+    }
+
+    fun setCredits(credits: TmdbCredits?): MovieDetails {
+        this.credits = credits
+        return this
+    }
 
     fun setAdult(adult: Boolean): MovieDetails {
         this.isAdult = adult
@@ -59,7 +85,7 @@ class MovieDetails {
         return this
     }
 
-    fun setGenres(genres: MutableList<Genre?>?): MovieDetails {
+    fun setGenres(genres: List<TmdbGenre>?): MovieDetails {
         this.genres = genres
         return this
     }
@@ -74,17 +100,17 @@ class MovieDetails {
         return this
     }
 
-    fun setBudget(budget: Int): MovieDetails {
+    fun setBudget(budget: Long): MovieDetails {
         this.budget = budget
         return this
     }
 
-    fun setRuntime(runtime: Int): MovieDetails {
+    fun setRuntime(runtime: Int?): MovieDetails {
         this.runtime = runtime
         return this
     }
 
-    fun setRevenue(revenue: Int): MovieDetails {
+    fun setRevenue(revenue: Long): MovieDetails {
         this.revenue = revenue
         return this
     }
@@ -99,8 +125,8 @@ class MovieDetails {
         return this
     }
 
-    fun setReleaseDate(release_date: String?): MovieDetails {
-        this.release_date = release_date!!
+    fun setReleaseDate(release_date: TmdbResult<TmdbReleaseDates>?): MovieDetails {
+        this.release_date = release_date
         return this
     }
 

@@ -33,7 +33,6 @@ public class CustomDetailPresenter extends FullWidthDetailsOverviewRowPresenter 
 
         switch (viewHolder.getState()) {
             case STATE_FULL:
-            default:
                 if (previousState == STATE_HALF) {
                     view.animate().translationYBy(-offset);
                 }

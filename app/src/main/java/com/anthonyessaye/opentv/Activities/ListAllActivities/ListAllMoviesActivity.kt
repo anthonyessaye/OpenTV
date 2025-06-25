@@ -14,7 +14,6 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.anthonyessaye.opentv.Activities.DetailActivities.DetailActivity
-import com.anthonyessaye.opentv.Activities.DetailsActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllLiveStreamsActivity
 import com.anthonyessaye.opentv.Adapters.GridRecyclerViewAdapter
 import com.anthonyessaye.opentv.Adapters.ListRecyclerViewAdapter
@@ -104,10 +103,10 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
             runOnUiThread {
                 recyclerViewCategoryList.layoutManager = LinearLayoutManager(this)
                 recyclerViewCategoryList.adapter = customAdapter
-
                 selectedCategoryIndexId = allCategories.first().category_id
-                loadMoviesList(allCategories.first().category_id)
             }
+
+            loadMoviesList(allCategories.first().category_id)
         }
     }
 
@@ -176,7 +175,7 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
                     DatabaseManager().openDatabase(this@ListAllMoviesActivity) { db ->
                         val movie = moviesInSelectedCategory.first { it.stream_id.toString() == id }
                         val intent = Intent(this@ListAllMoviesActivity, DetailActivity::class.java)
-                        intent.putExtra(DetailsActivity.MOVIE, movie)
+                        intent.putExtra(DetailActivity.MOVIE, movie)
 
                         startActivity(intent)
                     }

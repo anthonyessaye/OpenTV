@@ -13,6 +13,8 @@ import com.anthonyessaye.opentv.TMDBHelper;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 
+import app.moviebase.tmdb.model.TmdbCast;
+
 
 public class PersonPresenter extends Presenter {
 
@@ -31,10 +33,10 @@ public class PersonPresenter extends Presenter {
     @Override
     public void onBindViewHolder(ViewHolder viewHolder, Object item) {
         ImageCardView imageCardView = (ImageCardView) viewHolder.view;
-        CastMember castMember = (CastMember) item;
+        TmdbCast castMember = (TmdbCast) item;
 
         Glide.with(imageCardView.getContext())
-                .load(TMDBHelper.POSTER_URL + castMember.getProfile_path())
+                .load(TMDBHelper.POSTER_URL + castMember.getProfilePath())
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .into(imageCardView.getMainImageView());
 

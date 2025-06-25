@@ -69,13 +69,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".Activities.DetailsActivity"
-            android:exported="false" />
-        <activity
             android:name=".Activities.DetailActivities.DetailActivity"
-            android:exported="false" />
-        <activity
-            android:name=".Activities.DetailActivities.BaseTVActivity"
             android:exported="false" />
 
         <activity
