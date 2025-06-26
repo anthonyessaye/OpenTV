@@ -3,6 +3,7 @@ package com.anthonyessaye.opentv.Activities.DetailActivities
 import android.os.Bundle
 import android.widget.FrameLayout
 import androidx.cardview.widget.CardView
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.anthonyessaye.opentv.Models.MovieDetails
@@ -12,6 +13,7 @@ import com.anthonyessaye.opentv.TMDBHelper
 
 class MovieDetailActivity : FragmentActivity() {
     lateinit var mainView: FrameLayout
+    lateinit var constraintLayoutLoading: ConstraintLayout
 
     private var glideBackgroundManager: GlideBackgroundManager? = null
     private var movie: Movie? = null
@@ -22,6 +24,7 @@ class MovieDetailActivity : FragmentActivity() {
 
         movie = this.getIntent().getSerializableExtra(MovieDetailActivity.MOVIE) as Movie?
         mainView = findViewById<FrameLayout>(R.id.details_fragment)
+        constraintLayoutLoading = findViewById<ConstraintLayout>(R.id.constraintLayoutLoading)
 
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()

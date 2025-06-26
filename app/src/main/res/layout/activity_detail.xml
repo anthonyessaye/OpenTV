@@ -1,8 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/details_fragment"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".Activities.DetailActivities.MovieDetailActivity"
-    tools:deviceIds="tv" />
+    tools:deviceIds="tv">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/constraintLayoutLoading"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/major_color_blue">
+
+        <com.airbnb.lottie.LottieAnimationView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_centerInParent="true"
+            app:lottie_rawRes="@raw/loading_lottie"
+            app:lottie_speed="1.5"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</FrameLayout>

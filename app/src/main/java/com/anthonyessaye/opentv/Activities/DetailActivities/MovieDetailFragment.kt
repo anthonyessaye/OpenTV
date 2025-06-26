@@ -6,6 +6,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import androidx.core.app.ActivityOptionsCompat
 import androidx.core.net.toUri
 import androidx.leanback.app.DetailsSupportFragment
@@ -88,6 +89,7 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
                 setupRecommendationsRow()
                 setOnItemViewClickedListener(this@MovieDetailFragment)
                 (requireActivity() as MovieDetailActivity).updateBackground(movieDetails)
+                (requireActivity() as MovieDetailActivity).constraintLayoutLoading.visibility = View.GONE
             }
         }
 
@@ -146,7 +148,7 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
                     startActivity(
                         Intent(
                             Intent.ACTION_VIEW,
-                            Uri.parse(youtubeURL)
+                            youtubeURL.toUri()
                         )
                     )
                 }
