@@ -4,9 +4,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import androidx.core.app.ActivityOptionsCompat
+import androidx.core.net.toUri
 import androidx.leanback.app.DetailsSupportFragment
 import androidx.leanback.widget.Action
 import androidx.leanback.widget.ArrayObjectAdapter
@@ -141,9 +142,13 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
 
             else if (actionId == 1)  {
                 if (youtubeID != null) {
-                    /* Intent intent = new Intent(getActivity(), PlayerActivity.class);
-                    intent.putExtra("videoId", youtubeID);
-                    startActivity(intent);*/
+                    val youtubeURL = "https://www.youtube.com/watch?v=" + youtubeID
+                    startActivity(
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse(youtubeURL)
+                        )
+                    )
                 }
             }
 

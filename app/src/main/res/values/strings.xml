@@ -47,4 +47,5 @@
     <string name="cast">Cast</string>
     <string name="director">Director</string>
     <string name="recommendations">Recommendations</string>
+    <string name="overview">Overview:</string>
 </resources>
