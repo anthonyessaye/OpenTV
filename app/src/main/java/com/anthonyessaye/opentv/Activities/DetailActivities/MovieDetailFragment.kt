@@ -49,6 +49,7 @@ import com.anthonyessaye.opentv.R
 import com.anthonyessaye.opentv.REST.APIKeys
 import com.anthonyessaye.opentv.REST.TMDBRESTHandler
 import com.anthonyessaye.opentv.TMDBHelper
+import com.anthonyessaye.opentv.Utils.PaletteUtils
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy

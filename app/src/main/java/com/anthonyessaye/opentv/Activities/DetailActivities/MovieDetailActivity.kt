@@ -2,7 +2,6 @@ package com.anthonyessaye.opentv.Activities.DetailActivities
 
 import android.os.Bundle
 import android.widget.FrameLayout
-import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
