@@ -73,10 +73,10 @@ class GridRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
             if(isFocused && adapterPosition != selectedItem) {
                 hoverItem = adapterPosition
                 viewHolder.textView.isSelected = true
-                view.setBackgroundResource(R.drawable.item_hover_shape)
+                viewHolder.root.setBackgroundResource(R.drawable.item_hover_shape)
             } else {
                 viewHolder.textView.isSelected = false
-                view.setBackgroundResource(R.drawable.item_list_selection)
+                viewHolder.root.setBackgroundResource(R.drawable.item_list_selection)
             }
         }
 

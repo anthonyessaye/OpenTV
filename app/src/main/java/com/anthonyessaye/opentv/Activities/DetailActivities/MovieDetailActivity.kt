@@ -1,14 +1,17 @@
 package com.anthonyessaye.opentv.Activities.DetailActivities
 
 import android.os.Bundle
+import android.widget.FrameLayout
 import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.anthonyessaye.opentv.Models.MovieDetails
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.R
+import com.anthonyessaye.opentv.TMDBHelper
 
-class DetailActivity : FragmentActivity() {
-    lateinit var cardView: CardView
+class MovieDetailActivity : FragmentActivity() {
+    lateinit var mainView: FrameLayout
 
     private var glideBackgroundManager: GlideBackgroundManager? = null
     private var movie: Movie? = null
@@ -17,32 +20,25 @@ class DetailActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_detail)
 
-        movie = this.getIntent().getSerializableExtra(DetailActivity.MOVIE) as Movie?
+        movie = this.getIntent().getSerializableExtra(MovieDetailActivity.MOVIE) as Movie?
+        mainView = findViewById<FrameLayout>(R.id.details_fragment)
 
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
-                .replace(R.id.details_fragment, DetailFragment())
+                .replace(R.id.details_fragment, MovieDetailFragment())
                 .commitNow()
         }
 
         glideBackgroundManager = GlideBackgroundManager(this)
-        updateBackground()
     }
 
     override fun onResume() {
         super.onResume()
-        updateBackground()
     }
 
-    private fun updateBackground() {
-        glideBackgroundManager!!.setBackground(
-            ContextCompat.getDrawable(
-                this,
-                R.drawable.material_bg
-            )
-        )
-        if (movie != null) {// && movie.back != null) {
-            //glideBackgroundManager.loadImage(HttpClientModule.BACKDROP_URL + movie.getBackdropPath());
+    public fun updateBackground(movieDetails: MovieDetails) {
+        if (movieDetails.backdrop_path != null) {
+            glideBackgroundManager!!.loadImage(TMDBHelper.BACKDROP_URL + movieDetails.backdrop_path);
         } else {
             glideBackgroundManager!!.setBackground(
                 ContextCompat.getDrawable(

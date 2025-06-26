@@ -1,4 +1,4 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
+package com.anthonyessaye.opentv.Presenters;
 
 import androidx.leanback.widget.DetailsOverviewLogoPresenter;
 import androidx.leanback.widget.FullWidthDetailsOverviewRowPresenter;

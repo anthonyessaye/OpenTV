@@ -1,4 +1,4 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
+package com.anthonyessaye.opentv.Presenters;
 
 import android.content.Context;
 
@@ -7,7 +7,6 @@ import androidx.leanback.widget.ImageCardView;
 import androidx.leanback.widget.Presenter;
 import android.view.ViewGroup;
 
-import com.anthonyessaye.opentv.Models.CastMember;
 import com.anthonyessaye.opentv.R;
 import com.anthonyessaye.opentv.TMDBHelper;
 import com.bumptech.glide.Glide;

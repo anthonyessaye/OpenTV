@@ -7,7 +7,6 @@ import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.Log
 import androidx.core.app.ActivityOptionsCompat
-import androidx.leanback.app.DetailsFragment
 import androidx.leanback.app.DetailsSupportFragment
 import androidx.leanback.widget.Action
 import androidx.leanback.widget.ArrayObjectAdapter
@@ -28,20 +27,22 @@ import androidx.lifecycle.lifecycleScope
 import androidx.palette.graphics.Palette
 import androidx.palette.graphics.Palette.PaletteAsyncListener
 import app.moviebase.tmdb.Tmdb3
-import app.moviebase.tmdb.Tmdb4
 import app.moviebase.tmdb.model.AppendResponse
 import app.moviebase.tmdb.model.TmdbCredits
-import app.moviebase.tmdb.model.TmdbMovieDetail
 import app.moviebase.tmdb.model.TmdbResult
 import app.moviebase.tmdb.model.TmdbVideo
-import app.moviebase.tmdb.model.TmdbVideoType
+import com.anthonyessaye.opentv.Enums.StreamType
+import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Models.CastMember
-import com.anthonyessaye.opentv.Models.CreditsResponse
-import com.anthonyessaye.opentv.Models.Genre
 import com.anthonyessaye.opentv.Models.MovieDetails
 import com.anthonyessaye.opentv.Models.PaletteColors
+import com.anthonyessaye.opentv.Persistence.DatabaseManager
+import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistory
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
-import com.anthonyessaye.opentv.Persistence.Movie.MovieDao
+import com.anthonyessaye.opentv.Presenters.CustomDetailPresenter
+import com.anthonyessaye.opentv.Presenters.DetailDescriptionPresenter
+import com.anthonyessaye.opentv.Presenters.MoviePresenter
+import com.anthonyessaye.opentv.Presenters.PersonPresenter
 import com.anthonyessaye.opentv.R
 import com.anthonyessaye.opentv.REST.APIKeys
 import com.anthonyessaye.opentv.TMDBHelper
@@ -57,7 +58,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemViewClickedListener {
+class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemViewClickedListener, PlayerInterface {
     lateinit var mSelectedMovie: Movie
     lateinit var movieDetails: MovieDetails
     lateinit var palette: PaletteColors
@@ -73,7 +74,7 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        mSelectedMovie = requireActivity().intent.getSerializableExtra(DetailActivity.MOVIE) as Movie
+        mSelectedMovie = requireActivity().intent.getSerializableExtra(MovieDetailActivity.MOVIE) as Movie
         setUpAdapter()
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -83,13 +84,13 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
                 setUpDetailsOverviewRow()
                 setUpCastMembers()
                 setupRecommendationsRow()
-                setOnItemViewClickedListener(this@DetailFragment)
+                setOnItemViewClickedListener(this@MovieDetailFragment)
+                (requireActivity() as MovieDetailActivity).updateBackground(movieDetails)
             }
         }
 
 
     }
-
 
     private fun setUpAdapter() {
         customDetailPresenter = CustomDetailPresenter(
@@ -105,12 +106,47 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
         customDetailPresenter!!.setOnActionClickedListener(OnActionClickedListener { action: Action? ->
             val actionId = action!!.getId().toInt()
             if (actionId == 0) {
+                DatabaseManager().openDatabase(requireContext()) { db ->
+                    val serverInfo = db.serverDao().getAll().first()
+                    val loggedInUser = db.userDao().getAll().first()
+
+                    // Write history to disk
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val movieHistory = MovieHistory(
+                            mSelectedMovie.stream_id,
+                            mSelectedMovie.name,
+                            mSelectedMovie.container_extension,
+                            (System.currentTimeMillis() / 1000).toString(),
+                            mSelectedMovie.stream_icon.toString(),
+                            "0"
+                        )
+
+                        db.movieHistoryDao().insertTop(50, movieHistory)
+
+                        val streamURI = buildStreamURI(
+                            serverInfo,
+                            loggedInUser,
+                            StreamType.MOVIE,
+                            mSelectedMovie.stream_id,
+                            mSelectedMovie.container_extension
+                        )
+
+                        play(requireContext(), streamURI)
+                    }
+
+
+                }
+            }
+
+            else if (actionId == 1)  {
                 if (youtubeID != null) {
                     /* Intent intent = new Intent(getActivity(), PlayerActivity.class);
                     intent.putExtra("videoId", youtubeID);
                     startActivity(intent);*/
                 }
             }
+
+
         })
 
         val classPresenterSelector = ClassPresenterSelector()
@@ -180,7 +216,7 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
     }
 
     private fun setUpCastMembers() {
-        arrayObjectAdapter!!.add(ListRow(HeaderItem(0, "Cast"), castAdapter))
+        arrayObjectAdapter!!.add(ListRow(HeaderItem(0, getString(R.string.cast)), castAdapter))
         fetchCastMembers()
     }
 
@@ -190,7 +226,7 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
 
             if (!response.crew.isEmpty()) {
                 for (c in response.crew) {
-                    if (c.job == "Director") {
+                    if (c.job == getString(R.string.director)) {
                         movieDetails.setDirector(c.name)
                         notifyDetailsChanged()
                     }
@@ -206,7 +242,7 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
     }
 
     private fun setupRecommendationsRow() {
-        mRecommendationsRow = ListRow(HeaderItem(2, "Recommendations"), mRecommendationsAdapter)
+        mRecommendationsRow = ListRow(HeaderItem(2, getString(R.string.recommendations)), mRecommendationsAdapter)
         arrayObjectAdapter!!.add(mRecommendationsRow!!)
         fetchRecommendations()
     }
@@ -223,6 +259,9 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
     }
 
     private fun handleVideoResponse(response: TmdbResult<TmdbVideo>?) {
+        val adapter: SparseArrayObjectAdapter = SparseArrayObjectAdapter()
+        adapter.set(0,  Action (0, getString(R.string.play), null, null))
+
         if (response != null) {
             youtubeID = getTrailer(response.results, "official");
 
@@ -235,12 +274,13 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
             }
 
             if (youtubeID != null) {
-                val adapter: SparseArrayObjectAdapter = SparseArrayObjectAdapter()
-                adapter.set(0,  Action (0, "WATCH TRAILER", null, null))
-                detailsOverviewRow!!.setActionsAdapter(adapter);
-                notifyDetailsChanged();
+
+                adapter.set(1,  Action (1, getString(R.string.watch_trailer), null, null))
             }
         }
+
+        detailsOverviewRow!!.setActionsAdapter(adapter);
+        notifyDetailsChanged();
     }
 
 
@@ -291,12 +331,12 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
 
     private fun loadImage(url: String?) {
         if (url == null || url.isEmpty()) {
-            Glide.with(this@DetailFragment)
+            Glide.with(this@MovieDetailFragment)
                 .load(R.drawable.popcorn)
                 .into<CustomTarget<Drawable?>?>(mGlideDrawableSimpleTarget)
             return
         }
-        Glide.with(this@DetailFragment)
+        Glide.with(this@MovieDetailFragment)
             .load(url)
             .diskCacheStrategy(DiskCacheStrategy.ALL)
             .placeholder(R.drawable.popcorn)
@@ -353,7 +393,7 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
     ) {
         if (item is Movie) {
             val movie = item
-            val intent = Intent(getActivity(), DetailActivity::class.java)
+            val intent = Intent(getActivity(), MovieDetailActivity::class.java)
             intent.putExtra(Movie::class.java.getSimpleName(), movie)
 
             if (itemViewHolder.view is MovieCardView) {
@@ -378,10 +418,10 @@ class DetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemVie
         var TRANSITION_NAME: String = "poster_transition"
 
         @JvmStatic
-        fun newInstance(movie: Movie?): DetailFragment {
+        fun newInstance(movie: Movie?): MovieDetailFragment {
             val args = Bundle()
             //args.putParcelable(Movie.class.getSimpleName(), movie);
-            val fragment = DetailFragment()
+            val fragment = MovieDetailFragment()
             fragment.setArguments(args)
             return fragment
         }

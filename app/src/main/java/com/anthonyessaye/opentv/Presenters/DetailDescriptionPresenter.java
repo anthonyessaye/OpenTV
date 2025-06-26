@@ -1,10 +1,11 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
+package com.anthonyessaye.opentv.Presenters;
 
 import androidx.leanback.widget.Presenter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.anthonyessaye.opentv.Activities.DetailActivities.DetailViewHolder;
 import com.anthonyessaye.opentv.Models.MovieDetails;
 import com.anthonyessaye.opentv.R;
 

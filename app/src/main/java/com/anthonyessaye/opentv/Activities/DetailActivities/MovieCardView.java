@@ -27,7 +27,7 @@ public class MovieCardView extends BindableCardView<MovieDetails> {
     }
 
     @Override
-    protected void bind(MovieDetails movie) {
+    public void bind(MovieDetails movie) {
         String posterPath = movie.getPoster_path();
         if (posterPath == null || posterPath.isEmpty()) {
             Glide.with(getContext())

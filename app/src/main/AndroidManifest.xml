@@ -69,7 +69,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".Activities.DetailActivities.DetailActivity"
+            android:name=".Activities.DetailActivities.MovieDetailActivity"
             android:exported="false" />
 
         <activity

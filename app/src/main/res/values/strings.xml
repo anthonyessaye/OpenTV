@@ -42,4 +42,9 @@
     <string name="view_all">View All</string>
     <string name="title_activity_list_all_movies">ListAllMoviesActivity</string>
     <string name="under">-</string>
+    <string name="watch_trailer">Watch Trailer</string>
+    <string name="play">Play</string>
+    <string name="cast">Cast</string>
+    <string name="director">Director</string>
+    <string name="recommendations">Recommendations</string>
 </resources>

@@ -1,11 +1,11 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
+package com.anthonyessaye.opentv.Presenters;
 
 import androidx.leanback.widget.Presenter;
 
 import android.view.ViewGroup;
 
+import com.anthonyessaye.opentv.Activities.DetailActivities.MovieCardView;
 import com.anthonyessaye.opentv.Models.MovieDetails;
-import com.anthonyessaye.opentv.Persistence.Movie.Movie;
 
 public class MoviePresenter extends Presenter {
 

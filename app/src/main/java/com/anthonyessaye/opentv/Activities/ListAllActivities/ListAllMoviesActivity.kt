@@ -6,32 +6,23 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.core.app.ActivityOptionsCompat
-import androidx.core.net.toUri
 import androidx.core.widget.doOnTextChanged
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.anthonyessaye.opentv.Activities.DetailActivities.DetailActivity
-import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllLiveStreamsActivity
+import com.anthonyessaye.opentv.Activities.DetailActivities.MovieDetailActivity
 import com.anthonyessaye.opentv.Adapters.GridRecyclerViewAdapter
 import com.anthonyessaye.opentv.Adapters.ListRecyclerViewAdapter
 import com.anthonyessaye.opentv.Enums.RecyclerViewType
-import com.anthonyessaye.opentv.Enums.StreamType
 import com.anthonyessaye.opentv.Enums.ViewMode
 import com.anthonyessaye.opentv.Helper
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Interfaces.RecyclerViewCallbackInterface
 import com.anthonyessaye.opentv.Persistence.Categories.MovieCategory.MovieCategory
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
-import com.anthonyessaye.opentv.Persistence.History.LiveHistory.LiveHistory
-import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistory
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.R
 import dev.anilbeesetti.nextplayer.feature.player.extensions.next
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface, PlayerInterface {
     private lateinit var recyclerViewCategoryList: RecyclerView
@@ -155,27 +146,10 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
         when(recyclerViewType) {
             RecyclerViewType.LIST_MOVIES.name -> {
                 if(!longClick) {
-                    /*DatabaseManager().openDatabase(this@ListAllMoviesActivity) { db ->
-                    val movie = moviesInSelectedCategory.first { it.stream_id.toString() == id }
-                    val serverInfo = db.serverDao().getAll().first()
-                    val loggedInUser = db.userDao().getAll().first()
-
-                    // Write history to disk
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val movieHistory = MovieHistory(movie.stream_id, movie.name,
-                            movie.container_extension, (System.currentTimeMillis()/1000).toString(),
-                            movie.stream_icon.toString(), "0")
-
-                        db.movieHistoryDao().insertTop(50, movieHistory)
-                    }
-
-                    val streamURI = buildStreamURI(serverInfo, loggedInUser, StreamType.MOVIE, id!!.toInt(), movie.container_extension)
-                    play(this@ListAllMoviesActivity, streamURI)
-                }*/
                     DatabaseManager().openDatabase(this@ListAllMoviesActivity) { db ->
                         val movie = moviesInSelectedCategory.first { it.stream_id.toString() == id }
-                        val intent = Intent(this@ListAllMoviesActivity, DetailActivity::class.java)
-                        intent.putExtra(DetailActivity.MOVIE, movie)
+                        val intent = Intent(this@ListAllMoviesActivity, MovieDetailActivity::class.java)
+                        intent.putExtra(MovieDetailActivity.MOVIE, movie)
 
                         startActivity(intent)
                     }
