@@ -1,15 +1,7 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
-
-import android.os.Parcel;
-import android.os.Parcelable;
-
-import com.anthonyessaye.opentv.Models.MovieDetails;
-import com.anthonyessaye.opentv.Persistence.Movie.Movie;
+package com.anthonyessaye.opentv.Models;
 
 import java.io.Serializable;
 import java.util.List;
-
-import app.moviebase.tmdb.model.TmdbMovie;
 
 
 public class MovieResponse implements Serializable {

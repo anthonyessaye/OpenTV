@@ -1,4 +1,4 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
+package com.anthonyessaye.opentv.Utils;
 
 import android.app.Activity;
 import android.graphics.drawable.Drawable;

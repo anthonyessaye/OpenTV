@@ -1,6 +1,6 @@
 package com.anthonyessaye.opentv.REST
 
-import com.anthonyessaye.opentv.Activities.DetailActivities.MovieResponse
+import com.anthonyessaye.opentv.Models.MovieResponse
 import com.github.kittinunf.fuel.Fuel
 import com.github.kittinunf.fuel.core.ResponseResultOf
 import com.github.kittinunf.fuel.gson.responseObject

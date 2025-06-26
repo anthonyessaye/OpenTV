@@ -5,10 +5,12 @@ import android.widget.FrameLayout
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.anthonyessaye.opentv.Fragments.MovieDetailFragment
 import com.anthonyessaye.opentv.Models.MovieDetails
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.R
 import com.anthonyessaye.opentv.TMDBHelper
+import com.anthonyessaye.opentv.Utils.GlideBackgroundManager
 
 class MovieDetailActivity : FragmentActivity() {
     lateinit var mainView: FrameLayout

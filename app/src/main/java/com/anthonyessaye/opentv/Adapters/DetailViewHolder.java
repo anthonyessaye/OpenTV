@@ -1,4 +1,4 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
+package com.anthonyessaye.opentv.Adapters;
 
 import android.graphics.drawable.GradientDrawable;
 import android.view.View;
@@ -7,15 +7,12 @@ import android.widget.TextView;
 
 import androidx.leanback.widget.Presenter;
 
-import com.anthonyessaye.opentv.Models.Genre;
 import com.anthonyessaye.opentv.Models.MovieDetails;
 import com.anthonyessaye.opentv.R;
 
-import java.util.List;
 import java.util.Locale;
 
 import app.moviebase.tmdb.model.TmdbGenre;
-import app.moviebase.tmdb.model.TmdbMovieDetail;
 
 
 public class DetailViewHolder extends Presenter.ViewHolder {

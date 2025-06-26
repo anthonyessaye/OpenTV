@@ -1,4 +1,4 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
+package com.anthonyessaye.opentv.Adapters;
 
 import android.content.Context;
 

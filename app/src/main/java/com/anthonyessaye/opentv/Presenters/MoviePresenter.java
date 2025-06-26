@@ -4,7 +4,7 @@ import androidx.leanback.widget.Presenter;
 
 import android.view.ViewGroup;
 
-import com.anthonyessaye.opentv.Activities.DetailActivities.MovieCardView;
+import com.anthonyessaye.opentv.Adapters.MovieCardView;
 import com.anthonyessaye.opentv.Models.MovieDetails;
 
 public class MoviePresenter extends Presenter {

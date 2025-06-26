@@ -5,7 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.anthonyessaye.opentv.Activities.DetailActivities.DetailViewHolder;
+import com.anthonyessaye.opentv.Adapters.DetailViewHolder;
 import com.anthonyessaye.opentv.Models.MovieDetails;
 import com.anthonyessaye.opentv.R;
 

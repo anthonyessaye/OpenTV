@@ -1,10 +1,9 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities
+package com.anthonyessaye.opentv.Fragments
 
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import androidx.core.app.ActivityOptionsCompat
@@ -27,12 +26,14 @@ import androidx.leanback.widget.RowPresenter
 import androidx.leanback.widget.SparseArrayObjectAdapter
 import androidx.lifecycle.lifecycleScope
 import androidx.palette.graphics.Palette
-import androidx.palette.graphics.Palette.PaletteAsyncListener
 import app.moviebase.tmdb.Tmdb3
 import app.moviebase.tmdb.model.AppendResponse
 import app.moviebase.tmdb.model.TmdbCredits
 import app.moviebase.tmdb.model.TmdbResult
 import app.moviebase.tmdb.model.TmdbVideo
+import com.anthonyessaye.opentv.Activities.DetailActivities.MovieDetailActivity
+import com.anthonyessaye.opentv.Models.MovieResponse
+import com.anthonyessaye.opentv.Adapters.MovieCardView
 import com.anthonyessaye.opentv.Enums.StreamType
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Models.CastMember
@@ -62,7 +63,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnItemViewClickedListener, PlayerInterface {
+class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListener,
+    OnItemViewClickedListener, PlayerInterface {
     lateinit var mSelectedMovie: Movie
     lateinit var movieDetails: MovieDetails
     lateinit var palette: PaletteColors
@@ -78,7 +80,7 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        mSelectedMovie = requireActivity().intent.getSerializableExtra(MovieDetailActivity.MOVIE) as Movie
+        mSelectedMovie = requireActivity().intent.getSerializableExtra(MovieDetailActivity.Companion.MOVIE) as Movie
         setUpAdapter()
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -90,7 +92,8 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
                 setupRecommendationsRow()
                 setOnItemViewClickedListener(this@MovieDetailFragment)
                 (requireActivity() as MovieDetailActivity).updateBackground(movieDetails)
-                (requireActivity() as MovieDetailActivity).constraintLayoutLoading.visibility = View.GONE
+                (requireActivity() as MovieDetailActivity).constraintLayoutLoading.visibility =
+                    View.GONE
             }
         }
 
@@ -141,9 +144,7 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
 
 
                 }
-            }
-
-            else if (actionId == 1)  {
+            } else if (actionId == 1) {
                 if (youtubeID != null) {
                     val youtubeURL = "https://www.youtube.com/watch?v=" + youtubeID
                     startActivity(
@@ -173,7 +174,8 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
         val tmdbMovieDetail = tmdb.movies.getDetails(
             movieId = movieId,
             language = "EN",
-            appendResponses = listOf(AppendResponse.IMAGES,
+            appendResponses = listOf(
+                AppendResponse.IMAGES,
                 AppendResponse.TV_CREDITS,
                 AppendResponse.VIDEOS,
                 AppendResponse.CREDITS,
@@ -259,7 +261,8 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
     }
 
     private fun setupRecommendationsRow() {
-        mRecommendationsRow = ListRow(HeaderItem(2, getString(R.string.recommendations)), mRecommendationsAdapter)
+        mRecommendationsRow =
+            ListRow(HeaderItem(2, getString(R.string.recommendations)), mRecommendationsAdapter)
         arrayObjectAdapter!!.add(mRecommendationsRow!!)
         fetchRecommendations()
     }
@@ -277,7 +280,7 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
 
     private fun handleVideoResponse(response: TmdbResult<TmdbVideo>?) {
         val adapter: SparseArrayObjectAdapter = SparseArrayObjectAdapter()
-        adapter.set(0,  Action (0, getString(R.string.play), null, null))
+        adapter.set(0, Action(0, getString(R.string.play), null, null))
 
         if (response != null) {
             youtubeID = getTrailer(response.results, "official");
@@ -292,7 +295,7 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
 
             if (youtubeID != null) {
 
-                adapter.set(1,  Action (1, getString(R.string.watch_trailer), null, null))
+                adapter.set(1, Action(1, getString(R.string.watch_trailer), null, null))
             }
         }
 
@@ -301,7 +304,7 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
     }
 
 
-    private fun getTrailer(videos: List<TmdbVideo>,  keyword: String): String? {
+    private fun getTrailer(videos: List<TmdbVideo>, keyword: String): String? {
         var id: String? = null
 
         for(video in videos) {
@@ -313,7 +316,7 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
         return id;
     }
 
-    private fun getTrailerByType(videos: List<TmdbVideo>,  keyword: String): String? {
+    private fun getTrailerByType(videos: List<TmdbVideo>, keyword: String): String? {
         var id: String? = null
 
         for(video in videos) {

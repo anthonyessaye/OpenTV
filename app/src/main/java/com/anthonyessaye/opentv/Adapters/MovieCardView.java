@@ -1,19 +1,14 @@
-package com.anthonyessaye.opentv.Activities.DetailActivities;
-
-import static java.security.AccessController.getContext;
+package com.anthonyessaye.opentv.Adapters;
 
 import android.content.Context;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.anthonyessaye.opentv.Models.MovieDetails;
-import com.anthonyessaye.opentv.Persistence.Movie.Movie;
 import com.anthonyessaye.opentv.R;
 import com.anthonyessaye.opentv.TMDBHelper;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
-
-import app.moviebase.tmdb.model.TmdbMovieDetail;
 
 public class MovieCardView extends BindableCardView<MovieDetails> {
 
