@@ -45,6 +45,7 @@ import com.anthonyessaye.opentv.Presenters.MoviePresenter
 import com.anthonyessaye.opentv.Presenters.PersonPresenter
 import com.anthonyessaye.opentv.R
 import com.anthonyessaye.opentv.REST.APIKeys
+import com.anthonyessaye.opentv.REST.TMDBRESTHandler
 import com.anthonyessaye.opentv.TMDBHelper
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
@@ -171,7 +172,9 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
                 AppendResponse.RELEASES_DATES
         ))
 
-        val movieDetail: MovieDetails = MovieDetails().setAdult(tmdbMovieDetail.adult)
+        var recommendations = TMDBRESTHandler.getMovieRecommendations(movieId)
+
+        var movieDetail: MovieDetails = MovieDetails().setAdult(tmdbMovieDetail.adult)
             .setOverview(tmdbMovieDetail.overview)
             .setVideo(tmdbMovieDetail.video)
             .setGenres(tmdbMovieDetail.genres)
@@ -182,7 +185,6 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
             .setRevenue(tmdbMovieDetail.revenue)
             .setTagline(tmdbMovieDetail.tagline)
             .setStatus(tmdbMovieDetail.status.name)
-            .setReleaseDate(tmdbMovieDetail.releaseDates)
             .setPosterPath(tmdbMovieDetail.posterPath)
             .setOriginalTitle(tmdbMovieDetail.originalTitle)
             .setOriginalLanguage(tmdbMovieDetail.originalLanguage)
@@ -192,6 +194,13 @@ class MovieDetailFragment : DetailsSupportFragment(), PaletteAsyncListener, OnIt
             .setImdbId(tmdbMovieDetail.imdbId)
             .setCredits(tmdbMovieDetail.credits)
             .setVideos(tmdbMovieDetail.videos)
+
+        if (tmdbMovieDetail.releaseDates != null && !tmdbMovieDetail.releaseDates!!.results.isEmpty()) {
+            // WTH is this concatenation tho?
+            movieDetail.setReleaseDate(tmdbMovieDetail.releaseDates!!.results.first().releaseDates.first().releaseDate.toString())
+        }
+
+        bindRecommendations(recommendations.component3().get())
 
         return movieDetail
     }

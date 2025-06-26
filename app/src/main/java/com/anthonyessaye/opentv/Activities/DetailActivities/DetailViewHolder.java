@@ -53,16 +53,16 @@ public class DetailViewHolder extends Presenter.ViewHolder {
             movieTitleTV.setText(movie.getTitle());
 
             if (movie.getRelease_date() != null) {
-                movieYearTV.setText(String.format(Locale.getDefault(), "(%s)", movie.getRelease_date().toString().substring(0, 4)));
+                movieYearTV.setText(String.format(Locale.getDefault(), "(%s)", movie.getRelease_date().substring(0, 4)));
             }
             mRatingTv.setText(String.format(Locale.getDefault(), "%.1f / 10", movie.getVote_average()));
 
             movieOverview.setText(movie.getOverview());
             mGenresLayout.removeAllViews();
 
-            /*if (movie.getDirector() != null) {
+            if (movie.getDirector() != null) {
                 mDirectorTv.setText(String.format(Locale.getDefault(), "Director: %s", movie.getDirector()));
-            }*/
+            }
 
             int _16dp = (int) itemView.getResources().getDimension(R.dimen.full_padding);
             int _8dp = (int) itemView.getResources().getDimension(R.dimen.half_padding);

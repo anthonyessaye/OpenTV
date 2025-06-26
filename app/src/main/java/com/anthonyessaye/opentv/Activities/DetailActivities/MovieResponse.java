@@ -3,16 +3,19 @@ package com.anthonyessaye.opentv.Activities.DetailActivities;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import com.anthonyessaye.opentv.Models.MovieDetails;
 import com.anthonyessaye.opentv.Persistence.Movie.Movie;
 
 import java.io.Serializable;
 import java.util.List;
 
+import app.moviebase.tmdb.model.TmdbMovie;
+
 
 public class MovieResponse implements Serializable {
 
     private int page;
-    private List<Movie> results;
+    private List<MovieDetails> results;
     private int total_pages;
     private int total_results;
 
@@ -25,11 +28,11 @@ public class MovieResponse implements Serializable {
         return this;
     }
 
-    public List<Movie> getResults() {
+    public List<MovieDetails> getResults() {
         return results;
     }
 
-    public MovieResponse setResults(List<Movie> results) {
+    public MovieResponse setResults(List<MovieDetails> results) {
         this.results = results;
         return this;
     }

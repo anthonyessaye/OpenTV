@@ -34,7 +34,7 @@ class MovieDetails {
         private set
     var status: String? = null
         private set
-    var release_date: TmdbResult<TmdbReleaseDates>? = null
+    var release_date: String? = null //: TmdbResult<TmdbReleaseDates>? = null
         private set
     var poster_path: String? = null
         private set
@@ -125,7 +125,7 @@ class MovieDetails {
         return this
     }
 
-    fun setReleaseDate(release_date: TmdbResult<TmdbReleaseDates>?): MovieDetails {
+    fun setReleaseDate(release_date: String?): MovieDetails {
         this.release_date = release_date
         return this
     }
