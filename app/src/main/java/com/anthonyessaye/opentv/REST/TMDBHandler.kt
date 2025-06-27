@@ -7,9 +7,9 @@ import com.github.kittinunf.fuel.gson.responseObject
 
 
 object TMDBRESTHandler {
-    public fun getMovieRecommendations(movieID: Int): ResponseResultOf<MovieResponse> {
+    public fun getRecommendations(id: Int, endpoint: String): ResponseResultOf<MovieResponse> {
         return Fuel
-            .get("https://api.themoviedb.org/3/movie/${movieID}/recommendations")
+            .get("https://api.themoviedb.org/3/${endpoint}/${id}/recommendations")
             .header(Pair<String,String>("Authorization","Bearer ${APIKeys.TMDB_READ_TOKEN}"))
             .responseObject<MovieResponse>()
     }

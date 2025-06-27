@@ -34,6 +34,11 @@
             android:label="@string/title_activity_list_all_movies"
             android:theme="@style/Theme.OpenTV" />
         <activity
+            android:name=".Activities.ListAllActivities.ListAllSeriesActivity"
+            android:exported="false"
+            android:label="@string/listallseriesactivity"
+            android:theme="@style/Theme.OpenTV" />
+        <activity
             android:name=".Activities.ListAllActivities.ListAllLiveStreamsActivity"
             android:exported="false"
             android:label="@string/title_activity_list_all_live_streams"
@@ -70,6 +75,10 @@
         </activity>
         <activity
             android:name=".Activities.DetailActivities.MovieDetailActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".Activities.DetailActivities.TvDetailActivity"
             android:exported="false" />
 
         <activity

@@ -27,7 +27,8 @@ import androidx.leanback.widget.RowPresenter
 import androidx.lifecycle.lifecycleScope
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllLiveStreamsActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllMoviesActivity
-import com.anthonyessaye.opentv.Adapters.CardPresenter
+import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllSeriesActivity
+import com.anthonyessaye.opentv.Presenters.CardPresenter
 import com.anthonyessaye.opentv.Enums.StreamType
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
@@ -216,6 +217,11 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
 
                     else if (item.contains(getString(R.string.movies))) {
                         val intent = Intent(context!!, ListAllMoviesActivity::class.java)
+                        startActivity(intent)
+                    }
+
+                    else if (item.contains(getString(R.string.series))) {
+                        val intent = Intent(context!!, ListAllSeriesActivity::class.java)
                         startActivity(intent)
                     }
 

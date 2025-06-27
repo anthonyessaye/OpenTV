@@ -131,6 +131,7 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
 
                     runOnUiThread {
                         recyclerViewLiveStreamList.layoutManager =  GridLayoutManager(this,5)
+                        recyclerViewLiveStreamList.itemAnimator = null
                         recyclerViewLiveStreamList.adapter = availableStreamsAdapter
                     }
                 }
@@ -165,7 +166,8 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
                 selectedCategoryIndexId = id!!
                 loadMoviesList(selectedCategoryIndexId)
             }
-            RecyclerViewType.LIST_MOVIES.name, RecyclerViewType.LIST_SERIES.name -> {}
+
+            RecyclerViewType.LIST_SERIES.name -> {}
 
         }
     }

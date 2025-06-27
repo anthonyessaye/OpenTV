@@ -182,7 +182,7 @@ class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListen
                 AppendResponse.RELEASES_DATES
         ))
 
-        var recommendations = TMDBRESTHandler.getMovieRecommendations(movieId)
+        var recommendations = TMDBRESTHandler.getRecommendations(movieId, "movie")
 
         var movieDetail: MovieDetails = MovieDetails().setAdult(tmdbMovieDetail.adult)
             .setOverview(tmdbMovieDetail.overview)

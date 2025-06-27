@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import com.anthonyessaye.opentv.Persistence.Movie.Movie
 
 @Dao
 interface SeriesDao {
@@ -19,6 +20,10 @@ interface SeriesDao {
 
     @Query("SELECT * FROM Series WHERE series_id LIKE :Id")
     fun findById(Id: String): Series
+
+    @Query("SELECT * FROM Series WHERE category_id LIKE :id")
+    fun findByCategoryId(id: String): List<Series>
+
 
     @Insert
     fun insertAll(vararg series: Series)

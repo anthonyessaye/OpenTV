@@ -5,7 +5,6 @@
     android:id="@+id/details_fragment"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".Activities.DetailActivities.MovieDetailActivity"
     tools:deviceIds="tv">
 
     <androidx.constraintlayout.widget.ConstraintLayout

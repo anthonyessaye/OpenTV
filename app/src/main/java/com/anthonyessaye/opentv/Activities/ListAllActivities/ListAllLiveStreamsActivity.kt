@@ -136,7 +136,8 @@ class ListAllLiveStreamsActivity : ComponentActivity(), RecyclerViewCallbackInte
                             RecyclerViewType.LIST_LIVE_STREAMS)
 
                     runOnUiThread {
-                        recyclerViewLiveStreamList.layoutManager =  GridLayoutManager(this,4)
+                        recyclerViewLiveStreamList.layoutManager =  GridLayoutManager(this,5)
+                        recyclerViewLiveStreamList.itemAnimator = null
                         recyclerViewLiveStreamList.adapter = availableStreamsAdapter
                     }
                 }
