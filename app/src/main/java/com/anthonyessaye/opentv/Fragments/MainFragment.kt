@@ -152,9 +152,7 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
 
         val mGridPresenter = GridItemPresenter()
         val gridRowAdapter = ArrayObjectAdapter(mGridPresenter)
-        gridRowAdapter.add(getString(R.string.refresh_data))
-        gridRowAdapter.add(getString(R.string.error_fragment))
-        gridRowAdapter.add(resources.getString(R.string.personal_settings))
+        gridRowAdapter.add(getString(R.string.refresh_data)) 
         rowsAdapter.add(ListRow(gridHeader, gridRowAdapter))
 
         adapter = rowsAdapter
