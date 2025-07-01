@@ -29,6 +29,7 @@ import com.anthonyessaye.opentv.Activities.CachingActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllLiveStreamsActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllMoviesActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllSeriesActivity
+import com.anthonyessaye.opentv.Activities.SearchActivity
 import com.anthonyessaye.opentv.Presenters.CardPresenter
 import com.anthonyessaye.opentv.Enums.StreamType
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
@@ -116,7 +117,7 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
         isHeadersTransitionOnBackEnabled = true
 
         brandColor = ContextCompat.getColor(context!!, R.color.minor_color_blue)
-        searchAffordanceColor = ContextCompat.getColor(context!!, R.color.search_opaque)
+        searchAffordanceColor = ContextCompat.getColor(context!!, R.color.minor_color_green)
     }
 
     private fun loadRows() {
@@ -161,8 +162,8 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
 
     private fun setupEventListeners() {
         setOnSearchClickedListener {
-            Toast.makeText(context!!, "Implement your own in-app search", Toast.LENGTH_LONG)
-                .show()
+            val intent = Intent(requireContext(), SearchActivity::class.java)
+            startActivity(intent)
         }
 
         onItemViewClickedListener = ItemViewClickedListener()

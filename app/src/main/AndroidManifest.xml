@@ -85,6 +85,9 @@
             android:name=".Activities.DetailActivities.TvDetailActivity"
             android:exported="false" />
         <activity
+            android:name=".Activities.SearchActivity"
+            android:exported="false" />
+        <activity
             android:name=".BrowseErrorActivity"
             android:exported="false" />
     </application>
