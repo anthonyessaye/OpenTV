@@ -25,6 +25,7 @@ import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.Row
 import androidx.leanback.widget.RowPresenter
 import androidx.lifecycle.lifecycleScope
+import com.anthonyessaye.opentv.Activities.CachingActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllLiveStreamsActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllMoviesActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllSeriesActivity
@@ -150,7 +151,7 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
 
         val mGridPresenter = GridItemPresenter()
         val gridRowAdapter = ArrayObjectAdapter(mGridPresenter)
-        gridRowAdapter.add(resources.getString(R.string.grid_view))
+        gridRowAdapter.add(getString(R.string.refresh_data))
         gridRowAdapter.add(getString(R.string.error_fragment))
         gridRowAdapter.add(resources.getString(R.string.personal_settings))
         rowsAdapter.add(ListRow(gridHeader, gridRowAdapter))
@@ -222,6 +223,11 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
 
                     else if (item.contains(getString(R.string.series))) {
                         val intent = Intent(context!!, ListAllSeriesActivity::class.java)
+                        startActivity(intent)
+                    }
+
+                    else if (item.contains(getString(R.string.refresh_data))) {
+                        val intent = Intent(context!!, CachingActivity::class.java)
                         startActivity(intent)
                     }
 
