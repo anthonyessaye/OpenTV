@@ -16,7 +16,10 @@ interface MovieDao {
     fun loadAllByIds(streamIds: IntArray): List<Movie>
 
     @Query("SELECT * FROM Movie WHERE name LIKE :name")
-    fun findByName(name: String): Movie
+    fun findByExactName(name: String): Movie
+
+    @Query("SELECT * FROM Movie WHERE name LIKE '%' || :name || '%' COLLATE NOCASE LIMIT :limit")
+    fun findByLikeName(name: String, limit: Int): List<Movie>
 
     @Query("SELECT * FROM Movie WHERE category_id LIKE :id")
     fun findByCategoryId(id: String): List<Movie>

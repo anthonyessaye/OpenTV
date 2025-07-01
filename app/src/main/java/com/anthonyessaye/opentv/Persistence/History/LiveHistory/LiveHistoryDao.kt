@@ -18,7 +18,7 @@ interface LiveHistoryDao {
     fun findByName(name: String): LiveHistory
 
     @Query("SELECT * FROM LiveHistory WHERE stream_id LIKE :id")
-    fun findById(id: String): LiveHistory
+    fun findById(id: String): LiveHistory?
 
     @Transaction
     fun insertTop(top: Int, history: LiveHistory) {

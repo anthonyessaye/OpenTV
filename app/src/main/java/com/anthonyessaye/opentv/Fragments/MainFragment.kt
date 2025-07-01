@@ -117,7 +117,7 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
         isHeadersTransitionOnBackEnabled = true
 
         brandColor = ContextCompat.getColor(context!!, R.color.minor_color_blue)
-        searchAffordanceColor = ContextCompat.getColor(context!!, R.color.minor_color_green)
+        searchAffordanceColor = ContextCompat.getColor(context!!, R.color.major_color_blue)
     }
 
     private fun loadRows() {

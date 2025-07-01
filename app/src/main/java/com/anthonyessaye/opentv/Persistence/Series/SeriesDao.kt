@@ -16,7 +16,10 @@ interface SeriesDao {
     fun loadAllByIds(streamIds: IntArray): List<Series>
 
     @Query("SELECT * FROM Series WHERE name LIKE :name")
-    fun findByName(name: String): Series
+    fun findByExactName(name: String): Series
+
+    @Query("SELECT * FROM Series WHERE name LIKE '%' || :name || '%' COLLATE NOCASE LIMIT :limit")
+    fun findByLikeName(name: String, limit: Int): List<Series>
 
     @Query("SELECT * FROM Series WHERE series_id LIKE :Id")
     fun findById(Id: String): Series

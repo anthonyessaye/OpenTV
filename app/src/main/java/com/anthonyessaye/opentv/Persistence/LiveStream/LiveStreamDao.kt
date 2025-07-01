@@ -16,7 +16,10 @@ interface LiveStreamDao {
     fun loadAllByIds(streamIds: IntArray): List<LiveStream>
 
     @Query("SELECT * FROM LiveStream WHERE name LIKE :name")
-    fun findByName(name: String): LiveStream
+    fun findByExactName(name: String): LiveStream
+
+    @Query("SELECT * FROM LiveStream WHERE name LIKE '%' || :name || '%' COLLATE NOCASE LIMIT :limit")
+    fun findByLikeName(name: String, limit: Int): List<LiveStream>
 
     @Query("SELECT * FROM LiveStream WHERE category_id LIKE :id")
     fun findByCategoryId(id: String): List<LiveStream>

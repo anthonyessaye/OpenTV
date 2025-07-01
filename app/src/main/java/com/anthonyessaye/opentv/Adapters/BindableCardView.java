@@ -3,13 +3,14 @@ package com.anthonyessaye.opentv.Adapters;
 import android.content.Context;
 
 import androidx.annotation.LayoutRes;
+import androidx.cardview.widget.CardView;
 import androidx.leanback.widget.BaseCardView;
 
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 
 
-public abstract class BindableCardView<T> extends BaseCardView {
+public abstract class BindableCardView<T> extends CardView {
 
     public BindableCardView(Context context) {
         super(context);
