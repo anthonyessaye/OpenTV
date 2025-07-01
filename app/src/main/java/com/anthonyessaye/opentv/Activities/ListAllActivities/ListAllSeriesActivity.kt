@@ -140,6 +140,10 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
                         recyclerViewLiveStreamList.adapter = availableStreamsAdapter
                     }
                 }
+
+                ViewMode.EPISODE -> {
+
+                }
             }
         }
     }

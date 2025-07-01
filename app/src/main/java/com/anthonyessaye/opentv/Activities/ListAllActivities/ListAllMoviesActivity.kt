@@ -135,6 +135,8 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
                         recyclerViewLiveStreamList.adapter = availableStreamsAdapter
                     }
                 }
+
+                ViewMode.EPISODE -> { }
             }
         }
     }

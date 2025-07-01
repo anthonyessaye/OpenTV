@@ -7,6 +7,7 @@ import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.View
 import androidx.core.app.ActivityOptionsCompat
+import androidx.core.net.toUri
 import androidx.leanback.app.DetailsSupportFragment
 import androidx.leanback.widget.Action
 import androidx.leanback.widget.ArrayObjectAdapter
@@ -17,6 +18,7 @@ import androidx.leanback.widget.FullWidthDetailsOverviewSharedElementHelper
 import androidx.leanback.widget.HeaderItem
 import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.ListRowPresenter
+import androidx.leanback.widget.OnActionClickedListener
 import androidx.leanback.widget.OnItemViewClickedListener
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.Row
@@ -27,27 +29,33 @@ import androidx.palette.graphics.Palette
 import app.moviebase.tmdb.Tmdb3
 import app.moviebase.tmdb.model.AppendResponse
 import app.moviebase.tmdb.model.TmdbCredits
+import app.moviebase.tmdb.model.TmdbEpisode
 import app.moviebase.tmdb.model.TmdbResult
-import app.moviebase.tmdb.model.TmdbShow
+import app.moviebase.tmdb.model.TmdbSeason
 import app.moviebase.tmdb.model.TmdbShowDetail
 import app.moviebase.tmdb.model.TmdbVideo
 import com.anthonyessaye.opentv.Activities.DetailActivities.MovieDetailActivity
 import com.anthonyessaye.opentv.Activities.DetailActivities.TvDetailActivity
+import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllEpisodesActivity
 import com.anthonyessaye.opentv.Adapters.MovieCardView
-import com.anthonyessaye.opentv.Fragments.MovieDetailFragment
+import com.anthonyessaye.opentv.Builders.XtreamBuilder
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Models.CastMember
-import com.anthonyessaye.opentv.Models.MovieDetails
 import com.anthonyessaye.opentv.Models.MovieResponse
 import com.anthonyessaye.opentv.Models.PaletteColors
+import com.anthonyessaye.opentv.Models.Series.SeriesDetails
+import com.anthonyessaye.opentv.Persistence.DatabaseManager
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.Persistence.Series.Series
+import com.anthonyessaye.opentv.Persistence.Server.Server
+import com.anthonyessaye.opentv.Persistence.User.User
 import com.anthonyessaye.opentv.Presenters.CustomDetailPresenter
 import com.anthonyessaye.opentv.Presenters.MoviePresenter
 import com.anthonyessaye.opentv.Presenters.PersonPresenter
 import com.anthonyessaye.opentv.Presenters.TvDetailDescriptionPresenter
 import com.anthonyessaye.opentv.R
 import com.anthonyessaye.opentv.REST.APIKeys
+import com.anthonyessaye.opentv.REST.RESTHandler
 import com.anthonyessaye.opentv.REST.TMDBRESTHandler
 import com.anthonyessaye.opentv.TMDBHelper
 import com.anthonyessaye.opentv.Utils.PaletteUtils
@@ -56,9 +64,9 @@ import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
-import com.bumptech.glide.request.transition.Transition
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.target.Target
+import com.bumptech.glide.request.transition.Transition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,7 +75,8 @@ import kotlinx.coroutines.withContext
 class TvDetailFragment: DetailsSupportFragment(), Palette.PaletteAsyncListener,
 OnItemViewClickedListener, PlayerInterface {
     private lateinit var tvShow: Series
-    var showDetails: TmdbShowDetail? = null
+    var tmdbDetails: TmdbShowDetail? = null
+    var showDetails: SeriesDetails? = null
     var palette: PaletteColors? = null
     var arrayObjectAdapter: ArrayObjectAdapter? = null
     var customDetailPresenter: CustomDetailPresenter? = null
@@ -98,17 +107,24 @@ OnItemViewClickedListener, PlayerInterface {
         tvShow = requireActivity().intent.getSerializableExtra(TvDetailActivity.SERIES) as Series
         setUpAdapter()
 
-        lifecycleScope.launch(Dispatchers.IO) {
-            showDetails = doTMDBCall(tvShow.tmdb!!.toInt())
+        DatabaseManager().openDatabase(requireContext()) { db ->
+            lifecycleScope.launch(Dispatchers.IO) {
+                val user = db.userDao().getAll().first()
+                val server = db.serverDao().getAll().first()
 
-            withContext(Dispatchers.Main) {
-                setUpDetailsOverviewRow()
-                setUpCastMembers()
-                setupRecommendationsRow()
-                setOnItemViewClickedListener(this@TvDetailFragment)
-                (requireActivity() as TvDetailActivity).updateBackground(showDetails!!)
-                (requireActivity() as TvDetailActivity).constraintLayoutLoading.visibility =
-                    View.GONE
+                val answerPair = getSeriesDetails(user, server, tvShow)
+                showDetails = answerPair.first
+                tmdbDetails = answerPair.second
+
+                withContext(Dispatchers.Main) {
+                    setUpDetailsOverviewRow()
+                    setUpCastMembers()
+                    setupRecommendationsRow()
+                    setOnItemViewClickedListener(this@TvDetailFragment)
+                    (requireActivity() as TvDetailActivity).updateBackground(showDetails!!)
+                    (requireActivity() as TvDetailActivity).constraintLayoutLoading.visibility =
+                        View.GONE
+                }
             }
         }
     }
@@ -122,6 +138,27 @@ OnItemViewClickedListener, PlayerInterface {
         customDetailPresenter!!.setListener(helper)
         customDetailPresenter!!.setParticipatingEntranceTransition(false)
 
+        customDetailPresenter!!.setOnActionClickedListener(OnActionClickedListener { action: Action? ->
+            val actionId = action!!.getId().toInt()
+            if (actionId == 0) {
+                val intent = Intent(activity, ListAllEpisodesActivity::class.java)
+                intent.putExtra(TvDetailActivity.SERIES, showDetails)
+                startActivity(intent)
+            } else if (actionId == 1) {
+                if (youtubeID != null) {
+                    val youtubeURL = "https://www.youtube.com/watch?v=" + youtubeID
+                    startActivity(
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            youtubeURL.toUri()
+                        )
+                    )
+                }
+            }
+
+
+        })
+
         val selector: ClassPresenterSelector = ClassPresenterSelector()
         selector.addClassPresenter(DetailsOverviewRow::class.java, customDetailPresenter)
         selector.addClassPresenter(ListRow::class.java, ListRowPresenter())
@@ -129,10 +166,11 @@ OnItemViewClickedListener, PlayerInterface {
         setAdapter(arrayObjectAdapter)
     }
 
-    suspend fun doTMDBCall(tvShowId: Int): TmdbShowDetail {
+    suspend fun getSeriesDetails(user: User, server: Server, tvShow: Series): Pair<SeriesDetails?,TmdbShowDetail> {
+
         val tmdb = Tmdb3(APIKeys.TMDB_API_KEY)
         val tmdbSeriesDetail = tmdb.show.getDetails(
-            showId = tvShowId,
+            showId = tvShow.tmdb!!.toInt(),
             language = "EN",
             appendResponses = listOf(
                 AppendResponse.IMAGES,
@@ -143,10 +181,13 @@ OnItemViewClickedListener, PlayerInterface {
             )
         )
 
-        var recommendations = TMDBRESTHandler.getRecommendations(tvShowId, "tv")
+        var recommendations = TMDBRESTHandler.getRecommendations(tvShow.tmdb.toInt(), "tv")
         bindRecommendations(recommendations.component3().get())
 
-        return tmdbSeriesDetail
+        val xtream = XtreamBuilder(user.username, user.password, server.buildURL())
+        val seriesDetails: SeriesDetails? = RESTHandler.SeriesREST.getSeriesDetails(xtream, tvShow.series_id.toString())
+
+        return Pair(seriesDetails, tmdbSeriesDetail)
     }
 
     private fun setupRecommendationsRow() {
@@ -163,7 +204,7 @@ OnItemViewClickedListener, PlayerInterface {
     }
 
     private fun fetchCastMembers() {
-        bindCastMembers(showDetails!!.credits)
+        bindCastMembers(tmdbDetails!!.credits)
     }
 
     private fun setUpCastMembers() {
@@ -181,27 +222,27 @@ OnItemViewClickedListener, PlayerInterface {
         detailsOverviewRow = DetailsOverviewRow(tvShow)
         arrayObjectAdapter!!.add(detailsOverviewRow!!)
 
-        loadImage(TMDBHelper.POSTER_URL + showDetails!!.posterPath)
+        loadImage(TMDBHelper.POSTER_URL + tmdbDetails!!.posterPath)
         fetchShowDetails()
     }
 
     private fun fetchShowDetails() {
-        bindShowDetails(showDetails!!)
+        bindShowDetails(tmdbDetails!!)
     }
 
-    private fun bindShowDetails(showDetails: TmdbShowDetail) {
-        this.showDetails = showDetails
-        detailsOverviewRow!!.setItem(this.showDetails!!)
+    private fun bindShowDetails(tmdbShowDetail: TmdbShowDetail) {
+        this.tmdbDetails = tmdbShowDetail
+        detailsOverviewRow!!.setItem(this.tmdbDetails!!)
         fetchVideos()
     }
 
     private fun fetchVideos() {
-        handleVideoResponse(showDetails!!.videos)
+        handleVideoResponse(tmdbDetails!!.videos)
     }
 
     private fun handleVideoResponse(response: TmdbResult<TmdbVideo>?) {
         val adapter: SparseArrayObjectAdapter = SparseArrayObjectAdapter()
-        adapter.set(0, Action(0, getString(R.string.play), null, null))
+        adapter.set(0, Action(0, getString(R.string.choose_season), null, null))
 
         if (response != null) {
             youtubeID = getTrailer(response.results, "official");
@@ -299,7 +340,7 @@ OnItemViewClickedListener, PlayerInterface {
     }
 
     private fun notifyDetailsChanged() {
-        detailsOverviewRow!!.setItem(this.showDetails!!)
+        detailsOverviewRow!!.setItem(this.tmdbDetails!!)
         val index = arrayObjectAdapter!!.indexOf(detailsOverviewRow!!)
         arrayObjectAdapter!!.notifyArrayItemRangeChanged(index, 1)
     }

@@ -9,6 +9,7 @@ import app.moviebase.tmdb.model.TmdbShowDetail
 import com.anthonyessaye.opentv.Fragments.MovieDetailFragment
 import com.anthonyessaye.opentv.Fragments.TvDetailFragment
 import com.anthonyessaye.opentv.Models.MovieDetails
+import com.anthonyessaye.opentv.Models.Series.SeriesDetails
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.R
@@ -44,9 +45,9 @@ class TvDetailActivity : FragmentActivity() {
         super.onResume()
     }
 
-    public fun updateBackground(tvShowDetail: TmdbShowDetail) {
+    public fun updateBackground(tvShowDetail: SeriesDetails) {
         if (tvShow!!.backdrop_path != null) {
-            glideBackgroundManager!!.loadImage(TMDBHelper.BACKDROP_URL + tvShowDetail.posterPath)
+            glideBackgroundManager!!.loadImage(TMDBHelper.BACKDROP_URL + tvShowDetail.info.backdrop_path)
         } else {
             glideBackgroundManager!!.setBackground(
                 ContextCompat.getDrawable(

@@ -29,6 +29,11 @@
         android:theme="@style/Theme.OpenTV"
         android:usesCleartextTraffic="true">
         <activity
+            android:name=".Activities.ListAllActivities.ListAllEpisodesActivity"
+            android:exported="false"
+            android:label="@string/title_activity_list_all_episodes"
+            android:theme="@style/Theme.OpenTV" />
+        <activity
             android:name=".Activities.ListAllActivities.ListAllMoviesActivity"
             android:exported="false"
             android:label="@string/title_activity_list_all_movies"
@@ -76,11 +81,9 @@
         <activity
             android:name=".Activities.DetailActivities.MovieDetailActivity"
             android:exported="false" />
-
         <activity
             android:name=".Activities.DetailActivities.TvDetailActivity"
             android:exported="false" />
-
         <activity
             android:name=".BrowseErrorActivity"
             android:exported="false" />

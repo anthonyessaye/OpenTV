@@ -2,6 +2,7 @@ package com.anthonyessaye.opentv.REST
 
 import com.anthonyessaye.opentv.Builders.XtreamBuilder
 import com.anthonyessaye.opentv.DataClasses.UserAndServer
+import com.anthonyessaye.opentv.Models.Series.SeriesDetails
 import com.anthonyessaye.opentv.Persistence.Categories.LiveCategory.LiveCategory
 import com.anthonyessaye.opentv.Persistence.Categories.MovieCategory.MovieCategory
 import com.anthonyessaye.opentv.Persistence.Categories.SeriesCategory.SeriesCategory
@@ -11,6 +12,7 @@ import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.Persistence.Server.Server
 import com.anthonyessaye.opentv.Persistence.User.User
 import com.github.kittinunf.fuel.Fuel
+import com.github.kittinunf.fuel.coroutines.awaitObjectResponse
 import com.github.kittinunf.fuel.gson.responseObject
 import com.github.kittinunf.result.Result
 
@@ -173,6 +175,12 @@ object RESTHandler {
                     }
                 }
         }
+
+        suspend fun getSeriesDetails(
+            xtream: XtreamBuilder,
+            series_id: String
+        ) : SeriesDetails? = Fuel.get(xtream.getStreamInfoForSpecificSeries(series_id)).awaitObjectResponse<SeriesDetails>(SeriesDetails.Deserializer()).third
+
 
     }
 }

@@ -53,7 +53,7 @@ class XtreamBuilder(private val username: String,
     }
 
     public fun getStreamInfoForSpecificSeries(seriesID: String): String {
-        return "${getBaseURL()}&action=get_series_info&series=$seriesID"
+        return "${getBaseURL()}&action=get_series_info&series_id=$seriesID"
     }
 
     /*

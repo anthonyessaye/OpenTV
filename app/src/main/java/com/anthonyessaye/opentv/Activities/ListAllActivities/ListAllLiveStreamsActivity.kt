@@ -141,6 +141,8 @@ class ListAllLiveStreamsActivity : ComponentActivity(), RecyclerViewCallbackInte
                         recyclerViewLiveStreamList.adapter = availableStreamsAdapter
                     }
                 }
+
+                ViewMode.EPISODE ->  { }
             }
         }
     }
