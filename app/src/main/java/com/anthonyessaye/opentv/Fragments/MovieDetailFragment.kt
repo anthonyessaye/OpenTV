@@ -118,30 +118,19 @@ class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListen
                     val serverInfo = db.serverDao().getAll().first()
                     val loggedInUser = db.userDao().getAll().first()
 
-                    // Write history to disk
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val movieHistory = MovieHistory(
-                            mSelectedMovie.stream_id,
-                            mSelectedMovie.name,
-                            mSelectedMovie.container_extension,
-                            (System.currentTimeMillis() / 1000).toString(),
-                            mSelectedMovie.stream_icon.toString(),
-                            "0"
-                        )
+                    cache(requireContext(), mSelectedMovie.stream_id, mSelectedMovie.name,mSelectedMovie.stream_icon.toString(),
+                        mSelectedMovie.container_extension,
+                        StreamType.MOVIE)
 
-                        db.movieHistoryDao().insertTop(50, movieHistory)
+                    val streamURI = buildStreamURI(
+                        serverInfo,
+                        loggedInUser,
+                        StreamType.MOVIE,
+                        mSelectedMovie.stream_id,
+                        mSelectedMovie.container_extension
+                    )
 
-                        val streamURI = buildStreamURI(
-                            serverInfo,
-                            loggedInUser,
-                            StreamType.MOVIE,
-                            mSelectedMovie.stream_id,
-                            mSelectedMovie.container_extension
-                        )
-
-                        play(requireContext(), streamURI)
-                    }
-
+                    play(requireContext(), streamURI)
 
                 }
             } else if (actionId == 1) {

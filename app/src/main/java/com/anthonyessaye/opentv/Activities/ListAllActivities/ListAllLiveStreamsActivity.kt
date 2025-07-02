@@ -161,17 +161,8 @@ class ListAllLiveStreamsActivity : ComponentActivity(), RecyclerViewCallbackInte
                         val serverInfo = db.serverDao().getAll().first()
                         val loggedInUser = db.userDao().getAll().first()
 
-                        // Write history to disk
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            val liveHistory = LiveHistory(
-                                liveStream.stream_id,
-                                liveStream.name,
-                                (System.currentTimeMillis() / 1000).toString(),
-                                liveStream.stream_icon
-                            )
-
-                            db.liveHistoryDao().insertTop(10, liveHistory)
-                        }
+                        cache(this@ListAllLiveStreamsActivity, liveStream.stream_id,
+                            liveStream.name, liveStream.stream_icon, StreamType.LIVE)
 
                         val streamURI = buildStreamURI(
                             serverInfo,

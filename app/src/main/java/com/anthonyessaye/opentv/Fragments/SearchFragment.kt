@@ -168,23 +168,7 @@ class SearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchResu
                 val serverInfo = db.serverDao().getAll().first()
                 val loggedInUser = db.userDao().getAll().first()
 
-                val history = db.liveHistoryDao().findById(item.stream_id.toString())
-
-                // Write history to disk
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val liveHistory = LiveHistory(
-                        item.stream_id,
-                        item.name,
-                        (System.currentTimeMillis() / 1000).toString(),
-                        item.stream_icon
-                    )
-
-                    if (history == null)
-                        db.liveHistoryDao().insertTop(10, liveHistory)
-
-                    else
-                        db.liveHistoryDao().update((System.currentTimeMillis() / 1000).toString(), item.stream_id)
-                }
+                cache(requireContext(), item.stream_id, item.name, item.stream_icon, StreamType.LIVE)
 
                 val streamURI = buildStreamURI(
                     serverInfo,

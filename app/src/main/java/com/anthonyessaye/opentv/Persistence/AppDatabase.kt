@@ -15,6 +15,8 @@ import com.anthonyessaye.opentv.Persistence.History.LiveHistory.LiveHistory
 import com.anthonyessaye.opentv.Persistence.History.LiveHistory.LiveHistoryDao
 import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistory
 import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistoryDao
+import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistory
+import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistoryDao
 import com.anthonyessaye.opentv.Persistence.LiveStream.LiveStream
 import com.anthonyessaye.opentv.Persistence.LiveStream.LiveStreamDao
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
@@ -35,7 +37,8 @@ import com.anthonyessaye.opentv.Persistence.User.UserDao
                       MovieCategory::class,
                       SeriesCategory::class,
                       LiveHistory::class,
-                      MovieHistory::class], version = 1)
+                      MovieHistory::class,
+                      SeriesHistory::class], version = 1)
 
 @TypeConverters(StringListConverter::class, StringArrayConverter::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -49,4 +52,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun seriesDao(): SeriesDao
     abstract fun liveHistoryDao(): LiveHistoryDao
     abstract fun movieHistoryDao(): MovieHistoryDao
+    abstract fun seriesHistoryDao(): SeriesHistoryDao
 }
