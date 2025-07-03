@@ -36,6 +36,7 @@ import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
 import com.anthonyessaye.opentv.Persistence.History.LiveHistory.LiveHistory
 import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistory
+import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistory
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.Persistence.User.User
 import com.anthonyessaye.opentv.R
@@ -65,7 +66,7 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
     private lateinit var loggedInUser: User
     private var liveStreamHistory : List<LiveHistory> = emptyList()
     private var moviesHistory: List<MovieHistory> = emptyList()
-    private var seriesHistory : List<Series> = emptyList()
+    private var seriesHistory : List<SeriesHistory> = emptyList()
 
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -95,7 +96,7 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
             loggedInUser = db.userDao().getAll().first()
             liveStreamHistory = db.liveHistoryDao().getAll().sortedBy { it.last_watched }.reversed()
             moviesHistory = db.movieHistoryDao().getAll().sortedBy { it.last_watched }.reversed()
-            //availableSeries = db.seriesDao().getAll()
+            seriesHistory = db.seriesHistoryDao().getAll().sortedBy { it.last_watched }.reversed()
 
             namesToDataMap.put(getString(R.string.live_streams), liveStreamHistory)
             namesToDataMap.put(getString(R.string.movies), moviesHistory)
@@ -139,6 +140,13 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
 
             else if (item == getString(R.string.movies)) {
                 val data = namesToDataMap[item] as List<MovieHistory>
+                for (dItem in data) {
+                    listRowAdapter.add(dItem)
+                }
+            }
+
+            else if (item == getString(R.string.series)) {
+                val data = namesToDataMap[item] as List<SeriesHistory>
                 for (dItem in data) {
                     listRowAdapter.add(dItem)
                 }

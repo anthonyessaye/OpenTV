@@ -16,10 +16,10 @@ interface MovieHistoryDao {
     fun loadAllByIds(streamIds: IntArray): List<MovieHistory>
 
     @Query("SELECT * FROM MovieHistory WHERE name LIKE :name")
-    fun findByName(name: String): MovieHistory
+    fun findByName(name: String): MovieHistory?
 
     @Query("SELECT * FROM MovieHistory WHERE stream_id LIKE :id")
-    fun findById(id: String): MovieHistory
+    fun findById(id: String): MovieHistory?
 
     @Transaction
     fun insertTop(top: Int, history: MovieHistory) {

@@ -9,6 +9,7 @@ import androidx.leanback.widget.ImageCardView
 import androidx.leanback.widget.Presenter
 import com.anthonyessaye.opentv.Persistence.History.LiveHistory.LiveHistory
 import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistory
+import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistory
 import com.anthonyessaye.opentv.R
 import com.bumptech.glide.Glide
 import com.github.marlonlom.utilities.timeago.TimeAgo
@@ -54,8 +55,6 @@ class CardPresenter() : Presenter() {
             cardView.contentText = TimeAgo.Companion.using(liveStream.last_watched.toLong() * 1000)
 
             cardView.setMainImageDimensions(SPECIAL_CARD_WIDTH, CARD_HEIGHT)
-
-
             cardView.mainImageView!!.scaleType = ImageView.ScaleType.FIT_CENTER
 
             Glide.with(viewHolder.view.context)
@@ -73,12 +72,27 @@ class CardPresenter() : Presenter() {
             cardView.contentText = TimeAgo.Companion.using(movie.last_watched.toLong() * 1000)
 
             cardView.setMainImageDimensions(SPECIAL_CARD_WIDTH, CARD_HEIGHT)
-
-
             cardView.mainImageView!!.scaleType = ImageView.ScaleType.CENTER_CROP
 
             Glide.with(viewHolder.view.context)
                 .load(movie.stream_icon)
+                .centerCrop()
+                .error(mDefaultCardImage)
+                .into(cardView.mainImageView!!)
+        }
+
+        if (item is SeriesHistory) {
+            val series = item as SeriesHistory
+
+            val cardView = viewHolder.view as ImageCardView
+            cardView.titleText = series.name
+            cardView.contentText = TimeAgo.Companion.using(series.last_watched.toLong() * 1000)
+
+            cardView.setMainImageDimensions(SPECIAL_CARD_WIDTH, CARD_HEIGHT)
+            cardView.mainImageView!!.scaleType = ImageView.ScaleType.CENTER_CROP
+
+            Glide.with(viewHolder.view.context)
+                .load(series.stream_icon)
                 .centerCrop()
                 .error(mDefaultCardImage)
                 .into(cardView.mainImageView!!)

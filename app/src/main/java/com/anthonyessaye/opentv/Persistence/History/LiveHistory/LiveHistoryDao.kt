@@ -15,7 +15,7 @@ interface LiveHistoryDao {
     fun loadAllByIds(streamIds: IntArray): List<LiveHistory>
 
     @Query("SELECT * FROM LiveHistory WHERE name LIKE :name")
-    fun findByName(name: String): LiveHistory
+    fun findByName(name: String): LiveHistory?
 
     @Query("SELECT * FROM LiveHistory WHERE stream_id LIKE :id")
     fun findById(id: String): LiveHistory?

@@ -6,19 +6,28 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 
+/**
+ * In the future it might be worth creating a table just for series with
+ * something like series_id and List<Episode Ids Watched> and then query
+ * that for history and keep this table short with only the tracking info
+ * of the latest episode.
+ *
+ * That will definitely make the operations faster on the long run when
+ * the database is heavy. Food for thought.
+ */
 @Dao
 interface SeriesHistoryDao {
-    @Query("SELECT * FROM SeriesHistory")
+    @Query("SELECT * FROM (SELECT * FROM SeriesHistory ORDER BY last_watched DESC) GROUP BY series_id")
     fun getAll(): List<SeriesHistory>
 
-    @Query("SELECT * FROM SeriesHistory WHERE stream_id IN (:streamIds)")
-    fun loadAllByIds(streamIds: IntArray): List<SeriesHistory>
+    @Query("SELECT * FROM SeriesHistory WHERE series_id IN (:seriesId)")
+    fun loadAllByIds(seriesId: IntArray): List<SeriesHistory>
 
     @Query("SELECT * FROM SeriesHistory WHERE name LIKE :name")
-    fun findByName(name: String): SeriesHistory
+    fun findByName(name: String): SeriesHistory?
 
     @Query("SELECT * FROM SeriesHistory WHERE stream_id LIKE :id")
-    fun findById(id: String): SeriesHistory
+    fun findById(id: String): SeriesHistory?
 
     @Transaction
     fun insertTop(top: Int, history: SeriesHistory) {

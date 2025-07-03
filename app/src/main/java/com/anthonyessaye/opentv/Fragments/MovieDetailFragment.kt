@@ -118,9 +118,7 @@ class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListen
                     val serverInfo = db.serverDao().getAll().first()
                     val loggedInUser = db.userDao().getAll().first()
 
-                    cache(requireContext(), mSelectedMovie.stream_id, mSelectedMovie.name,mSelectedMovie.stream_icon.toString(),
-                        mSelectedMovie.container_extension,
-                        StreamType.MOVIE)
+                    cache(requireContext(), mSelectedMovie, StreamType.MOVIE)
 
                     val streamURI = buildStreamURI(
                         serverInfo,

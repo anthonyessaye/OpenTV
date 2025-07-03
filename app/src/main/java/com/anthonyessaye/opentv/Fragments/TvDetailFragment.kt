@@ -142,7 +142,8 @@ OnItemViewClickedListener, PlayerInterface {
             val actionId = action!!.getId().toInt()
             if (actionId == 0) {
                 val intent = Intent(activity, ListAllEpisodesActivity::class.java)
-                intent.putExtra(TvDetailActivity.SERIES, showDetails)
+                intent.putExtra(TvDetailActivity.SERIES_DETAIL, showDetails)
+                intent.putExtra(TvDetailActivity.SERIES, tvShow)
                 startActivity(intent)
             } else if (actionId == 1) {
                 if (youtubeID != null) {

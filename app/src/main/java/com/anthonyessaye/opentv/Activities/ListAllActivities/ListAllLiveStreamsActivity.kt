@@ -161,8 +161,7 @@ class ListAllLiveStreamsActivity : ComponentActivity(), RecyclerViewCallbackInte
                         val serverInfo = db.serverDao().getAll().first()
                         val loggedInUser = db.userDao().getAll().first()
 
-                        cache(this@ListAllLiveStreamsActivity, liveStream.stream_id,
-                            liveStream.name, liveStream.stream_icon, StreamType.LIVE)
+                        cache(this@ListAllLiveStreamsActivity, liveStream, StreamType.LIVE)
 
                         val streamURI = buildStreamURI(
                             serverInfo,

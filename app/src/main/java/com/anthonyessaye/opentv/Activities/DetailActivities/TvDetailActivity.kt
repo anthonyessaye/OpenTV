@@ -60,5 +60,6 @@ class TvDetailActivity : FragmentActivity() {
 
     companion object {
         const val SERIES = "Series"
+        const val SERIES_DETAIL = "SeriesDetail"
     }
 }

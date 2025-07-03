@@ -168,7 +168,7 @@ class SearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchResu
                 val serverInfo = db.serverDao().getAll().first()
                 val loggedInUser = db.userDao().getAll().first()
 
-                cache(requireContext(), item.stream_id, item.name, item.stream_icon, StreamType.LIVE)
+                cache(requireContext(), item, StreamType.LIVE)
 
                 val streamURI = buildStreamURI(
                     serverInfo,

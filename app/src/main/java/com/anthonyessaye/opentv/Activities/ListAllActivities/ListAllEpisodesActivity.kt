@@ -34,7 +34,8 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
     private lateinit var editTextSearch: EditText
     private lateinit var imageBtnViewStyle: ImageButton
 
-    lateinit var tvShow: SeriesDetails
+    lateinit var tvShow: Series
+    lateinit var seriesDetails: SeriesDetails
     var viewMode: ViewMode = ViewMode.EPISODE
     var selectedKey: String = ""
 
@@ -47,11 +48,12 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
         editTextSearch = findViewById<EditText>(R.id.editTextSearch)
         imageBtnViewStyle = findViewById<ImageButton>(R.id.imageBtnViewStyle)
 
-        tvShow = intent.getSerializableExtra(TvDetailActivity.SERIES) as SeriesDetails
+        tvShow = intent.getSerializableExtra(TvDetailActivity.SERIES) as Series
+        seriesDetails = intent.getSerializableExtra(TvDetailActivity.SERIES_DETAIL) as SeriesDetails
 
         var dataSetPair = ArrayList<Pair<String, String>>()
 
-        for (season in tvShow.episodes.keys) {
+        for (season in seriesDetails.episodes.keys) {
             dataSetPair.add(Pair(season, "Season ${season}"))
         }
 
@@ -62,12 +64,12 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
             recyclerViewCategoryList.adapter = customAdapter
         }
 
-        loadEpisodesList(tvShow.episodes.keys.first())
+        loadEpisodesList(seriesDetails.episodes.keys.first())
     }
 
     fun loadEpisodesList(mapKey: String) {
         selectedKey = mapKey
-        val availableStreamsAdapter = EpisodeRecyclerViewAdapter(tvShow.episodes[mapKey]!!, this,
+        val availableStreamsAdapter = EpisodeRecyclerViewAdapter(seriesDetails.episodes[mapKey]!!, this,
             RecyclerViewType.LIST_SERIES)
 
         runOnUiThread {
@@ -94,18 +96,8 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
                         val loggedInUser = db.userDao().getAll().first()
                         val serverInfo = db.serverDao().getAll().first()
 
-                        val episode = tvShow.episodes[selectedKey]!!.first { it.id.toString() == id }
-
-                        /*val movieHistory = MovieHistory(
-                            mSelectedMovie.stream_id,
-                            mSelectedMovie.name,
-                            mSelectedMovie.container_extension,
-                            (System.currentTimeMillis() / 1000).toString(),
-                            mSelectedMovie.stream_icon.toString(),
-                            "0"
-                        )
-
-                        db.movieHistoryDao().insertTop(50, movieHistory)*/
+                        val episode = seriesDetails.episodes[selectedKey]!!.first { it.id.toString() == id }
+                        cache(this@ListAllEpisodesActivity, Pair(tvShow, episode), StreamType.SERIES)
 
                         val streamURI = buildStreamURI(
                             serverInfo,
