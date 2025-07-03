@@ -217,6 +217,22 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
                 }
             }
 
+            else if (item is SeriesHistory) {
+                DatabaseManager().openDatabase(requireContext()) { db ->
+                    val loggedInUser = db.userDao().getAll().first()
+                    val server = db.serverDao().getAll().first()
+                    val streamType = StreamType.SERIES
+
+                    // update history on disk
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        db.seriesHistoryDao().updateLastWatched((System.currentTimeMillis()/1000).toString(), item.stream_id)
+                    }
+
+                    val streamURI = buildStreamURI(server, loggedInUser, streamType, item.stream_id, item.container_extension)
+                    play(requireContext(), streamURI)
+                }
+            }
+
             else if (item is String) {
                     if (item.contains(getString(R.string.live_streams))) {
                         val intent = Intent(context!!, ListAllLiveStreamsActivity::class.java)
