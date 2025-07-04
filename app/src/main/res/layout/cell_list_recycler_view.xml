@@ -29,6 +29,7 @@
         app:layout_constraintStart_toEndOf="@+id/textView"
         app:layout_constraintTop_toTopOf="parent"
         android:visibility="gone"
+        android:padding="10dp"
         android:src="@mipmap/favorite"
     />
 

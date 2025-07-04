@@ -46,6 +46,10 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
         val view = LayoutInflater.from(viewGroup.context)
             .inflate(R.layout.cell_list_recycler_view, viewGroup, false)
 
+        if (recyclerViewType != RecyclerViewType.LIST_CATEGORIES) {
+            selectedItem = -1
+        }
+
         view.isFocusable = true
         view.isFocusableInTouchMode = true
 
@@ -67,9 +71,27 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
         if (recyclerViewType != RecyclerViewType.LIST_CATEGORIES) {
             viewHolder.itemView.setBackgroundResource(R.drawable.item_list_no_background)
 
+            viewHolder.imageViewFavorite.visibility = View.GONE
             if (favoriteIDs.contains(currentItemId))
                 viewHolder.imageViewFavorite.visibility = View.VISIBLE
+
+            viewHolder.itemView.setOnLongClickListener {
+                longClickedItem = adapterPosition
+                buildIntent(longClickedItem, true)
+                return@setOnLongClickListener true
+            }
         }
+
+        viewHolder.itemView.setOnClickListener {
+            if (recyclerViewType == RecyclerViewType.LIST_CATEGORIES) {
+                notifyItemChanged(selectedItem);
+                selectedItem = adapterPosition
+                notifyItemChanged(selectedItem);
+            }
+
+            buildIntent(adapterPosition, false)
+        }
+
 
         viewHolder.itemView.setOnFocusChangeListener { view, isFocused ->
             // add focus handling logic
@@ -81,20 +103,6 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
                 viewHolder.textView.isSelected = false
                 view.setBackgroundResource(R.drawable.item_list_selection)
             }
-        }
-
-        viewHolder.itemView.setOnClickListener {
-            notifyItemChanged(selectedItem);
-            selectedItem = adapterPosition
-            notifyItemChanged(selectedItem);
-
-            buildIntent(selectedItem, false)
-        }
-
-        viewHolder.itemView.setOnLongClickListener {
-            longClickedItem = adapterPosition
-            buildIntent(longClickedItem, true)
-            return@setOnLongClickListener true
         }
     }
 
