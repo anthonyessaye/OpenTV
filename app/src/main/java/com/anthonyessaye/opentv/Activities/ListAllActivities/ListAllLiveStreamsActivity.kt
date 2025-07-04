@@ -88,7 +88,11 @@ class ListAllLiveStreamsActivity : ComponentActivity(),
 
         imageBtnViewStyle.setOnClickListener {
             viewMode = viewMode.next()
-            loadStreamsList(selectedCategoryIndexId)
+            if(selectedCategoryIndexId != "-1")
+                loadStreamsList(selectedCategoryIndexId)
+
+            else
+                loadFavorites()
         }
     }
 
@@ -120,7 +124,8 @@ class ListAllLiveStreamsActivity : ComponentActivity(),
                 if (favorites.isNullOrEmpty())
                     loadStreamsList(allCategories.first().category_id)
 
-                else loadFavorites()
+                else
+                    loadFavorites()
             }
         }
     }
@@ -152,8 +157,11 @@ class ListAllLiveStreamsActivity : ComponentActivity(),
                 }
 
                 ViewMode.GRID -> {
-                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(), images.toTypedArray(), this,
-                            RecyclerViewType.LIST_LIVE_STREAMS)
+                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(),
+                        images.toTypedArray(),
+                        favorites?.map(Favorite::stream_id) ?: emptyList(),
+                        this,
+                        RecyclerViewType.LIST_LIVE_STREAMS)
 
                     runOnUiThread {
                         recyclerViewLiveStreamList.layoutManager =  GridLayoutManager(this,5)
@@ -162,7 +170,11 @@ class ListAllLiveStreamsActivity : ComponentActivity(),
                     }
                 }
 
-                ViewMode.EPISODE ->  { }
+                ViewMode.EPISODE ->  {
+                    runOnUiThread {
+                        imageBtnViewStyle.performClick()
+                    }
+                }
             }
         }
     }
@@ -192,7 +204,10 @@ class ListAllLiveStreamsActivity : ComponentActivity(),
                 }
 
                 ViewMode.GRID -> {
-                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(), images.toTypedArray(), this,
+                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(),
+                        images.toTypedArray(),
+                        favorites?.map(Favorite::stream_id) ?: emptyList(),
+                        this,
                         RecyclerViewType.LIST_LIVE_STREAMS)
 
                     runOnUiThread {
@@ -202,7 +217,11 @@ class ListAllLiveStreamsActivity : ComponentActivity(),
                     }
                 }
 
-                ViewMode.EPISODE ->  { }
+                ViewMode.EPISODE ->  {
+                    runOnUiThread {
+                        imageBtnViewStyle.performClick()
+                    }
+                }
             }
         }
     }

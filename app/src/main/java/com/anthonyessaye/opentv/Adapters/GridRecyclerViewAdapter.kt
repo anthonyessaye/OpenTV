@@ -18,6 +18,7 @@ import com.bumptech.glide.Glide
 
 class GridRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
                               private val images: Array<String>,
+                              private val favoriteIDs: List<Int>,
                               private val parentInterface: RecyclerViewCallbackInterface,
                               private val recyclerViewType: RecyclerViewType) :
     RecyclerView.Adapter<GridRecyclerViewAdapter.ViewHolder>()  {
@@ -30,13 +31,14 @@ class GridRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
         val imageViewCover: ImageView
         val textView: TextView
         val root: ConstraintLayout
+        val imageViewFavorite: ImageView
 
         init {
             // Define click listener for the ViewHolder's View
             imageViewCover = view.findViewById(R.id.imageViewCover)
             textView = view.findViewById(R.id.textView)
             root = view.findViewById(R.id.root)
-
+            imageViewFavorite = view.findViewById<ImageView>(R.id.imageViewFavorite)
         }
     }
 
@@ -59,6 +61,7 @@ class GridRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
         // Get element from your dataset at this position and replace the
         // contents of the view with that element
         val adapterPosition = viewHolder.bindingAdapterPosition
+        val currentItemId = dataSet[adapterPosition].first.toInt()
 
         viewHolder.textView.text = dataSet[adapterPosition].component2()
         viewHolder.root.setSelected(selectedItem == adapterPosition);
@@ -66,6 +69,16 @@ class GridRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
 
         if (recyclerViewType != RecyclerViewType.LIST_CATEGORIES) {
             viewHolder.itemView.setBackgroundResource(R.drawable.item_list_no_background)
+
+            viewHolder.imageViewFavorite.visibility = View.GONE
+            if (favoriteIDs.contains(currentItemId))
+                viewHolder.imageViewFavorite.visibility = View.VISIBLE
+
+            viewHolder.itemView.setOnLongClickListener {
+                longClickedItem = adapterPosition
+                buildIntent(longClickedItem, true)
+                return@setOnLongClickListener true
+            }
         }
 
         viewHolder.itemView.setOnFocusChangeListener { view, isFocused ->
@@ -86,12 +99,6 @@ class GridRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
             notifyItemChanged(selectedItem);
 
             buildIntent(selectedItem, false)
-        }
-
-        viewHolder.itemView.setOnLongClickListener {
-            longClickedItem = adapterPosition
-            buildIntent(longClickedItem, true)
-            return@setOnLongClickListener true
         }
 
         Glide.with(viewHolder.imageViewCover.context)

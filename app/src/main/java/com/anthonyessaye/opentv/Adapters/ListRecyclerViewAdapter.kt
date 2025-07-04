@@ -36,7 +36,6 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
             textView = view.findViewById(R.id.textView)
             root = view.findViewById(R.id.root)
             imageViewFavorite = view.findViewById<ImageView>(R.id.imageViewFavorite)
-
         }
     }
 

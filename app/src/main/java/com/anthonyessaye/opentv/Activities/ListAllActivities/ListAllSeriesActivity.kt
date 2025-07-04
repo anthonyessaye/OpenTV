@@ -131,7 +131,7 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
                 }
 
                 ViewMode.GRID -> {
-                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(), images.toTypedArray(), this,
+                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(), images.toTypedArray(), emptyList(), this,
                         RecyclerViewType.LIST_SERIES)
 
                     runOnUiThread {

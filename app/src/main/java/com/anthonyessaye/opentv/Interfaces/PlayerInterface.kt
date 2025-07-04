@@ -78,7 +78,7 @@ interface PlayerInterface {
                             series.series_id.toString())
 
                         if (history == null)
-                            db.seriesHistoryDao().insertTop(50, seriesHistory)
+                            db.seriesHistoryDao().insertTop(1000, seriesHistory)
                         else
                             db.seriesHistoryDao().updateLastWatched(
                                 (System.currentTimeMillis() / 1000).toString(),
@@ -106,7 +106,7 @@ interface PlayerInterface {
                         )
 
                         if (history == null)
-                            db.movieHistoryDao().insertTop(50, movieHistory)
+                            db.movieHistoryDao().insertTop(1000, movieHistory)
                         else
                             db.movieHistoryDao().updateLastWatched(
                                 (System.currentTimeMillis() / 1000).toString(),
