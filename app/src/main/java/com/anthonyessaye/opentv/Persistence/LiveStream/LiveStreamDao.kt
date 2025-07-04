@@ -22,10 +22,10 @@ interface LiveStreamDao {
     fun findByLikeName(name: String, limit: Int): List<LiveStream>
 
     @Query("SELECT * FROM LiveStream WHERE category_id LIKE :id")
-    fun findByCategoryId(id: String): List<LiveStream>
+    fun findByCategoryId(id: String): List<LiveStream>?
 
     @Query("SELECT * FROM LiveStream WHERE stream_id LIKE :id")
-    fun findById(id: String): LiveStream
+    fun findById(id: String): LiveStream?
 
     @Insert
     fun insertAll(vararg streams: LiveStream)

@@ -57,7 +57,7 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
             dataSetPair.add(Pair(season, "Season ${season}"))
         }
 
-        val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), this, RecyclerViewType.LIST_CATEGORIES)
+        val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), emptyList(), this, RecyclerViewType.LIST_CATEGORIES)
 
         runOnUiThread {
             recyclerViewCategoryList.layoutManager = LinearLayoutManager(this)

@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.RecyclerView
@@ -16,6 +17,7 @@ import com.anthonyessaye.opentv.Interfaces.RecyclerViewCallbackInterface
 import com.anthonyessaye.opentv.R
 
 class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
+                              private val favoriteIDs: List<Int>,
                               private val parentInterface: RecyclerViewCallbackInterface,
                               private val recyclerViewType: RecyclerViewType) :
     RecyclerView.Adapter<ListRecyclerViewAdapter.ViewHolder>()  {
@@ -27,11 +29,13 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val textView: TextView
         val root: ConstraintLayout
+        val imageViewFavorite: ImageView
 
         init {
             // Define click listener for the ViewHolder's View
             textView = view.findViewById(R.id.textView)
             root = view.findViewById(R.id.root)
+            imageViewFavorite = view.findViewById<ImageView>(R.id.imageViewFavorite)
 
         }
     }
@@ -53,6 +57,7 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
     override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
 
         val adapterPosition = viewHolder.bindingAdapterPosition
+        val currentItemId = dataSet[adapterPosition].first.toInt()
         // Get element from your dataset at this position and replace the
         // contents of the view with that element
         viewHolder.textView.text = dataSet[adapterPosition].component2()
@@ -61,6 +66,9 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
 
         if (recyclerViewType != RecyclerViewType.LIST_CATEGORIES) {
             viewHolder.itemView.setBackgroundResource(R.drawable.item_list_no_background)
+
+            if (favoriteIDs.contains(currentItemId))
+                viewHolder.imageViewFavorite.visibility = View.VISIBLE
         }
 
         viewHolder.itemView.setOnFocusChangeListener { view, isFocused ->

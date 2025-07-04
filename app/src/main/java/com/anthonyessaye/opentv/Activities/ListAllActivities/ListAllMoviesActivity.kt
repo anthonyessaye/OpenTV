@@ -67,7 +67,7 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
                 }
             }
 
-            val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), this, RecyclerViewType.LIST_CATEGORIES)
+            val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), emptyList(), this, RecyclerViewType.LIST_CATEGORIES)
 
             recyclerViewCategoryList.layoutManager = LinearLayoutManager(this)
             recyclerViewCategoryList.adapter = customAdapter
@@ -89,7 +89,7 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
                 dataSetPair.add(Pair(it.category_id, it.category_name))
             }
 
-            val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), this, RecyclerViewType.LIST_CATEGORIES)
+            val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), emptyList(), this, RecyclerViewType.LIST_CATEGORIES)
 
             runOnUiThread {
                 recyclerViewCategoryList.layoutManager = LinearLayoutManager(this)
@@ -116,7 +116,7 @@ class ListAllMoviesActivity : ComponentActivity(), RecyclerViewCallbackInterface
 
             when(viewMode) {
                 ViewMode.LIST -> {
-                    val availableStreamsAdapter = ListRecyclerViewAdapter(dataSet.toTypedArray(), this,
+                    val availableStreamsAdapter = ListRecyclerViewAdapter(dataSet.toTypedArray(), emptyList(), this,
                         RecyclerViewType.LIST_MOVIES)
 
                     runOnUiThread {
