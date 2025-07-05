@@ -16,26 +16,30 @@ import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllMoviesActivi
 import com.anthonyessaye.opentv.Adapters.GridRecyclerViewAdapter
 import com.anthonyessaye.opentv.Adapters.ListRecyclerViewAdapter
 import com.anthonyessaye.opentv.Enums.RecyclerViewType
+import com.anthonyessaye.opentv.Enums.StreamType
 import com.anthonyessaye.opentv.Enums.ViewMode
 import com.anthonyessaye.opentv.Helper
+import com.anthonyessaye.opentv.Interfaces.FavoriteInterface
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Interfaces.RecyclerViewCallbackInterface
 import com.anthonyessaye.opentv.Persistence.Categories.MovieCategory.MovieCategory
 import com.anthonyessaye.opentv.Persistence.Categories.SeriesCategory.SeriesCategory
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
+import com.anthonyessaye.opentv.Persistence.Favorite.Favorite
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.R
 import dev.anilbeesetti.nextplayer.feature.player.extensions.next
 import kotlin.collections.forEach
 
-class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface, PlayerInterface {
+class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface, PlayerInterface, FavoriteInterface {
     private lateinit var recyclerViewCategoryList: RecyclerView
     private lateinit var recyclerViewLiveStreamList: RecyclerView
     private lateinit var editTextSearch: EditText
     private lateinit var imageBtnViewStyle: ImageButton
 
     private lateinit var allCategories: List<SeriesCategory>
+    private var favorites: List<Favorite>? = null
     private lateinit var seriesInSelectedCategory: List<Series>
 
     var selectedCategoryIndexId = "-1"
@@ -72,7 +76,10 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
                 }
             }
 
-            val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), emptyList(), this, RecyclerViewType.LIST_CATEGORIES)
+            val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(),
+                favorites?.map(Favorite::stream_id) ?: emptyList(),
+                this,
+                RecyclerViewType.LIST_CATEGORIES)
 
             recyclerViewCategoryList.layoutManager = LinearLayoutManager(this)
             recyclerViewCategoryList.adapter = customAdapter
@@ -87,14 +94,21 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
     fun loadAllCategories() {
         DatabaseManager().openDatabase(this) { db ->
             allCategories = db.seriesCategoryDao().getAll().sortedBy( { it.category_name })
+            favorites = db.favoriteDao().findByType(StreamType.SERIES.toString())?.sortedBy( { it.name })
 
             var dataSetPair = ArrayList<Pair<String, String>>()
 
+            if (!favorites.isNullOrEmpty()) {
+                dataSetPair.add(Pair("-1", getString(R.string.favorites)))
+            }
             allCategories.forEach {
                 dataSetPair.add(Pair(it.category_id, it.category_name))
             }
 
-            val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), emptyList(), this, RecyclerViewType.LIST_CATEGORIES)
+            val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(),
+                favorites?.map(Favorite::stream_id) ?: emptyList(),
+                this,
+                RecyclerViewType.LIST_CATEGORIES)
 
             runOnUiThread {
                 recyclerViewCategoryList.layoutManager = LinearLayoutManager(this)
@@ -102,7 +116,11 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
                 selectedCategoryIndexId = allCategories.first().category_id
             }
 
-            loadSeriesList(allCategories.first().category_id)
+            if (favorites.isNullOrEmpty())
+                loadSeriesList(allCategories.first().category_id)
+
+            else
+                loadFavorites()
         }
     }
 
@@ -121,7 +139,9 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
 
             when(viewMode) {
                 ViewMode.LIST -> {
-                    val availableStreamsAdapter = ListRecyclerViewAdapter(dataSet.toTypedArray(), emptyList(), this,
+                    val availableStreamsAdapter = ListRecyclerViewAdapter(dataSet.toTypedArray(),
+                        favorites?.map(Favorite::stream_id) ?: emptyList(),
+                        this,
                         RecyclerViewType.LIST_SERIES)
 
                     runOnUiThread {
@@ -131,7 +151,10 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
                 }
 
                 ViewMode.GRID -> {
-                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(), images.toTypedArray(), emptyList(), this,
+                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(),
+                        images.toTypedArray(),
+                        favorites?.map(Favorite::stream_id) ?: emptyList(),
+                        this,
                         RecyclerViewType.LIST_SERIES)
 
                     runOnUiThread {
@@ -142,11 +165,61 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
                 }
 
                 ViewMode.EPISODE -> {
-
+                    runOnUiThread {
+                        imageBtnViewStyle.performClick()
+                    }
                 }
             }
         }
     }
+
+    fun loadFavorites() {
+        selectedCategoryIndexId = "-1"
+        DatabaseManager().openDatabase(this) { db ->
+            var dataSet = ArrayList<Pair<String, String>>()
+            var images = ArrayList<String>()
+
+            favorites!!.forEach {
+                dataSet.add(Pair(it.stream_id.toString(), it.name))
+                images.add(it.stream_icon.toString())
+            }
+
+            when(viewMode) {
+                ViewMode.LIST -> {
+                    val availableStreamsAdapter = ListRecyclerViewAdapter(dataSet.toTypedArray(),
+                        favorites?.map(Favorite::stream_id) ?: emptyList(),
+                        this,
+                        RecyclerViewType.LIST_SERIES)
+
+                    runOnUiThread {
+                        recyclerViewLiveStreamList.layoutManager = LinearLayoutManager(this)
+                        recyclerViewLiveStreamList.adapter = availableStreamsAdapter
+                    }
+                }
+
+                ViewMode.GRID -> {
+                    val availableStreamsAdapter = GridRecyclerViewAdapter(dataSet.toTypedArray(),
+                        images.toTypedArray(),
+                        favorites?.map(Favorite::stream_id) ?: emptyList(),
+                        this,
+                        RecyclerViewType.LIST_SERIES)
+
+                    runOnUiThread {
+                        recyclerViewLiveStreamList.layoutManager =  GridLayoutManager(this,5)
+                        recyclerViewLiveStreamList.itemAnimator = null
+                        recyclerViewLiveStreamList.adapter = availableStreamsAdapter
+                    }
+                }
+
+                ViewMode.EPISODE ->  {
+                    runOnUiThread {
+                        imageBtnViewStyle.performClick()
+                    }
+                }
+            }
+        }
+    }
+
 
     override fun processIntent(intent: Intent) {
         val recyclerViewType = intent.getStringExtra(Helper.KEY_RECYCLER_VIEW_TYPE)
@@ -156,14 +229,20 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
         when(recyclerViewType) {
             RecyclerViewType.LIST_CATEGORIES.name -> {
                 selectedCategoryIndexId = id!!
-                loadSeriesList(selectedCategoryIndexId)
+
+
+                if(selectedCategoryIndexId != "-1")
+                    loadSeriesList(selectedCategoryIndexId)
+
+                else
+                    loadFavorites()
             }
             RecyclerViewType.LIST_MOVIES.name -> {}
 
             RecyclerViewType.LIST_SERIES.name -> {
                 if(!longClick) {
                     DatabaseManager().openDatabase(this@ListAllSeriesActivity) { db ->
-                        val series = seriesInSelectedCategory.first { it.series_id.toString() == id }
+                        val series = db.seriesDao().findById(id!!)
                         val intent = Intent(this@ListAllSeriesActivity, TvDetailActivity::class.java)
                         intent.putExtra(TvDetailActivity.SERIES, series)
 
@@ -172,7 +251,17 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
                 }
 
                 else {
-                    Toast.makeText(this@ListAllSeriesActivity, "Not yet implemented", Toast.LENGTH_LONG).show()
+                    DatabaseManager().openDatabase(this@ListAllSeriesActivity) { db ->
+                        val series = db.seriesDao().findById(id.toString())
+
+                        val favorite: Favorite = Favorite(series.series_id,
+                            series.name,
+                            series.cover,
+                            StreamType.SERIES.toString())
+
+                        addOrDeleteFavorite(this@ListAllSeriesActivity, favorite)
+                        loadAllCategories()
+                    }
                 }
             }
 
