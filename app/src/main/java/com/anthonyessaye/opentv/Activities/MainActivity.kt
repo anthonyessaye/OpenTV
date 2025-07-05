@@ -3,9 +3,11 @@ package com.anthonyessaye.opentv.Activities
 import android.os.Bundle
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.FragmentActivity
 import com.anthonyessaye.opentv.Fragments.MainFragment
 import com.anthonyessaye.opentv.R
+
 
 /**
  * Loads [MainFragment].
@@ -28,4 +30,5 @@ class MainActivity : FragmentActivity() {
                 .commitNow()
         }
     }
+
 }
