@@ -17,7 +17,7 @@ interface FavoriteInterface {
                     db.favoriteDao().insertAll(favorite)
 
                 else
-                    db.favoriteDao().delete(favorite)
+                    db.favoriteDao().delete(favoriteCache)
             }
         }
     }

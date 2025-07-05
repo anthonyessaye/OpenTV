@@ -6,6 +6,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.View
+import androidx.compose.ui.graphics.vector.Path
 import androidx.core.app.ActivityOptionsCompat
 import androidx.core.net.toUri
 import androidx.leanback.app.DetailsSupportFragment
@@ -32,14 +33,17 @@ import app.moviebase.tmdb.model.TmdbCredits
 import app.moviebase.tmdb.model.TmdbResult
 import app.moviebase.tmdb.model.TmdbVideo
 import com.anthonyessaye.opentv.Activities.DetailActivities.MovieDetailActivity
+import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllMoviesActivity
 import com.anthonyessaye.opentv.Models.MovieResponse
 import com.anthonyessaye.opentv.Adapters.MovieCardView
 import com.anthonyessaye.opentv.Enums.StreamType
+import com.anthonyessaye.opentv.Interfaces.FavoriteInterface
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Models.CastMember
 import com.anthonyessaye.opentv.Models.MovieDetails
 import com.anthonyessaye.opentv.Models.PaletteColors
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
+import com.anthonyessaye.opentv.Persistence.Favorite.Favorite
 import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistory
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.Presenters.CustomDetailPresenter
@@ -62,9 +66,11 @@ import com.bumptech.glide.request.transition.Transition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.collections.set
+import kotlin.toString
 
 class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListener,
-    OnItemViewClickedListener, PlayerInterface {
+    OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
     lateinit var mSelectedMovie: Movie
     lateinit var movieDetails: MovieDetails
     lateinit var palette: PaletteColors
@@ -75,6 +81,7 @@ class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListen
     var mRecommendationsAdapter: ArrayObjectAdapter = ArrayObjectAdapter(MoviePresenter())
     var mRecommendationsRow: ListRow? = null
     var youtubeID: String? = null
+    var favorite: Favorite? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,21 +90,24 @@ class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListen
         mSelectedMovie = requireActivity().intent.getSerializableExtra(MovieDetailActivity.Companion.MOVIE) as Movie
         setUpAdapter()
 
-        lifecycleScope.launch(Dispatchers.IO) {
-            movieDetails = doTMDBCall(mSelectedMovie.tmdb!!.toInt())
+        DatabaseManager().openDatabase(requireContext()) { db ->
+            favorite = db.favoriteDao().findById(mSelectedMovie.stream_id.toString())
 
-            withContext(Dispatchers.Main) {
-                setUpDetailsOverviewRow()
-                setUpCastMembers()
-                setupRecommendationsRow()
-                setOnItemViewClickedListener(this@MovieDetailFragment)
-                (requireActivity() as MovieDetailActivity).updateBackground(movieDetails)
-                (requireActivity() as MovieDetailActivity).constraintLayoutLoading.visibility =
-                    View.GONE
+            lifecycleScope.launch(Dispatchers.IO) {
+                movieDetails = doTMDBCall(mSelectedMovie.tmdb!!.toInt())
+
+                withContext(Dispatchers.Main) {
+                    setUpDetailsOverviewRow()
+                    setUpCastMembers()
+                    setupRecommendationsRow()
+
+                    setOnItemViewClickedListener(this@MovieDetailFragment)
+                    (requireActivity() as MovieDetailActivity).updateBackground(movieDetails)
+                    (requireActivity() as MovieDetailActivity).constraintLayoutLoading.visibility =
+                        View.GONE
+                }
             }
         }
-
-
     }
 
     private fun setUpAdapter() {
@@ -141,6 +151,24 @@ class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListen
                         )
                     )
                 }
+            }
+
+            else if (actionId == 2) {
+                if (action.label1 == resources.getString(R.string.unfavorite)) {
+                    addOrDeleteFavorite(requireContext(), favorite!!)
+                    favorite = null
+                }
+
+                else {
+                    favorite = Favorite(mSelectedMovie.stream_id,
+                    mSelectedMovie.name,
+                    mSelectedMovie.stream_icon,
+                        StreamType.MOVIE.toString())
+
+                    addOrDeleteFavorite(requireContext(), favorite!!)
+                }
+
+                fetchVideos()
             }
 
 
@@ -285,6 +313,11 @@ class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListen
                 adapter.set(1, Action(1, getString(R.string.watch_trailer), null, null))
             }
         }
+
+        if (favorite == null)
+            adapter.set(2, Action(2, getString(R.string.favorite), null, null))
+        else
+            adapter.set(2, Action(2, getString(R.string.unfavorite), null, null))
 
         detailsOverviewRow!!.setActionsAdapter(adapter);
         notifyDetailsChanged();

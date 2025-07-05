@@ -39,12 +39,15 @@ import com.anthonyessaye.opentv.Activities.DetailActivities.TvDetailActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllEpisodesActivity
 import com.anthonyessaye.opentv.Adapters.MovieCardView
 import com.anthonyessaye.opentv.Builders.XtreamBuilder
+import com.anthonyessaye.opentv.Enums.StreamType
+import com.anthonyessaye.opentv.Interfaces.FavoriteInterface
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
 import com.anthonyessaye.opentv.Models.CastMember
 import com.anthonyessaye.opentv.Models.MovieResponse
 import com.anthonyessaye.opentv.Models.PaletteColors
 import com.anthonyessaye.opentv.Models.Series.SeriesDetails
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
+import com.anthonyessaye.opentv.Persistence.Favorite.Favorite
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.Persistence.Server.Server
@@ -73,7 +76,7 @@ import kotlinx.coroutines.withContext
 
 /** Very lightweight detail fragment for TV shows.  */
 class TvDetailFragment: DetailsSupportFragment(), Palette.PaletteAsyncListener,
-OnItemViewClickedListener, PlayerInterface {
+OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
     private lateinit var tvShow: Series
     var tmdbDetails: TmdbShowDetail? = null
     var showDetails: SeriesDetails? = null
@@ -85,6 +88,7 @@ OnItemViewClickedListener, PlayerInterface {
     var mRecommendationsAdapter: ArrayObjectAdapter = ArrayObjectAdapter(MoviePresenter())
     var mRecommendationsRow: ListRow? = null
     var youtubeID: String? = null
+    var favorite: Favorite? = null
 
     private val mGlideDrawableSimpleTarget: CustomTarget<Drawable?> = object : CustomTarget<Drawable?>() {
             override fun onResourceReady(
@@ -155,6 +159,24 @@ OnItemViewClickedListener, PlayerInterface {
                         )
                     )
                 }
+            }
+
+            else if (actionId == 2) {
+                if (action.label1 == resources.getString(R.string.unfavorite)) {
+                    addOrDeleteFavorite(requireContext(), favorite!!)
+                    favorite = null
+                }
+
+                else {
+                    favorite = Favorite(tvShow.series_id,
+                        tvShow.name,
+                        tvShow.cover,
+                        StreamType.SERIES.toString())
+
+                    addOrDeleteFavorite(requireContext(), favorite!!)
+                }
+
+                fetchVideos()
             }
 
 
@@ -261,6 +283,11 @@ OnItemViewClickedListener, PlayerInterface {
                 adapter.set(1, Action(1, getString(R.string.watch_trailer), null, null))
             }
         }
+
+        if (favorite == null)
+            adapter.set(2, Action(2, getString(R.string.favorite), null, null))
+        else
+            adapter.set(2, Action(2, getString(R.string.unfavorite), null, null))
 
         detailsOverviewRow!!.setActionsAdapter(adapter);
         notifyDetailsChanged();

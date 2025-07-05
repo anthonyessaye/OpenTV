@@ -53,4 +53,6 @@
     <string name="title_activity_list_all_episodes">ListAllEpisodesActivity</string>
     <string name="refresh_data">Refresh Data</string>
     <string name="favorites">Favorites</string>
+    <string name="favorite">Favorite</string>
+    <string name="unfavorite">Unfavorite</string>
 </resources>
