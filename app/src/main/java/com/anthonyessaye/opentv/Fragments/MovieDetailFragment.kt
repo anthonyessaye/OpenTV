@@ -186,48 +186,61 @@ class MovieDetailFragment : DetailsSupportFragment(), Palette.PaletteAsyncListen
 
     suspend fun doTMDBCall(movieId: Int): MovieDetails {
         val tmdb = Tmdb3(APIKeys.TMDB_API_KEY)
-        val tmdbMovieDetail = tmdb.movies.getDetails(
-            movieId = movieId,
-            language = "EN",
-            appendResponses = listOf(
-                AppendResponse.IMAGES,
-                AppendResponse.TV_CREDITS,
-                AppendResponse.VIDEOS,
-                AppendResponse.CREDITS,
-                AppendResponse.RELEASES_DATES
-        ))
 
-        var recommendations = TMDBRESTHandler.getRecommendations(movieId, "movie")
+        if (movieId != 0) {
+            var tmdbMovieDetail = tmdb.movies.getDetails(
+                movieId = movieId,
+                language = "EN",
+                appendResponses = listOf(
+                    AppendResponse.IMAGES,
+                    AppendResponse.TV_CREDITS,
+                    AppendResponse.VIDEOS,
+                    AppendResponse.CREDITS,
+                    AppendResponse.RELEASES_DATES
+                )
+            )
 
-        var movieDetail: MovieDetails = MovieDetails().setAdult(tmdbMovieDetail.adult)
-            .setOverview(tmdbMovieDetail.overview)
-            .setVideo(tmdbMovieDetail.video)
-            .setGenres(tmdbMovieDetail.genres)
-            .setTitle(tmdbMovieDetail.title)
-            .setPopularity(tmdbMovieDetail.popularity)
-            .setBudget(tmdbMovieDetail.budget)
-            .setRuntime(tmdbMovieDetail.runtime)
-            .setRevenue(tmdbMovieDetail.revenue)
-            .setTagline(tmdbMovieDetail.tagline)
-            .setStatus(tmdbMovieDetail.status.name)
-            .setPosterPath(tmdbMovieDetail.posterPath)
-            .setOriginalTitle(tmdbMovieDetail.originalTitle)
-            .setOriginalLanguage(tmdbMovieDetail.originalLanguage)
-            .setBackdropPath(tmdbMovieDetail.backdropPath)
-            .setVoteCount(tmdbMovieDetail.voteCount)
-            .setVoteAverage(tmdbMovieDetail.voteAverage)
-            .setImdbId(tmdbMovieDetail.imdbId)
-            .setCredits(tmdbMovieDetail.credits)
-            .setVideos(tmdbMovieDetail.videos)
+            var recommendations = TMDBRESTHandler.getRecommendations(movieId, "movie")
 
-        if (tmdbMovieDetail.releaseDates != null && !tmdbMovieDetail.releaseDates!!.results.isEmpty()) {
-            // WTH is this concatenation tho?
-            movieDetail.setReleaseDate(tmdbMovieDetail.releaseDates!!.results.first().releaseDates.first().releaseDate.toString())
+
+            var movieDetail: MovieDetails = MovieDetails().setAdult(tmdbMovieDetail.adult)
+                .setOverview(tmdbMovieDetail!!.overview)
+                .setVideo(tmdbMovieDetail.video)
+                .setGenres(tmdbMovieDetail.genres)
+                .setTitle(tmdbMovieDetail.title)
+                .setPopularity(tmdbMovieDetail.popularity)
+                .setBudget(tmdbMovieDetail.budget)
+                .setRuntime(tmdbMovieDetail.runtime)
+                .setRevenue(tmdbMovieDetail.revenue)
+                .setTagline(tmdbMovieDetail.tagline)
+                .setStatus(tmdbMovieDetail.status.name)
+                .setPosterPath(tmdbMovieDetail.posterPath)
+                .setOriginalTitle(tmdbMovieDetail.originalTitle)
+                .setOriginalLanguage(tmdbMovieDetail.originalLanguage)
+                .setBackdropPath(tmdbMovieDetail.backdropPath)
+                .setVoteCount(tmdbMovieDetail.voteCount)
+                .setVoteAverage(tmdbMovieDetail.voteAverage)
+                .setImdbId(tmdbMovieDetail.imdbId)
+                .setCredits(tmdbMovieDetail.credits)
+                .setVideos(tmdbMovieDetail.videos)
+
+            if (tmdbMovieDetail.releaseDates != null && !tmdbMovieDetail.releaseDates!!.results.isEmpty()) {
+                // WTH is this concatenation tho?
+                movieDetail.setReleaseDate(tmdbMovieDetail.releaseDates!!.results.first().releaseDates.first().releaseDate.toString())
+            }
+
+            bindRecommendations(recommendations.component3().get())
+
+            return movieDetail
         }
 
-        bindRecommendations(recommendations.component3().get())
-
-        return movieDetail
+        return MovieDetails().setAdult(mSelectedMovie.is_adult != 0)
+            .setOverview("No Overview Found")
+            .setTitle(mSelectedMovie.name)
+            .setPosterPath(mSelectedMovie.stream_icon)
+            .setOriginalTitle(mSelectedMovie.name)
+            .setBackdropPath(mSelectedMovie.stream_icon)
+            .setVoteAverage(mSelectedMovie.rating.toFloat())
     }
 
 
