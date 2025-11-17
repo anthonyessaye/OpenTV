@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.RecyclerView
@@ -20,6 +21,7 @@ import com.anthonyessaye.opentv.R
 import com.bumptech.glide.Glide
 
 class EpisodeRecyclerViewAdapter(private val tmdbEpisodes: List<Episode>,
+                                 private val episodeIDToPositionPair: HashMap<Int, String>,
                                  private val parentInterface: RecyclerViewCallbackInterface,
                                  private val recyclerViewType: RecyclerViewType) : RecyclerView.Adapter<ViewHolder>()  {
 
@@ -31,6 +33,7 @@ class EpisodeRecyclerViewAdapter(private val tmdbEpisodes: List<Episode>,
         val imageViewCover: ImageView
         val textViewTitle: TextView
         val textViewDescription: TextView
+        val seekBar: SeekBar
         //val root: ConstraintLayout
 
         init {
@@ -38,6 +41,7 @@ class EpisodeRecyclerViewAdapter(private val tmdbEpisodes: List<Episode>,
             imageViewCover = view.findViewById(R.id.imageViewEpisode)
             textViewTitle = view.findViewById(R.id.textViewTitle)
             textViewDescription = view.findViewById(R.id.textViewDescription)
+            seekBar = view.findViewById(R.id.seekBar)
             //root = view.findViewById(R.id.root)
 
         }
@@ -62,7 +66,7 @@ class EpisodeRecyclerViewAdapter(private val tmdbEpisodes: List<Episode>,
         val adapterPosition = holder.bindingAdapterPosition
 
         holder.textViewTitle.text = tmdbEpisodes[adapterPosition].title
-        holder.textViewDescription.text = tmdbEpisodes[adapterPosition].info.overview
+        holder.textViewDescription.text = tmdbEpisodes[adapterPosition].info.duration
         holder.itemView.setSelected(selectedItem == adapterPosition);
         holder.itemView.isHovered = hoverItem == adapterPosition
 
@@ -97,10 +101,22 @@ class EpisodeRecyclerViewAdapter(private val tmdbEpisodes: List<Episode>,
         }
 
         Glide.with(holder.itemView.context)
-            .load(tmdbEpisodes[adapterPosition].info.cover_big)
+            .load(tmdbEpisodes[adapterPosition].info.movie_image)
             .fitCenter()
             .error(R.drawable.default_cover)
             .into(holder.imageViewCover)
+
+        if (episodeIDToPositionPair[tmdbEpisodes[adapterPosition].id.toInt()] != null) {
+            val episodePosition = episodeIDToPositionPair[tmdbEpisodes[adapterPosition].id.toInt()]
+
+            holder.seekBar.max = tmdbEpisodes[adapterPosition].info.duration_secs
+            holder.seekBar.visibility = View.VISIBLE
+            holder.seekBar.setProgress((episodePosition!!.toLong()/1000).toInt())
+        }
+
+        else {
+            holder.seekBar.visibility = View.GONE
+        }
     }
 
     fun buildIntent(index: Int, longClick: Boolean) {

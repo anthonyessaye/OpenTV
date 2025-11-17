@@ -19,6 +19,7 @@ import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.Icon
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
@@ -65,6 +66,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import dev.anilbeesetti.nextplayer.core.common.Utils
+import dev.anilbeesetti.nextplayer.core.common.player.PlayerCommonInterfaceObserver
 import dev.anilbeesetti.nextplayer.core.common.extensions.getMediaContentUri
 import dev.anilbeesetti.nextplayer.core.common.extensions.isDeviceTvBox
 import dev.anilbeesetti.nextplayer.core.model.ControlButtonsPosition
@@ -106,6 +108,8 @@ import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import kotlin.collections.first
+import kotlin.text.split
 
 @SuppressLint("UnsafeOptInUsageError")
 @AndroidEntryPoint
@@ -313,6 +317,14 @@ class PlayerActivity : AppCompatActivity() {
         playerApi = PlayerApi(this)
 
         onBackPressedDispatcher.addCallback {
+
+
+            val uriArray = mediaController?.currentMediaItem?.mediaId?.split("/")
+            val stream_id = uriArray!![uriArray.size - 1].split(".").first()
+            val stream_type = uriArray[uriArray.size - 4]
+
+            playerCommonInterfaceObserverInstance.notifyObserversToCache(stream_id, stream_type, mediaController?.currentPosition!!)
+
             mediaController?.run {
                 clearMediaItems()
                 stop()
@@ -724,7 +736,14 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private suspend fun playVideo(uri: Uri) = withContext(Dispatchers.Default) {
+
+        val uriArray = uri.toString().split("/")
+        val stream_id = uriArray[uriArray.size - 1].split(".").first()
+        val stream_type = uriArray[uriArray.size - 4]
+        val position: kotlin.String = playerCommonInterfaceObserverInstance.notifyObserversToGetPosition(stream_id, stream_type)
+
         val mediaContentUri = getMediaContentUri(uri)
+
         val playlist = mediaContentUri?.let { mediaUri ->
             viewModel.getPlaylistFromUri(mediaUri)
                 .map { it.uriString }
@@ -760,7 +779,7 @@ class PlayerActivity : AppCompatActivity() {
 
         withContext(Dispatchers.Main) {
             mediaController?.run {
-                setMediaItems(mediaItems, mediaItemIndexToPlay, playerApi.position?.toLong() ?: C.TIME_UNSET)
+                setMediaItems(mediaItems, mediaItemIndexToPlay, position.toLong())
                 playWhenReady = viewModel.playWhenReady
                 prepare()
             }
@@ -1155,6 +1174,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     companion object {
+        val playerCommonInterfaceObserverInstance = PlayerCommonInterfaceObserver.getInstance()
         const val HIDE_DELAY_MILLIS = 1000L
         const val PIP_INTENT_ACTION = "pip_action"
         const val PIP_INTENT_ACTION_CODE = "pip_action_code"

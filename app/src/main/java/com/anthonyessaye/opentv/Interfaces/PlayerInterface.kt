@@ -27,6 +27,7 @@ interface PlayerInterface {
         return ("${server.buildURL()}/${stream_type.type}/${loggedInUser.username}/" +
                 "${loggedInUser.password}/${stream_id}.${container_extension}").toUri()
     }
+
     fun play(context: Context, streamURI: Uri) {
         val intent = Intent(context, dev.anilbeesetti.nextplayer.feature.player.PlayerActivity::class.java).apply {
             data = streamURI

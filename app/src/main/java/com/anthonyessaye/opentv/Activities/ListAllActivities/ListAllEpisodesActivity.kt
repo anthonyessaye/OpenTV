@@ -6,6 +6,8 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContentProviderCompat.requireContext
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -25,8 +27,13 @@ import com.anthonyessaye.opentv.Interfaces.RecyclerViewCallbackInterface
 import com.anthonyessaye.opentv.Models.Series.SeriesDetails
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
 import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistory
+import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistory
+import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistoryDao
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterface, PlayerInterface {
     private lateinit var recyclerViewCategoryList: RecyclerView
@@ -36,6 +43,7 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
 
     lateinit var tvShow: Series
     lateinit var seriesDetails: SeriesDetails
+    lateinit var tvShowHistory: List<SeriesHistory>
     var viewMode: ViewMode = ViewMode.EPISODE
     var selectedKey: String = ""
 
@@ -51,25 +59,39 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
         tvShow = intent.getSerializableExtra(TvDetailActivity.SERIES) as Series
         seriesDetails = intent.getSerializableExtra(TvDetailActivity.SERIES_DETAIL) as SeriesDetails
 
-        var dataSetPair = ArrayList<Pair<String, String>>()
+        DatabaseManager().openDatabase(this) { db ->
+            lifecycleScope.launch(Dispatchers.IO) {
+                tvShowHistory = db.seriesHistoryDao().loadAllByIds(tvShow.series_id)
 
-        for (season in seriesDetails.episodes.keys) {
-            dataSetPair.add(Pair(season, "Season ${season}"))
+                withContext(Dispatchers.Main) {
+                    var dataSetPair = ArrayList<Pair<String, String>>()
+
+                    for (season in seriesDetails.episodes.keys) {
+                        dataSetPair.add(Pair(season, "Season ${season}"))
+                    }
+
+                    val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), emptyList(), this@ListAllEpisodesActivity, RecyclerViewType.LIST_CATEGORIES)
+
+                    runOnUiThread {
+                        recyclerViewCategoryList.layoutManager = LinearLayoutManager(this@ListAllEpisodesActivity)
+                        recyclerViewCategoryList.adapter = customAdapter
+                    }
+
+                    loadEpisodesList(seriesDetails.episodes.keys.first(), tvShowHistory)
+                }
+            }
         }
-
-        val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), emptyList(), this, RecyclerViewType.LIST_CATEGORIES)
-
-        runOnUiThread {
-            recyclerViewCategoryList.layoutManager = LinearLayoutManager(this)
-            recyclerViewCategoryList.adapter = customAdapter
-        }
-
-        loadEpisodesList(seriesDetails.episodes.keys.first())
     }
 
-    fun loadEpisodesList(mapKey: String) {
+    fun loadEpisodesList(mapKey: String, tvShowHistory: List<SeriesHistory>) {
         selectedKey = mapKey
-        val availableStreamsAdapter = EpisodeRecyclerViewAdapter(seriesDetails.episodes[mapKey]!!, this,
+        var episodeIDToPositionPair = HashMap<Int, String>()
+
+        for (history in tvShowHistory) {
+            episodeIDToPositionPair.put(history.stream_id, history.position)
+        }
+
+        val availableStreamsAdapter = EpisodeRecyclerViewAdapter(seriesDetails.episodes[mapKey]!!, episodeIDToPositionPair, this,
             RecyclerViewType.LIST_SERIES)
 
         runOnUiThread {
@@ -86,7 +108,7 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
 
         when(recyclerViewType) {
             RecyclerViewType.LIST_CATEGORIES.name -> {
-                loadEpisodesList(id!!)
+                loadEpisodesList(id!!, tvShowHistory)
             }
             RecyclerViewType.LIST_MOVIES.name -> {}
 

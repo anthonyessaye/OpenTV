@@ -20,8 +20,8 @@ interface SeriesHistoryDao {
     @Query("SELECT * FROM (SELECT * FROM SeriesHistory ORDER BY last_watched DESC) GROUP BY series_id")
     fun getAll(): List<SeriesHistory>
 
-    @Query("SELECT * FROM SeriesHistory WHERE series_id IN (:seriesId)")
-    fun loadAllByIds(seriesId: IntArray): List<SeriesHistory>
+    @Query("SELECT * FROM SeriesHistory WHERE series_id LIKE :seriesId")
+    fun loadAllByIds(seriesId: Int): List<SeriesHistory>
 
     @Query("SELECT * FROM SeriesHistory WHERE name LIKE :name")
     fun findByName(name: String): SeriesHistory?
