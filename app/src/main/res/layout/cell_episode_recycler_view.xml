@@ -19,15 +19,16 @@
     <SeekBar
         android:id="@+id/seekBar"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="5dp"
         android:layout_marginStart="-15dp"
+        android:layout_marginTop="2dp"
         android:layout_marginEnd="-15dp"
         android:backgroundTint="@color/minor_color_blue"
         android:clickable="false"
         android:max="100"
-        app:layout_constraintBottom_toBottomOf="@id/imageViewEpisode"
         app:layout_constraintEnd_toEndOf="@id/imageViewEpisode"
-        app:layout_constraintStart_toStartOf="@id/imageViewEpisode" />
+        app:layout_constraintStart_toStartOf="@id/imageViewEpisode"
+        app:layout_constraintTop_toBottomOf="@id/imageViewEpisode" />
 
     <TextView
         android:id="@+id/textViewTitle"

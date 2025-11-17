@@ -8,6 +8,7 @@ import dagger.hilt.android.HiltAndroidApp
 import dev.anilbeesetti.nextplayer.core.common.player.PlayerCommonInterface
 import dev.anilbeesetti.nextplayer.core.common.player.PlayerCommonInterfaceObserver
 import kotlinx.coroutines.runBlocking
+import java.lang.System
 import kotlin.Pair
 import kotlin.collections.first
 
@@ -23,6 +24,7 @@ class OpenTVApplication: Application(), PlayerCommonInterface {
        if (stream_type == StreamType.SERIES.toString().lowercase()) {
            DatabaseManager().openDatabase(this) { db ->
                db.seriesHistoryDao().updatePosition(position.toString(), stream_id.toInt())
+               db.seriesHistoryDao().updateLastWatched((System.currentTimeMillis()/1000).toString(), stream_id.toInt())
            }
        }
 

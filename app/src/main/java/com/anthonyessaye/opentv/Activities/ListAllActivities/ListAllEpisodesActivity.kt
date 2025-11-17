@@ -47,6 +47,9 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
     var viewMode: ViewMode = ViewMode.EPISODE
     var selectedKey: String = ""
 
+
+    var selectedEpisodeId: Int? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activite_list_all_live_streams)
@@ -58,6 +61,7 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
 
         tvShow = intent.getSerializableExtra(TvDetailActivity.SERIES) as Series
         seriesDetails = intent.getSerializableExtra(TvDetailActivity.SERIES_DETAIL) as SeriesDetails
+        selectedEpisodeId = intent.getSerializableExtra(TvDetailActivity.SERIES_SELECTED_EPISODE) as? Int
 
         DatabaseManager().openDatabase(this) { db ->
             lifecycleScope.launch(Dispatchers.IO) {
@@ -67,7 +71,12 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
                     var dataSetPair = ArrayList<Pair<String, String>>()
 
                     for (season in seriesDetails.episodes.keys) {
-                        dataSetPair.add(Pair(season, "Season ${season}"))
+                        var extra = ""
+
+                        if(selectedEpisodeId != null && seriesDetails.episodes[season]!!.any { it.id == selectedEpisodeId.toString()})
+                            extra += "${selectedEpisodeId}-//OpenTV-"
+
+                        dataSetPair.add(Pair(season, "${extra}Season ${season}"))
                     }
 
                     val customAdapter = ListRecyclerViewAdapter(dataSetPair.toTypedArray(), emptyList(), this@ListAllEpisodesActivity, RecyclerViewType.LIST_CATEGORIES)
@@ -85,6 +94,7 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
 
     fun loadEpisodesList(mapKey: String, tvShowHistory: List<SeriesHistory>) {
         selectedKey = mapKey
+        var selectedEpisodePosition = seriesDetails.episodes[selectedKey]!!.indexOfFirst { it.id == selectedEpisodeId.toString()  }
         var episodeIDToPositionPair = HashMap<Int, String>()
 
         for (history in tvShowHistory) {
@@ -98,6 +108,7 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
             recyclerViewLiveStreamList.layoutManager = LinearLayoutManager(this)
             recyclerViewLiveStreamList.itemAnimator = null
             recyclerViewLiveStreamList.adapter = availableStreamsAdapter
+            recyclerViewLiveStreamList.layoutManager!!.scrollToPosition(selectedEpisodePosition)
         }
     }
 

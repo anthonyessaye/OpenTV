@@ -26,14 +26,20 @@ import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.Row
 import androidx.leanback.widget.RowPresenter
 import androidx.lifecycle.lifecycleScope
+import app.moviebase.tmdb.Tmdb3
+import app.moviebase.tmdb.model.AppendResponse
 import com.anthonyessaye.opentv.Activities.CachingActivity
+import com.anthonyessaye.opentv.Activities.DetailActivities.TvDetailActivity
+import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllEpisodesActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllLiveStreamsActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllMoviesActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllSeriesActivity
 import com.anthonyessaye.opentv.Activities.SearchActivity
+import com.anthonyessaye.opentv.Builders.XtreamBuilder
 import com.anthonyessaye.opentv.Presenters.CardPresenter
 import com.anthonyessaye.opentv.Enums.StreamType
 import com.anthonyessaye.opentv.Interfaces.PlayerInterface
+import com.anthonyessaye.opentv.Models.Series.SeriesDetails
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
 import com.anthonyessaye.opentv.Persistence.History.LiveHistory.LiveHistory
 import com.anthonyessaye.opentv.Persistence.History.MovieHistory.MovieHistory
@@ -41,6 +47,9 @@ import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistory
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.Persistence.User.User
 import com.anthonyessaye.opentv.R
+import com.anthonyessaye.opentv.REST.APIKeys
+import com.anthonyessaye.opentv.REST.RESTHandler
+import com.anthonyessaye.opentv.REST.TMDBRESTHandler
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
@@ -228,17 +237,24 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
 
             else if (item is SeriesHistory) {
                 DatabaseManager().openDatabase(requireContext()) { db ->
-                    val loggedInUser = db.userDao().getAll().first()
-                    val server = db.serverDao().getAll().first()
-                    val streamType = StreamType.SERIES
-
-                    // update history on disk
                     lifecycleScope.launch(Dispatchers.IO) {
-                        db.seriesHistoryDao().updateLastWatched((System.currentTimeMillis()/1000).toString(), item.stream_id)
+                        val user = db.userDao().getAll().first()
+                        val server = db.serverDao().getAll().first()
+                        val tvShow = db.seriesDao().findById(item.series_id.toString())
+
+                        val xtream = XtreamBuilder(user.username, user.password, server.buildURL())
+                        val showDetails: SeriesDetails? = RESTHandler.SeriesREST.getSeriesDetails(
+                            xtream,
+                            tvShow.series_id.toString()
+                        )
+
+                        val intent = Intent(context!!, ListAllEpisodesActivity::class.java)
+                        intent.putExtra(TvDetailActivity.SERIES_DETAIL, showDetails)
+                        intent.putExtra(TvDetailActivity.SERIES, tvShow)
+                        intent.putExtra(TvDetailActivity.SERIES_SELECTED_EPISODE, item.stream_id)
+                        startActivity(intent)
                     }
 
-                    val streamURI = buildStreamURI(server, loggedInUser, streamType, item.stream_id, item.container_extension)
-                    play(requireContext(), streamURI)
                 }
             }
 

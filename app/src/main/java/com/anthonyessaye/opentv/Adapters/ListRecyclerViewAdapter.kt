@@ -25,6 +25,7 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
     private var selectedItem = 0
     private var longClickedItem = 0
     private var hoverItem = 0
+    private var hasInitialized = false
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val textView: TextView
@@ -45,7 +46,8 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
         val view = LayoutInflater.from(viewGroup.context)
             .inflate(R.layout.cell_list_recycler_view, viewGroup, false)
 
-        if (recyclerViewType != RecyclerViewType.LIST_CATEGORIES) {
+
+        if (dataSet.any() {it.component2().contains("-//OpenTV-")} || recyclerViewType != RecyclerViewType.LIST_CATEGORIES) {
             selectedItem = -1
         }
 
@@ -58,12 +60,24 @@ class ListRecyclerViewAdapter(private val dataSet: Array<Pair<String, String>>,
 
     // Replace the contents of a view (invoked by the layout manager)
     override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
-
         val adapterPosition = viewHolder.bindingAdapterPosition
         val currentItemId = dataSet[adapterPosition].first.toInt()
-        // Get element from your dataset at this position and replace the
-        // contents of the view with that element
-        viewHolder.textView.text = dataSet[adapterPosition].component2()
+
+        val seasonName = dataSet[adapterPosition].component2()
+        viewHolder.textView.text = seasonName
+
+        if (seasonName.contains("-//OpenTV-")) {
+            val data = seasonName.split("-//OpenTV-")
+            viewHolder.textView.text = data.last()
+
+            if (!hasInitialized) {
+                selectedItem = adapterPosition
+                hoverItem = selectedItem
+                buildIntent(selectedItem, false)
+                hasInitialized = true
+            }
+        }
+
         viewHolder.root.setSelected(selectedItem == adapterPosition);
         viewHolder.root.isHovered = hoverItem == adapterPosition
 
