@@ -34,6 +34,7 @@ import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllEpisodesActi
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllLiveStreamsActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllMoviesActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllSeriesActivity
+import com.anthonyessaye.opentv.Activities.LoginActivity
 import com.anthonyessaye.opentv.Activities.SearchActivity
 import com.anthonyessaye.opentv.Builders.XtreamBuilder
 import com.anthonyessaye.opentv.Presenters.CardPresenter
@@ -55,6 +56,7 @@ import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Timer
 import java.util.TimerTask
 
@@ -174,11 +176,14 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
             rowsAdapter.add(ListRow(header, listRowAdapter))
         }
 
-        val gridHeader = HeaderItem(NUM_ROWS.toLong(), "Settings")
+        val gridHeader = HeaderItem(NUM_ROWS.toLong(), getString(R.string.settings))
 
         val mGridPresenter = GridItemPresenter()
         val gridRowAdapter = ArrayObjectAdapter(mGridPresenter)
-        gridRowAdapter.add(getString(R.string.refresh_data)) 
+        gridRowAdapter.add(getString(R.string.refresh_data))
+        gridRowAdapter.add(getString(R.string.clear_history))
+        gridRowAdapter.add(getString(R.string.clear_favorites))
+        gridRowAdapter.add(getString(R.string.logout))
         rowsAdapter.add(ListRow(gridHeader, gridRowAdapter))
 
         adapter = rowsAdapter
@@ -277,6 +282,40 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
                     else if (item.contains(getString(R.string.refresh_data))) {
                         val intent = Intent(context!!, CachingActivity::class.java)
                         startActivity(intent)
+                    }
+
+                    else if (item.contains(getString(R.string.clear_history))) {
+                        DatabaseManager().openDatabase(requireContext()) { db ->
+                            db.seriesHistoryDao().deleteTable()
+                            db.movieHistoryDao().deleteTable()
+                            db.liveHistoryDao().deleteTable()
+
+                            activity?.runOnUiThread {
+                                activity!!.recreate()
+                            }
+
+                        }
+                    }
+
+                    else if (item.contains(getString(R.string.clear_favorites))) {
+                        DatabaseManager().openDatabase(requireContext()) { db ->
+                            db.favoriteDao().deleteTable()
+
+                            activity?.runOnUiThread {
+                                activity!!.recreate()
+                            }
+                        }
+                    }
+
+                    else if (item.contains(getString(R.string.logout))) {
+                            DatabaseManager().openDatabase(requireContext()) { db ->
+                                db.clearAllTables()
+
+                                activity?.runOnUiThread {
+                                    val intent = Intent(context!!, LoginActivity::class.java)
+                                    startActivity(intent)
+                                }
+                        }
                     }
 
                     else {

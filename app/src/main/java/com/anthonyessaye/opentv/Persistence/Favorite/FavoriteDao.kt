@@ -30,6 +30,6 @@ interface FavoriteDao {
     @Delete
     fun delete(favorite: Favorite)
 
-    @Query("DELETE FROM LiveHistory")
+    @Query("DELETE FROM Favorite")
     fun deleteTable(): Int
 }
