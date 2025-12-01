@@ -179,7 +179,14 @@ object RESTHandler {
         suspend fun getSeriesDetails(
             xtream: XtreamBuilder,
             series_id: String
-        ) : SeriesDetails? = Fuel.get(xtream.getStreamInfoForSpecificSeries(series_id)).awaitObjectResponse<SeriesDetails>(SeriesDetails.Deserializer()).third
+        ) : SeriesDetails? {
+            return try {
+                Fuel.get(xtream.getStreamInfoForSpecificSeries(series_id))
+                    .awaitObjectResponse<SeriesDetails>(SeriesDetails.Deserializer()).third
+            } catch (e: Exception) {
+                null
+            }
+        }
 
 
     }
