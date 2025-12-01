@@ -123,7 +123,7 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
                 withContext(Dispatchers.Main) {
                     setUpDetailsOverviewRow()
                     setUpCastMembers()
-                    setupRecommendationsRow()
+
                     setOnItemViewClickedListener(this@TvDetailFragment)
                     (requireActivity() as TvDetailActivity).updateBackground(showDetails!!)
                     (requireActivity() as TvDetailActivity).constraintLayoutLoading.visibility =
@@ -205,7 +205,11 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
         )
 
         var recommendations = TMDBRESTHandler.getRecommendations(tvShow.tmdb.toInt(), "tv")
-        bindRecommendations(recommendations.component3().get())
+
+        if (recommendations.component3().component1() != null && !recommendations.component3().component1()!!.results.isNullOrEmpty()) {
+            setupRecommendationsRow()
+            bindRecommendations(recommendations.component3().get())
+        }
 
         val xtream = XtreamBuilder(user.username, user.password, server.buildURL())
         val seriesDetails: SeriesDetails? = RESTHandler.SeriesREST.getSeriesDetails(xtream, tvShow.series_id.toString())
@@ -222,7 +226,9 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
     private fun bindRecommendations(response: MovieResponse) {
         mRecommendationsAdapter.addAll(0, response.getResults())
         if (response.getResults() == null || response.getResults().isEmpty()) {
-            arrayObjectAdapter!!.remove(mRecommendationsRow!!)
+            if (mRecommendationsRow != null) {
+                    arrayObjectAdapter!!.remove(mRecommendationsRow!!)
+            }
         }
     }
 
