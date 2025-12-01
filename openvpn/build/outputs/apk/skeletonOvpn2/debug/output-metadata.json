@@ -1,0 +1,73 @@
+{
+  "version": 3,
+  "artifactType": {
+    "type": "APK",
+    "kind": "Directory"
+  },
+  "applicationId": "de.blinkt.openvpn",
+  "variantName": "skeletonOvpn2Debug",
+  "elements": [
+    {
+      "type": "UNIVERSAL",
+      "filters": [],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "openvpn-skeleton-ovpn2-universal-debug.apk"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "arm64-v8a"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "openvpn-skeleton-ovpn2-arm64-v8a-debug.apk"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "x86_64"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "openvpn-skeleton-ovpn2-x86_64-debug.apk"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "x86"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "openvpn-skeleton-ovpn2-x86-debug.apk"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "armeabi-v7a"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "openvpn-skeleton-ovpn2-armeabi-v7a-debug.apk"
+    }
+  ],
+  "elementType": "File",
+  "minSdkVersionForDexing": 21
+}

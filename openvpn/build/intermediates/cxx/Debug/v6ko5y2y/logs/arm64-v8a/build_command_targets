@@ -1,0 +1,9 @@
+/Users/anthonyessaye_podeo/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/arm64-v8a \
+  libovpnexec.so \
+  openvpn \
+  osslspeedtest \
+  osslutil \
+  ovpn3 \
+  ovpnutil

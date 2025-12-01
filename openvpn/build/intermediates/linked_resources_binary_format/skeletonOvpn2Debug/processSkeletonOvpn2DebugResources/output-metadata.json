@@ -1,0 +1,72 @@
+{
+  "version": 3,
+  "artifactType": {
+    "type": "LINKED_RESOURCES_BINARY_FORMAT",
+    "kind": "Directory"
+  },
+  "applicationId": "de.blinkt.openvpn",
+  "variantName": "skeletonOvpn2Debug",
+  "elements": [
+    {
+      "type": "UNIVERSAL",
+      "filters": [],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "linked-resources-binary-format-skeletonOvpn2UniversalDebug.ap_"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "arm64-v8a"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "linked-resources-binary-format-skeletonOvpn2Arm64-v8aDebug.ap_"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "x86_64"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "linked-resources-binary-format-skeletonOvpn2X86_64Debug.ap_"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "x86"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "linked-resources-binary-format-skeletonOvpn2X86Debug.ap_"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "armeabi-v7a"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 218,
+      "versionName": "0.7.63-o2",
+      "outputFile": "linked-resources-binary-format-skeletonOvpn2Armeabi-v7aDebug.ap_"
+    }
+  ],
+  "elementType": "File"
+}

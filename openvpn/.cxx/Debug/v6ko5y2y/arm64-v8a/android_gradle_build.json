@@ -1,0 +1,130 @@
+{
+  "buildFiles": [
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp/CMakeLists.txt",
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp/GetGitRevisionDescription.cmake",
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp/fmt/CMakeLists.txt",
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp/fmt/support/cmake/JoinPaths.cmake",
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp/lz4.cmake",
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp/lzo.cmake",
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp/openssl/openssl.cmake",
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp/tools.cmake"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/anthonyessaye_podeo/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/anthonyessaye_podeo/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "crypto::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "crypto",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/arm64-v8a/libcrypto.a"
+    },
+    "fmt::@b8b4cdcf357fa61d5575": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "fmt",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/arm64-v8a/fmt/libfmtd.a"
+    },
+    "libovpnexec.so::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "libovpnexec.so",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/libovpnexec.so",
+      "runtimeFiles": [
+        "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/libopenvpn.so"
+      ]
+    },
+    "lz4::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "lz4",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/arm64-v8a/liblz4.a"
+    },
+    "lzo::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "lzo",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/arm64-v8a/liblzo.a"
+    },
+    "makeassetdir::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "makeassetdir"
+    },
+    "openvpn::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "openvpn",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/libopenvpn.so",
+      "runtimeFiles": []
+    },
+    "osslspeedtest::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "osslspeedtest",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/libosslspeedtest.so",
+      "runtimeFiles": []
+    },
+    "osslutil::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "osslutil",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/libosslutil.so",
+      "runtimeFiles": []
+    },
+    "ovpn3::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "ovpn3",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/libovpn3.so",
+      "runtimeFiles": []
+    },
+    "ovpnutil::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "ovpnutil",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/libovpnutil.so",
+      "runtimeFiles": []
+    },
+    "pie_openvpn.arm64-v8a::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "pie_openvpn.arm64-v8a",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/pie_openvpn.arm64-v8a",
+      "runtimeFiles": [
+        "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/cxx/Debug/v6ko5y2y/obj/arm64-v8a/libopenvpn.so"
+      ]
+    },
+    "ssl::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "ssl",
+      "output": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/arm64-v8a/libssl.a"
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "/Users/anthonyessaye_podeo/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang.lld",
+      "cppCompilerExecutable": "/Users/anthonyessaye_podeo/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++.lld"
+    }
+  },
+  "cFileExtensions": [
+    "c"
+  ],
+  "cppFileExtensions": [
+    "cc",
+    "cpp",
+    "cxx"
+  ]
+}

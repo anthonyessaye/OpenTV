@@ -1,0 +1,201 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1
+					],
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10.0"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12
+					]
+				},
+				{
+					"build" : "fmt",
+					"jsonFile" : "directory-fmt-Debug-c24b5a7404003910bd84.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.8"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 1,
+					"source" : "fmt",
+					"targetIndexes" : 
+					[
+						1
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"childIndexes" : 
+					[
+						1
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "ics-openvpn",
+					"targetIndexes" : 
+					[
+						0,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						1
+					],
+					"name" : "FMT",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						1
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "crypto::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-crypto-Debug-eb8ceca325a1f27a3954.json",
+					"name" : "crypto",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "fmt::@b8b4cdcf357fa61d5575",
+					"jsonFile" : "target-fmt-Debug-398f2232a96a608a9f87.json",
+					"name" : "fmt",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "libovpnexec.so::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-libovpnexec.so-Debug-5eab7f128f17f97f8242.json",
+					"name" : "libovpnexec.so",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "lz4::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-lz4-Debug-9cb74a349bdaea7cf02f.json",
+					"name" : "lz4",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "lzo::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-lzo-Debug-e96c20291e6232747c8c.json",
+					"name" : "lzo",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "makeassetdir::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-makeassetdir-Debug-de06daeff571d71ce8b5.json",
+					"name" : "makeassetdir",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "openvpn::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-openvpn-Debug-03ee1a58e75aefdf318e.json",
+					"name" : "openvpn",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "osslspeedtest::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-osslspeedtest-Debug-c8887574c76821775707.json",
+					"name" : "osslspeedtest",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "osslutil::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-osslutil-Debug-bd17e43b71a48b139586.json",
+					"name" : "osslutil",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ovpn3::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ovpn3-Debug-cbb681047230041edd51.json",
+					"name" : "ovpn3",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ovpnutil::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ovpnutil-Debug-0afbb559d1248089c724.json",
+					"name" : "ovpnutil",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "pie_openvpn.x86::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-pie_openvpn.x86-Debug-5793dc5e3b6ca2c4f92b.json",
+					"name" : "pie_openvpn.x86",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ssl::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ssl-Debug-c98356b5841bc48dad17.json",
+					"name" : "ssl",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/.cxx/Debug/v6ko5y2y/x86",
+		"source" : "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/cpp"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}

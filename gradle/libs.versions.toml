@@ -1,26 +1,27 @@
 [versions]
 agp = "8.10.1"
+android-compileSdk = "35"
+android-targetSdk = "35"
+android-minSdk = "21"
+android-jvm = "21"
 kotlin = "2.1.21"
 ksp = "2.1.21-2.0.2"
 coreKtx = "1.16.0"
 leanback = "1.2.0"
+androidxComposeBom = "2025.06.00"
+androidxConstraintLayout = "2.2.1"
 glide = "4.16.0"
 lifecycleRuntimeKtx = "2.9.1"
 activityCompose = "1.10.1"
 composeBom = "2025.06.01"
 constraintlayout = "2.2.1"
-android-compileSdk = "35"
-android-targetSdk = "35"
-android-minSdk = "21"
-android-jvm = "21"
+androidx-annotation = "1.9.1"
 aboutlibraries = "11.2.3"
 accompanist = "0.37.3"
 androidGradlePlugin = "8.10.1"
 androidMaterial = "1.12.0"
 androidxActivity = "1.10.1"
 androidxAppCompat = "1.7.1"
-androidxComposeBom = "2025.06.00"
-androidxConstraintLayout = "2.2.1"
 androidxCoreSplashscreen = "1.0.1"
 androidxDataStore = "1.1.7"
 androidxEspresso = "3.6.1"
@@ -28,7 +29,6 @@ androidxHiltNavigationCompose = "1.2.0"
 androidxLifecycle = "2.9.1"
 androidxMedia3 = "1.7.1"
 androidxNavigation = "2.9.0"
-androidxTestCore = "1.5.0"
 androidxTestExt = "1.2.1"
 coil = "2.7.0"
 hilt = "2.56.2"
@@ -43,7 +43,21 @@ universalChardet = "2.5.0"
 navigationCommonAndroid = "2.9.0"
 navigationRuntimeAndroid = "2.9.0"
 palette = "1.0.0"
+androidx-cardview = "1.0.0"
+androidx-viewpager2 = "1.1.0"
+androidx-fragment-ktx = "1.8.9"
+androidx-recyclerview = "1.4.0"
+androidx-preference-ktx = "1.2.1"
+androidx-security-crypto = "1.1.0"
+androidx-webkit = "1.14.0"
+square-okhttp = "4.10.0"
+mpandroidchart = "v3.1.0"
 
+# Test
+androidx-test-core = "1.7.0"
+junit = "4.13.2"
+mockito-core = "4.8.1"
+robolectric = "4.10.2"
 
 [libraries]
 
@@ -61,7 +75,7 @@ androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-man
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
-
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidx-annotation" }
 aboutlibraries-compose = { group = "com.mikepenz", name = "aboutlibraries-compose", version.ref = "aboutlibraries" }
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
 androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "androidxActivity" }
@@ -108,6 +122,21 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 androidx-navigation-common-android = { group = "androidx.navigation", name = "navigation-common-android", version.ref = "navigationCommonAndroid" }
 androidx-navigation-runtime-android = { group = "androidx.navigation", name = "navigation-runtime-android", version.ref = "navigationRuntimeAndroid" }
 androidx-palette = { group = "androidx.palette", name = "palette", version.ref = "palette" }
+androidx-cardview = { group = "androidx.cardview", name = "cardview", version.ref = "androidx-cardview" }
+androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref= "androidx-viewpager2" }
+androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "androidx-fragment-ktx" }
+square-okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "square-okhttp" }
+androidx-preference-ktx = { group = "androidx.preference", name = "preference-ktx", version.ref = "androidx-preference-ktx" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "androidx-recyclerview" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "androidx-security-crypto" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "androidx-webkit" }
+mpandroidchart = { group = "com.github.PhilJay", name = "MPAndroidChart", version.ref = "mpandroidchart" }
+kotlin = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
+
+# Test
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidx-test-core" }
+mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockito-core" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

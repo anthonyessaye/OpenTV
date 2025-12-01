@@ -1,0 +1,43 @@
+{
+    "logs": [
+        {
+            "outputFile": "de.blinkt.openvpn-mergeSkeletonOvpn2DebugResources-12:/values-zh-rTW/values-zh-rTW.xml",
+            "map": [
+                {
+                    "source": "/Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/res/values-zh-rTW/bools.xml",
+                    "from": {
+                        "startLines": "6",
+                        "startColumns": "4",
+                        "startOffsets": "211",
+                        "endColumns": "52",
+                        "endOffsets": "259"
+                    },
+                    "to": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "52",
+                        "endOffsets": "103"
+                    }
+                },
+                {
+                    "source": "/Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/res/values-zh-rTW/values-zh-rTW.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,147,246,340,434,527,620,716",
+                        "endColumns": "91,98,93,93,92,92,95,100",
+                        "endOffsets": "142,241,335,429,522,615,711,812"
+                    },
+                    "to": {
+                        "startLines": "3,4,5,6,7,8,9,10",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "108,200,299,393,487,580,673,769",
+                        "endColumns": "91,98,93,93,92,92,95,100",
+                        "endOffsets": "195,294,388,482,575,668,764,865"
+                    }
+                }
+            ]
+        }
+    ]
+}

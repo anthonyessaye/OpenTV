@@ -1,0 +1,4 @@
+de.blinkt.openvpn.test.openvpn-skeletonOvpn2-0 /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/generated/res/resValues/androidTest/skeletonOvpn2/debug
+de.blinkt.openvpn.test.openvpn-mergeSkeletonOvpn2DebugAndroidTestResources-1 /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/incremental/skeletonOvpn2DebugAndroidTest/mergeSkeletonOvpn2DebugAndroidTestResources/merged.dir
+de.blinkt.openvpn.test.openvpn-mergeSkeletonOvpn2DebugAndroidTestResources-2 /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/incremental/skeletonOvpn2DebugAndroidTest/mergeSkeletonOvpn2DebugAndroidTestResources/stripped.dir
+de.blinkt.openvpn.test.openvpn-skeletonOvpn2DebugAndroidTest-3 /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/build/intermediates/merged_res/skeletonOvpn2DebugAndroidTest/mergeSkeletonOvpn2DebugAndroidTestResources

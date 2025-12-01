@@ -24,6 +24,7 @@
             <option value="$PROJECT_DIR$/feature/player" />
             <option value="$PROJECT_DIR$/feature/settings" />
             <option value="$PROJECT_DIR$/feature/videopicker" />
+            <option value="$PROJECT_DIR$/openvpn" />
           </set>
         </option>
       </GradleProjectSettings>
