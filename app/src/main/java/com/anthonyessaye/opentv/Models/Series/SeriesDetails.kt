@@ -2,6 +2,7 @@ package com.anthonyessaye.opentv.Models.Series
 
 import com.github.kittinunf.fuel.core.ResponseDeserializable
 import com.google.gson.Gson
+import com.google.gson.JsonArray
 import java.io.Serializable
 
 data class SeriesDetails(val seasons: List<Season>,

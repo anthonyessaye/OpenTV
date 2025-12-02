@@ -109,6 +109,7 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
         super.onCreate(savedInstanceState)
 
         tvShow = requireActivity().intent.getSerializableExtra(TvDetailActivity.SERIES) as Series
+        setOnItemViewClickedListener(this@TvDetailFragment)
         setUpAdapter()
 
         DatabaseManager().openDatabase(requireContext()) { db ->
@@ -123,8 +124,8 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
                 withContext(Dispatchers.Main) {
                     setUpDetailsOverviewRow()
                     setUpCastMembers()
+                    setupRecommendationsRow()
 
-                    setOnItemViewClickedListener(this@TvDetailFragment)
                     (requireActivity() as TvDetailActivity).updateBackground(showDetails!!)
                     (requireActivity() as TvDetailActivity).constraintLayoutLoading.visibility =
                         View.GONE
@@ -207,12 +208,11 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
         var recommendations = TMDBRESTHandler.getRecommendations(tvShow.tmdb.toInt(), "tv")
 
         if (recommendations.component3().component1() != null && !recommendations.component3().component1()!!.results.isNullOrEmpty()) {
-            setupRecommendationsRow()
             bindRecommendations(recommendations.component3().get())
         }
 
         val xtream = XtreamBuilder(user.username, user.password, server.buildURL())
-        val seriesDetails: SeriesDetails? = RESTHandler.SeriesREST.getSeriesDetails(xtream, tvShow.series_id.toString())
+        var seriesDetails: SeriesDetails? = RESTHandler.SeriesREST.getSeriesDetails(xtream, tvShow.series_id.toString())
 
         return Pair(seriesDetails, tmdbSeriesDetail)
     }
