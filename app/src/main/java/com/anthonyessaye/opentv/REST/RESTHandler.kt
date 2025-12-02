@@ -3,6 +3,7 @@ package com.anthonyessaye.opentv.REST
 import com.anthonyessaye.opentv.Builders.XtreamBuilder
 import com.anthonyessaye.opentv.DataClasses.UserAndServer
 import com.anthonyessaye.opentv.Models.Series.SeriesDetails
+import com.anthonyessaye.opentv.Models.Series.SeriesDetailsAlternative
 import com.anthonyessaye.opentv.Persistence.Categories.LiveCategory.LiveCategory
 import com.anthonyessaye.opentv.Persistence.Categories.MovieCategory.MovieCategory
 import com.anthonyessaye.opentv.Persistence.Categories.SeriesCategory.SeriesCategory
@@ -13,8 +14,10 @@ import com.anthonyessaye.opentv.Persistence.Server.Server
 import com.anthonyessaye.opentv.Persistence.User.User
 import com.github.kittinunf.fuel.Fuel
 import com.github.kittinunf.fuel.coroutines.awaitObjectResponse
+import com.github.kittinunf.fuel.coroutines.awaitStringResponseResult
 import com.github.kittinunf.fuel.gson.responseObject
 import com.github.kittinunf.result.Result
+import com.google.gson.Gson
 
 object RESTHandler {
 
@@ -181,13 +184,23 @@ object RESTHandler {
             series_id: String
         ) : SeriesDetails? {
             return try {
-                Fuel.get(xtream.getStreamInfoForSpecificSeries(series_id))
-                    .awaitObjectResponse<SeriesDetails>(SeriesDetails.Deserializer()).third
+                val responseResult = Fuel.get(xtream.getStreamInfoForSpecificSeries(series_id)).awaitStringResponseResult()
+                var result: SeriesDetails? = null
+
+                try {
+                    result = Gson().fromJson(responseResult.third.get(), SeriesDetails::class.java)
+                }
+
+                catch(e: Exception) {
+                    // This is for the idiot idea that some iptv providers have put forward
+                    // by changing the standard because god knows why
+                    result = Gson().fromJson(responseResult.third.get(), SeriesDetailsAlternative::class.java).translateToSeriesDetails()
+                }
+
+                return result
             } catch (e: Exception) {
                 null
             }
         }
-
-
     }
 }

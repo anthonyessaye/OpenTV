@@ -1,5 +1,7 @@
 package com.anthonyessaye.opentv.Models.Series
 
+import com.github.kittinunf.fuel.core.ResponseDeserializable
+import com.google.gson.Gson
 import java.io.Serializable
 
 data class Season(var name: String,
