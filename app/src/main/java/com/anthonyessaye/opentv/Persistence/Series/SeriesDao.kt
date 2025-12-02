@@ -21,6 +21,12 @@ interface SeriesDao {
     @Query("SELECT * FROM Series WHERE name LIKE '%' || :name || '%' COLLATE NOCASE LIMIT :limit")
     fun findByLikeName(name: String, limit: Int): List<Series>
 
+    @Query("SELECT * FROM Series WHERE name LIKE '%' || :name COLLATE NOCASE LIMIT :limit")
+    fun findByStartsWithName(name: String, limit: Int): List<Series>
+
+    @Query("SELECT * FROM Series WHERE name LIKE :name || '%' COLLATE NOCASE LIMIT :limit")
+    fun findByEndsWithName(name: String, limit: Int): List<Series>
+
     @Query("SELECT * FROM Series WHERE series_id LIKE :Id")
     fun findById(Id: String): Series
 

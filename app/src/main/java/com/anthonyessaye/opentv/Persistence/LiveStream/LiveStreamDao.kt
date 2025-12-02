@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
-import com.anthonyessaye.opentv.Persistence.Movie.Movie
 
 @Dao
 interface LiveStreamDao {
@@ -20,6 +19,12 @@ interface LiveStreamDao {
 
     @Query("SELECT * FROM LiveStream WHERE name LIKE '%' || :name || '%' COLLATE NOCASE LIMIT :limit")
     fun findByLikeName(name: String, limit: Int): List<LiveStream>
+
+    @Query("SELECT * FROM LiveStream WHERE name LIKE '%' || :name COLLATE NOCASE LIMIT :limit")
+    fun findByStartsWithName(name: String, limit: Int): List<LiveStream>
+
+    @Query("SELECT * FROM LiveStream WHERE name LIKE :name || '%' COLLATE NOCASE LIMIT :limit")
+    fun findByEndsWithName(name: String, limit: Int): List<LiveStream>
 
     @Query("SELECT * FROM LiveStream WHERE category_id LIKE :id")
     fun findByCategoryId(id: String): List<LiveStream>?
