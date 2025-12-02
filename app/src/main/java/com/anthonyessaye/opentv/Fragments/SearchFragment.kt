@@ -77,71 +77,76 @@ class SearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchResu
             }
 
             DatabaseManager().openDatabase(requireContext()) { db ->
-                var series: List<Series> = db.seriesDao().findByStartsWithName(query, 10)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    var series: List<Series> = db.seriesDao().findByStartsWithName(query, 10)
 
-                //Fallback
-                if (series.isEmpty()) {
-                    series = db.seriesDao().findByEndsWithName(query, 10)
-
+                    //Fallback
                     if (series.isEmpty()) {
-                        series = db.seriesDao().findByLikeName(query, 10)
+                        series = db.seriesDao().findByEndsWithName(query, 10)
+
+                        if (series.isEmpty()) {
+                            series = db.seriesDao().findByLikeName(query, 10)
+                        }
                     }
-                }
 
-                var movies: List<Movie> = db.movieDao().findByStartsWithName(query, 10)
+                    var movies: List<Movie> = db.movieDao().findByStartsWithName(query, 10)
 
-                //Fallback
-                if (movies.isEmpty()) {
-                    movies = db.movieDao().findByEndsWithName(query, 10)
-
+                    //Fallback
                     if (movies.isEmpty()) {
-                        movies = db.movieDao().findByLikeName(query, 10)
+                        movies = db.movieDao().findByEndsWithName(query, 10)
+
+                        if (movies.isEmpty()) {
+                            movies = db.movieDao().findByLikeName(query, 10)
+                        }
                     }
-                }
 
-                var liveStreams: List<LiveStream> =
-                    db.liveStreamDao().findByStartsWithName(query, 10)
+                    var liveStreams: List<LiveStream> =
+                        db.liveStreamDao().findByStartsWithName(query, 10)
 
-                //Fallback
-                if (liveStreams.isEmpty()) {
-                    liveStreams = db.liveStreamDao().findByEndsWithName(query, 10)
-
+                    //Fallback
                     if (liveStreams.isEmpty()) {
-                        liveStreams = db.liveStreamDao().findByLikeName(query, 10)
-                    }
-                }
+                        liveStreams = db.liveStreamDao().findByEndsWithName(query, 10)
 
-                requireActivity().runOnUiThread {
-                    arrayAdapter!!.clear()
-                    matchingLiveStreamAdapter.clear()
-                    matchingMovieAdapter.clear()
-                    matchingSeriesAdapter.clear()
-
-                    if (!movies.isEmpty()) {
-                        matchingMovieAdapter.addAll(0, movies)
-                        matchingMovies =
-                            ListRow(HeaderItem(1, getString(R.string.movies)), matchingMovieAdapter)
-                        arrayAdapter!!.add(matchingMovies!!)
+                        if (liveStreams.isEmpty()) {
+                            liveStreams = db.liveStreamDao().findByLikeName(query, 10)
+                        }
                     }
 
-                    if (!liveStreams.isEmpty()) {
-                        matchingLiveStreamAdapter.addAll(0, liveStreams)
-                        matchingLiveStream =
-                            ListRow(
-                                HeaderItem(0, getString(R.string.live_streams)),
-                                matchingLiveStreamAdapter
-                            )
-                        arrayAdapter!!.add(matchingLiveStream!!)
-                    }
+                    requireActivity().runOnUiThread {
+                        arrayAdapter!!.clear()
+                        matchingLiveStreamAdapter.clear()
+                        matchingMovieAdapter.clear()
+                        matchingSeriesAdapter.clear()
 
-                    if (!series.isEmpty()) {
-                        matchingSeriesAdapter.addAll(0, series)
-                        matchingSeries =
-                            ListRow(
-                                HeaderItem(2, getString(R.string.series)),
-                                matchingSeriesAdapter
-                            )
-                        arrayAdapter!!.add(matchingSeries!!)
+                        if (!movies.isEmpty()) {
+                            matchingMovieAdapter.addAll(0, movies)
+                            matchingMovies =
+                                ListRow(
+                                    HeaderItem(1, getString(R.string.movies)),
+                                    matchingMovieAdapter
+                                )
+                            arrayAdapter!!.add(matchingMovies!!)
+                        }
+
+                        if (!liveStreams.isEmpty()) {
+                            matchingLiveStreamAdapter.addAll(0, liveStreams)
+                            matchingLiveStream =
+                                ListRow(
+                                    HeaderItem(0, getString(R.string.live_streams)),
+                                    matchingLiveStreamAdapter
+                                )
+                            arrayAdapter!!.add(matchingLiveStream!!)
+                        }
+
+                        if (!series.isEmpty()) {
+                            matchingSeriesAdapter.addAll(0, series)
+                            matchingSeries =
+                                ListRow(
+                                    HeaderItem(2, getString(R.string.series)),
+                                    matchingSeriesAdapter
+                                )
+                            arrayAdapter!!.add(matchingSeries!!)
+                        }
                     }
                 }
             }
