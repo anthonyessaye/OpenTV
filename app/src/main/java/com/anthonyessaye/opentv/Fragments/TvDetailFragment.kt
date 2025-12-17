@@ -60,6 +60,7 @@ import com.anthonyessaye.opentv.R
 import com.anthonyessaye.opentv.REST.APIKeys
 import com.anthonyessaye.opentv.REST.RESTHandler
 import com.anthonyessaye.opentv.REST.TMDBRESTHandler
+import com.anthonyessaye.opentv.SelectedTVDetailHandler
 import com.anthonyessaye.opentv.TMDBHelper
 import com.anthonyessaye.opentv.Utils.PaletteUtils
 import com.bumptech.glide.Glide
@@ -146,9 +147,8 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
         customDetailPresenter!!.setOnActionClickedListener(OnActionClickedListener { action: Action? ->
             val actionId = action!!.getId().toInt()
             if (actionId == 0) {
+                SelectedTVDetailHandler.setSelectedTVDetailHandler(showDetails, tvShow)
                 val intent = Intent(activity, ListAllEpisodesActivity::class.java)
-                intent.putExtra(TvDetailActivity.SERIES_DETAIL, showDetails)
-                intent.putExtra(TvDetailActivity.SERIES, tvShow)
                 startActivity(intent)
             } else if (actionId == 1) {
                 if (youtubeID != null) {
