@@ -23,7 +23,7 @@ data class EpisodeInfo(val kinopoisk_url: String,
                        val duration_secs: Int,
                        val duration: String,
                        val video: EpisodeVideo,
-                       val audio: EpisodeAudio,
+                       //val audio: EpisodeAudio,
                        val bitrate: Int,
                        val rating: Float): Serializable
 

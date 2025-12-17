@@ -31,6 +31,7 @@ import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistory
 import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistoryDao
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.R
+import com.anthonyessaye.opentv.Singletons.SelectedTVDetailHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,8 +60,8 @@ class ListAllEpisodesActivity : ComponentActivity(), RecyclerViewCallbackInterfa
         editTextSearch = findViewById<EditText>(R.id.editTextSearch)
         imageBtnViewStyle = findViewById<ImageButton>(R.id.imageBtnViewStyle)
 
-        tvShow = intent.getSerializableExtra(TvDetailActivity.SERIES) as Series
-        seriesDetails = intent.getSerializableExtra(TvDetailActivity.SERIES_DETAIL) as SeriesDetails
+        tvShow = SelectedTVDetailHandler.getTVShow()!!
+        seriesDetails = SelectedTVDetailHandler.getShowDetails()!!
         selectedEpisodeId = intent.getSerializableExtra(TvDetailActivity.SERIES_SELECTED_EPISODE) as? Int
 
         DatabaseManager().openDatabase(this) { db ->
