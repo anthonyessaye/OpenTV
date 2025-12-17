@@ -1,4 +1,4 @@
-package com.anthonyessaye.opentv
+package com.anthonyessaye.opentv.Singletons
 
 import com.anthonyessaye.opentv.Models.Series.SeriesDetails
 import com.anthonyessaye.opentv.Persistence.Series.Series

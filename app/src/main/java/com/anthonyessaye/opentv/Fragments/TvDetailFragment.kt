@@ -60,7 +60,7 @@ import com.anthonyessaye.opentv.R
 import com.anthonyessaye.opentv.REST.APIKeys
 import com.anthonyessaye.opentv.REST.RESTHandler
 import com.anthonyessaye.opentv.REST.TMDBRESTHandler
-import com.anthonyessaye.opentv.SelectedTVDetailHandler
+import com.anthonyessaye.opentv.Singletons.SelectedTVDetailHandler
 import com.anthonyessaye.opentv.TMDBHelper
 import com.anthonyessaye.opentv.Utils.PaletteUtils
 import com.bumptech.glide.Glide
