@@ -28,12 +28,23 @@ import androidx.lifecycle.lifecycleScope
 import androidx.palette.graphics.Palette
 import app.moviebase.tmdb.Tmdb3
 import app.moviebase.tmdb.model.AppendResponse
+import app.moviebase.tmdb.model.TmdbAggregateCredits
+import app.moviebase.tmdb.model.TmdbCompany
+import app.moviebase.tmdb.model.TmdbContentRating
 import app.moviebase.tmdb.model.TmdbCredits
 import app.moviebase.tmdb.model.TmdbEpisode
+import app.moviebase.tmdb.model.TmdbExternalIds
+import app.moviebase.tmdb.model.TmdbGenre
+import app.moviebase.tmdb.model.TmdbImages
+import app.moviebase.tmdb.model.TmdbNetwork
 import app.moviebase.tmdb.model.TmdbResult
 import app.moviebase.tmdb.model.TmdbSeason
+import app.moviebase.tmdb.model.TmdbShowCreatedBy
 import app.moviebase.tmdb.model.TmdbShowDetail
+import app.moviebase.tmdb.model.TmdbShowStatus
+import app.moviebase.tmdb.model.TmdbShowType
 import app.moviebase.tmdb.model.TmdbVideo
+import app.moviebase.tmdb.model.TmdbWatchProviderResult
 import com.anthonyessaye.opentv.Activities.DetailActivities.MovieDetailActivity
 import com.anthonyessaye.opentv.Activities.DetailActivities.TvDetailActivity
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllEpisodesActivity
@@ -74,6 +85,9 @@ import com.bumptech.glide.request.transition.Transition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 /** Very lightweight detail fragment for TV shows.  */
 class TvDetailFragment: DetailsSupportFragment(), Palette.PaletteAsyncListener,
@@ -191,30 +205,81 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
     }
 
     suspend fun getSeriesDetails(user: User, server: Server, tvShow: Series): Pair<SeriesDetails?,TmdbShowDetail> {
+        val xtream = XtreamBuilder(user.username, user.password, server.buildURL())
+        var seriesDetails: SeriesDetails? =
+            RESTHandler.SeriesREST.getSeriesDetails(xtream, tvShow.series_id.toString())
 
-        val tmdb = Tmdb3(APIKeys.TMDB_API_KEY)
-        val tmdbSeriesDetail = tmdb.show.getDetails(
-            showId = tvShow.tmdb!!.toInt(),
-            language = "EN",
-            appendResponses = listOf(
-                AppendResponse.IMAGES,
-                AppendResponse.TV_CREDITS,
-                AppendResponse.VIDEOS,
-                AppendResponse.CREDITS,
-                AppendResponse.RELEASES_DATES
+        if (tvShow.tmdb!!.toInt() != 0) {
+            val tmdb = Tmdb3(APIKeys.TMDB_API_KEY)
+            val tmdbSeriesDetail = tmdb.show.getDetails(
+                showId = tvShow.tmdb!!.toInt(),
+                language = "EN",
+                appendResponses = listOf(
+                    AppendResponse.IMAGES,
+                    AppendResponse.TV_CREDITS,
+                    AppendResponse.VIDEOS,
+                    AppendResponse.CREDITS,
+                    AppendResponse.RELEASES_DATES
+                )
             )
-        )
 
-        var recommendations = TMDBRESTHandler.getRecommendations(tvShow.tmdb.toInt(), "tv")
+            var recommendations = TMDBRESTHandler.getRecommendations(tvShow.tmdb.toInt(), "tv")
 
-        if (recommendations.component3().component1() != null && !recommendations.component3().component1()!!.results.isNullOrEmpty()) {
-            bindRecommendations(recommendations.component3().get())
+            if (recommendations.component3().component1() != null && !recommendations.component3()
+                    .component1()!!.results.isNullOrEmpty()
+            ) {
+                bindRecommendations(recommendations.component3().get())
+            }
+
+            return Pair(seriesDetails, tmdbSeriesDetail)
         }
 
-        val xtream = XtreamBuilder(user.username, user.password, server.buildURL())
-        var seriesDetails: SeriesDetails? = RESTHandler.SeriesREST.getSeriesDetails(xtream, tvShow.series_id.toString())
+        /*
+        Added default series in case we did not have the tmdb id for the show
+        Future work should go towards falling back to at least searching the name
+        of the show, we'll need a way to verify if the search by name is correct
+        and then we'll fill any gaps.
+         */
+        val defaultSeries: TmdbShowDetail = TmdbShowDetail(
+            overview = "No Overview Found", 
+            name = tvShow.name,
+            id = tvShow.series_id,
+            posterPath = tvShow.cover,
+            backdropPath = tvShow.backdrop_path?.toString(),
+            popularity = tvShow.rating!!.toFloat(),
+            firstAirDate = null,
+            lastAirDate = null,
+            genres = emptyList(),
+            lastEpisodeToAir = null,
+            nextEpisodeToAir = null,
+            numberOfEpisodes = tvShow.num,
+            numberOfSeasons = 0,
+            episodeRuntime = listOf(tvShow.episode_run_time!!.toInt()),
+            productionCompanies = null,
+            homepage = null,
+            inProduction = false,
+            seasons = emptyList(),
+            networks = emptyList(),
+            status = null,
+            type = null,
+            languages = emptyList(),
+            originCountry = emptyList(),
+            originalLanguage = "",
+            originalName = tvShow.name,
+            tagline = "",
+            voteAverage = tvShow.rating.toFloat(),
+            voteCount = 0,
+            externalIds = null,
+            watchProviders = null,
+            credits = null,
+            aggregateCredits = null,
+            videos = null,
+            contentRatings = null,
+            images = null,
+            createdBy = null
+        )
 
-        return Pair(seriesDetails, tmdbSeriesDetail)
+        return Pair(seriesDetails, defaultSeries)
     }
 
     private fun setupRecommendationsRow() {
