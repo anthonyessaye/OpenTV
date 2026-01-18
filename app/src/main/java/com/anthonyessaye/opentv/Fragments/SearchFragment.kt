@@ -33,6 +33,7 @@ import com.anthonyessaye.opentv.Presenters.SearchLiveStreamPresenter
 import com.anthonyessaye.opentv.Presenters.SearchMoviePresenter
 import com.anthonyessaye.opentv.Presenters.SearchSeriesPresenter
 import com.anthonyessaye.opentv.R
+import com.anthonyessaye.opentv.Singletons.SelectedTVDetailHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -197,8 +198,9 @@ class SearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchResu
         }
 
         else if (item is Series) {
+            SelectedTVDetailHandler.setSelectedTVDetailHandler(null, item)
+
             val intent = Intent(getActivity(), TvDetailActivity::class.java)
-            intent.putExtra(TvDetailActivity.SERIES, item)
             startActivity(intent)
         }
     }

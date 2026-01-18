@@ -123,7 +123,7 @@ OnItemViewClickedListener, PlayerInterface, FavoriteInterface {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        tvShow = requireActivity().intent.getSerializableExtra(TvDetailActivity.SERIES) as Series
+        tvShow = SelectedTVDetailHandler.getTVShow()!!
         setOnItemViewClickedListener(this@TvDetailFragment)
         setUpAdapter()
 

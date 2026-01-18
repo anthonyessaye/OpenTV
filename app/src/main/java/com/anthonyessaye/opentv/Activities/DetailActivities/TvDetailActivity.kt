@@ -13,6 +13,7 @@ import com.anthonyessaye.opentv.Models.Series.SeriesDetails
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.R
+import com.anthonyessaye.opentv.Singletons.SelectedTVDetailHandler
 import com.anthonyessaye.opentv.TMDBHelper
 import com.anthonyessaye.opentv.Utils.GlideBackgroundManager
 
@@ -28,7 +29,7 @@ class TvDetailActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_detail)
 
-        tvShow = this.getIntent().getSerializableExtra(TvDetailActivity.SERIES) as Series?
+        tvShow = SelectedTVDetailHandler.getTVShow()
         mainView = findViewById<FrameLayout>(R.id.details_fragment)
         constraintLayoutLoading = findViewById<ConstraintLayout>(R.id.constraintLayoutLoading)
 
@@ -59,8 +60,8 @@ class TvDetailActivity : FragmentActivity() {
     }
 
     companion object {
-        const val SERIES = "Series"
-        const val SERIES_DETAIL = "SeriesDetail"
+        //const val SERIES = "Series"
+        //const val SERIES_DETAIL = "SeriesDetail"
         const val SERIES_SELECTED_EPISODE = "SeriesSelectedEpisode"
     }
 }

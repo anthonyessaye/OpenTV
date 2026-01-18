@@ -29,6 +29,7 @@ import com.anthonyessaye.opentv.Persistence.Favorite.Favorite
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.R
+import com.anthonyessaye.opentv.Singletons.SelectedTVDetailHandler
 import dev.anilbeesetti.nextplayer.feature.player.extensions.next
 import kotlin.collections.forEach
 
@@ -243,9 +244,9 @@ class ListAllSeriesActivity: ComponentActivity(), RecyclerViewCallbackInterface,
                 if(!longClick) {
                     DatabaseManager().openDatabase(this@ListAllSeriesActivity) { db ->
                         val series = db.seriesDao().findById(id!!)
-                        val intent = Intent(this@ListAllSeriesActivity, TvDetailActivity::class.java)
-                        intent.putExtra(TvDetailActivity.SERIES, series)
+                        SelectedTVDetailHandler.setSelectedTVDetailHandler(null, series)
 
+                        val intent = Intent(this@ListAllSeriesActivity, TvDetailActivity::class.java)
                         startActivity(intent)
                     }
                 }

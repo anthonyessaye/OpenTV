@@ -51,6 +51,7 @@ import com.anthonyessaye.opentv.R
 import com.anthonyessaye.opentv.REST.APIKeys
 import com.anthonyessaye.opentv.REST.RESTHandler
 import com.anthonyessaye.opentv.REST.TMDBRESTHandler
+import com.anthonyessaye.opentv.Singletons.SelectedTVDetailHandler
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.SimpleTarget
 import com.bumptech.glide.request.transition.Transition
@@ -253,9 +254,9 @@ class MainFragment : BrowseSupportFragment(), PlayerInterface {
                             tvShow.series_id.toString()
                         )
 
+                        SelectedTVDetailHandler.setSelectedTVDetailHandler(showDetails!!, tvShow)
+
                         val intent = Intent(context!!, ListAllEpisodesActivity::class.java)
-                        intent.putExtra(TvDetailActivity.SERIES_DETAIL, showDetails)
-                        intent.putExtra(TvDetailActivity.SERIES, tvShow)
                         intent.putExtra(TvDetailActivity.SERIES_SELECTED_EPISODE, item.stream_id)
                         startActivity(intent)
                     }
