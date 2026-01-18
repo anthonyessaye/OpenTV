@@ -14,17 +14,15 @@ interface MovieDao {
     @Query("SELECT * FROM Movie WHERE stream_id IN (:streamIds)")
     fun loadAllByIds(streamIds: IntArray): List<Movie>
 
-    @Query("SELECT * FROM Movie WHERE name LIKE :name")
-    fun findByExactName(name: String): Movie
-
-    @Query("SELECT * FROM Movie WHERE name LIKE '%' || :name || '%' COLLATE NOCASE LIMIT :limit")
-    fun findByLikeName(name: String, limit: Int): List<Movie>
-
-    @Query("SELECT * FROM Movie WHERE name LIKE '%' || :name COLLATE NOCASE LIMIT :limit")
-    fun findByStartsWithName(name: String, limit: Int): List<Movie>
-
-    @Query("SELECT * FROM Movie WHERE name LIKE :name || '%' COLLATE NOCASE LIMIT :limit")
-    fun findByEndsWithName(name: String, limit: Int): List<Movie>
+    @Query("""
+    SELECT Movie.*, (LENGTH(Movie.name) - LENGTH(REPLACE(LOWER(Movie.name), LOWER(:name), ''))) AS match_count
+    FROM Movie
+    JOIN MovieFts ON Movie.rowid = MovieFts.docid
+    WHERE MovieFts MATCH :name
+    ORDER BY match_count DESC, Movie.name ASC
+    LIMIT :limit
+""")
+    fun search(name: String, limit: Int): List<Movie>
 
     @Query("SELECT * FROM Movie WHERE category_id LIKE :id")
     fun findByCategoryId(id: String): List<Movie>

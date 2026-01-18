@@ -78,39 +78,13 @@ class SearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchResu
 
             DatabaseManager().openDatabase(requireContext()) { db ->
                 lifecycleScope.launch(Dispatchers.IO) {
-                    var series: List<Series> = db.seriesDao().findByStartsWithName(query, 10)
+                    val safeQuery = query.trim().split("\\s+".toRegex())
+                        .joinToString(" ") { it.trim() }
 
-                    //Fallback
-                    if (series.isEmpty()) {
-                        series = db.seriesDao().findByEndsWithName(query, 10)
+                    var series: List<Series> = db.seriesDao().search(safeQuery, 10)
+                    var movies: List<Movie> = db.movieDao().search(safeQuery, 10)
+                    var liveStreams: List<LiveStream> = db.liveStreamDao().search(safeQuery, 10)
 
-                        if (series.isEmpty()) {
-                            series = db.seriesDao().findByLikeName(query, 10)
-                        }
-                    }
-
-                    var movies: List<Movie> = db.movieDao().findByStartsWithName(query, 10)
-
-                    //Fallback
-                    if (movies.isEmpty()) {
-                        movies = db.movieDao().findByEndsWithName(query, 10)
-
-                        if (movies.isEmpty()) {
-                            movies = db.movieDao().findByLikeName(query, 10)
-                        }
-                    }
-
-                    var liveStreams: List<LiveStream> =
-                        db.liveStreamDao().findByStartsWithName(query, 10)
-
-                    //Fallback
-                    if (liveStreams.isEmpty()) {
-                        liveStreams = db.liveStreamDao().findByEndsWithName(query, 10)
-
-                        if (liveStreams.isEmpty()) {
-                            liveStreams = db.liveStreamDao().findByLikeName(query, 10)
-                        }
-                    }
 
                     requireActivity().runOnUiThread {
                         arrayAdapter!!.clear()

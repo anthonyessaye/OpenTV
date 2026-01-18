@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
-import com.anthonyessaye.opentv.Persistence.Movie.Movie
 
 @Dao
 interface SeriesDao {
@@ -15,17 +14,15 @@ interface SeriesDao {
     @Query("SELECT * FROM Series WHERE series_id IN (:streamIds)")
     fun loadAllByIds(streamIds: IntArray): List<Series>
 
-    @Query("SELECT * FROM Series WHERE name LIKE :name")
-    fun findByExactName(name: String): Series
-
-    @Query("SELECT * FROM Series WHERE name LIKE '%' || :name || '%' COLLATE NOCASE LIMIT :limit")
-    fun findByLikeName(name: String, limit: Int): List<Series>
-
-    @Query("SELECT * FROM Series WHERE name LIKE '%' || :name COLLATE NOCASE LIMIT :limit")
-    fun findByStartsWithName(name: String, limit: Int): List<Series>
-
-    @Query("SELECT * FROM Series WHERE name LIKE :name || '%' COLLATE NOCASE LIMIT :limit")
-    fun findByEndsWithName(name: String, limit: Int): List<Series>
+    @Query("""
+    SELECT Series.*, (LENGTH(Series.name) - LENGTH(REPLACE(LOWER(Series.name), LOWER(:name), ''))) AS match_count
+    FROM Series
+    JOIN SeriesFts ON Series.rowid = SeriesFts.docid
+    WHERE SeriesFts MATCH :name
+    ORDER BY match_count DESC, Series.name ASC
+    LIMIT :limit
+""")
+    fun search(name: String, limit: Int): List<Series>
 
     @Query("SELECT * FROM Series WHERE series_id LIKE :Id")
     fun findById(Id: String): Series

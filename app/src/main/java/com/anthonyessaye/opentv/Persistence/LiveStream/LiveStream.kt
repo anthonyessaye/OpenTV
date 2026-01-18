@@ -2,6 +2,7 @@ package com.anthonyessaye.opentv.Persistence.LiveStream
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Fts4
 import androidx.room.PrimaryKey
 import java.io.Serializable
 
@@ -22,4 +23,10 @@ class LiveStream(
     @ColumnInfo(name = "direct_source") val direct_source: String?,
     @ColumnInfo(name = "tv_archive_duration") val tv_archive_duration: Int
 ) : Serializable
+
+@Fts4(contentEntity = LiveStream::class)
+@Entity(tableName = "LiveStreamFts")
+data class LiveStreamFts(
+    val name: String
+)
 

@@ -21,18 +21,24 @@ import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistory
 import com.anthonyessaye.opentv.Persistence.History.SeriesHistory.SeriesHistoryDao
 import com.anthonyessaye.opentv.Persistence.LiveStream.LiveStream
 import com.anthonyessaye.opentv.Persistence.LiveStream.LiveStreamDao
+import com.anthonyessaye.opentv.Persistence.LiveStream.LiveStreamFts
 import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import com.anthonyessaye.opentv.Persistence.Movie.MovieDao
+import com.anthonyessaye.opentv.Persistence.Movie.MovieFts
 import com.anthonyessaye.opentv.Persistence.Series.Series
 import com.anthonyessaye.opentv.Persistence.Series.SeriesDao
+import com.anthonyessaye.opentv.Persistence.Series.SeriesFts
 import com.anthonyessaye.opentv.Persistence.Server.Server
 import com.anthonyessaye.opentv.Persistence.Server.ServerDao
 import com.anthonyessaye.opentv.Persistence.User.User
 import com.anthonyessaye.opentv.Persistence.User.UserDao
 
 @Database(entities = [LiveStream::class,
+                      LiveStreamFts::class,
                       Movie::class,
+                      MovieFts::class,
                       Series::class,
+                      SeriesFts::class,
                       User::class,
                       Server::class,
                       LiveCategory::class,
@@ -41,7 +47,7 @@ import com.anthonyessaye.opentv.Persistence.User.UserDao
                       LiveHistory::class,
                       MovieHistory::class,
                       SeriesHistory::class,
-                      Favorite::class], version = 1)
+                      Favorite::class], version = 3, exportSchema = true)
 
 @TypeConverters(StringListConverter::class, StringArrayConverter::class)
 abstract class AppDatabase : RoomDatabase() {

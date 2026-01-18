@@ -2,7 +2,9 @@ package com.anthonyessaye.opentv.Persistence.Series
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Fts4
 import androidx.room.PrimaryKey
+import com.anthonyessaye.opentv.Persistence.Movie.Movie
 import java.io.Serializable
 
 @Entity
@@ -26,8 +28,10 @@ class Series(
     @ColumnInfo(name = "episode_run_time") val episode_run_time: String?,
     @ColumnInfo(name = "category_id") val category_id: String?,
     @ColumnInfo(name = "category_ids") val category_ids: List<String>?
-) : Serializable {
+) : Serializable
 
-
-
-}
+@Fts4(contentEntity = Series::class)
+@Entity(tableName = "SeriesFts")
+data class SeriesFts(
+    val name: String
+)

@@ -2,7 +2,9 @@ package com.anthonyessaye.opentv.Persistence.Movie
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Fts4
 import androidx.room.PrimaryKey
+import com.anthonyessaye.opentv.Persistence.LiveStream.LiveStream
 import java.io.Serializable
 
 @Entity
@@ -24,3 +26,9 @@ class Movie(
     @ColumnInfo(name = "custom_sid") val custom_sid: String?,
     @ColumnInfo(name = "direct_source") val direct_source: String?
 ) : Serializable
+
+@Fts4(contentEntity = Movie::class)
+@Entity(tableName = "MovieFts")
+data class MovieFts(
+    val name: String
+)
