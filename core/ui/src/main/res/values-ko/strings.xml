@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="about_description">버전 및 기여자 정보</string>
+    <string name="about_description">버전, 지원, 기여자 정보</string>
     <string name="about_name">정보</string>
     <string name="ascending">오름차순</string>
     <string name="cancel">취소</string>
@@ -38,7 +38,6 @@
     <string name="seek_gesture_description">좌우로 화면을 쓸어 앞뒤로 동영상 탐색</string>
     <string name="resume_description">지난 번에 멈췄던 곳에서부터 동영상 재생</string>
     <string name="size">크기</string>
-    <string name="swipe_gesture">스와이프 제스처</string>
     <string name="title_activity_player">Next Player 액티비티</string>
     <string name="playback">재생</string>
     <string name="a_z">A-Z</string>
@@ -91,7 +90,6 @@
     <string name="audio">오디오</string>
     <string name="subtitle">자막</string>
     <string name="videos">동영상</string>
-    <string name="swipe_gesture_description">위아래로 화면을 쓸어 밝기 및 볼륨 조절</string>
     <string name="dynamic_theme_description">애플리케이션 테마에 시스템 배경화면 색상 사용</string>
     <string name="player_description">플레이어 모양, 재생 제어</string>
     <string name="controls_lock">재생 제어 잠금</string>
@@ -138,7 +136,6 @@
     <string name="subtitle_text_encoding">자막 텍스트 인코딩</string>
     <string name="high_contrast_dark_theme_desc">다크 테마 배경에 검정색 사용</string>
     <string name="zoom_gesture_description">두 손가락으로 동영상 확대</string>
-    <string name="delete_folder">다음 폴더의 모든 동영상 파일을 영구적으로 삭제합니다.</string>
     <string name="autoplay_settings_description">현재 폴더에 있는 다음 동영상을 자동으로 재생</string>
     <string name="controller_timeout">제어 버튼 시간 제한</string>
     <string name="pause_on_headset_disconnect_desc">기기에서 헤드셋 연결이 끊기면 재생 중인 항목 일시정지</string>
@@ -189,13 +186,11 @@
     <string name="open_subtitle">로컬 자막 열기</string>
     <string name="no_subtitle_tracks_found">이 동영상의 자막 트랙을 사용할 수 없습니다.</string>
     <string name="no_audio_tracks_found">이 동영상의 오디오 트랙을 사용할 수 없습니다.</string>
-    <string name="floating_play_button">플로팅 재생 버튼</string>
     <string name="mark_last_played_media">마지막으로 재생했던 미디어 표시</string>
     <string name="mark_last_played_media_desc">홈 및 각 폴더에서 마지막으로 재생했던 미디어 표시</string>
     <string name="open_network_stream">네트워크 스트림 열기</string>
     <string name="exit">종료</string>
     <string name="play_next_video">다음 동영상 재생</string>
-    <string name="floating_play_button_desc">마지막으로 시청했던 미디어를 재생하는 플로팅 버튼을 표시합니다.</string>
     <string name="open_local_video">로컬 동영상 열기</string>
     <string name="skip_silence">무음 건너뛰기</string>
     <string name="folder">폴더</string>
@@ -210,4 +205,20 @@
     <string name="background_play">백그라운드 재생</string>
     <string name="background_play_description">홈을 누르거나 화면이 잠겨 있을 때 백그라운드에서 계속 재생합니다.</string>
     <string name="enable_pip_from_settings">PIP 기능이 꺼져 있습니다. 설정에서 PIP 모드를 켜 주세요.</string>
+    <string name="loop_mode">반복 모드</string>
+    <string name="loop_mode_off">반복: 꺼짐</string>
+    <string name="loop_mode_one">반복: 단일 동영상</string>
+    <string name="loop_mode_all">반복: 전체</string>
+    <string name="by">%1$s 제작</string>
+    <string name="libraries">라이브러리</string>
+    <string name="github">GitHub</string>
+    <string name="donate">후원</string>
+    <string name="support_the_developer_on">%1$s에서 개발자에게 도움 주기</string>
+    <string name="kofi">Ko-fi</string>
+    <string name="paypal">PayPal</string>
+    <string name="upi">UPI</string>
+    <string name="media_layout">미디어 레이아웃</string>
+    <string name="list">목록</string>
+    <string name="grid">그리드</string>
+    <string name="error_opening_link">이 링크를 열 수 있는 앱이 없습니다</string>
 </resources>

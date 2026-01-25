@@ -1,8 +1,11 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -18,12 +21,15 @@ android {
         targetCompatibility = JavaVersion.toVersion(libs.versions.android.jvm.get().toInt())
     }
 
-    kotlinOptions {
-        jvmTarget = libs.versions.android.jvm.get()
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.fromTarget(libs.versions.android.jvm.get()))
+        }
     }
 
     buildFeatures {
         viewBinding = true
+        compose = true
     }
 }
 
@@ -42,6 +48,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewModel.ktx)
     implementation(libs.google.android.material)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.icons)
     implementation(libs.androidx.constraintlayout)
 
     // Media3
@@ -51,6 +62,7 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.exoplayer.rtsp)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.ui.compose)
     implementation(libs.androidx.media3.session)
     implementation(libs.github.anilbeesetti.nextlib.media3ext)
     implementation(libs.github.anilbeesetti.nextlib.mediainfo)
@@ -61,9 +73,8 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    ksp(libs.kotlin.metadata.jvm)
     kspAndroidTest(libs.hilt.compiler)
-
-    implementation(libs.timber)
 
     testImplementation(libs.junit4)
     androidTestImplementation(libs.androidx.test.ext)

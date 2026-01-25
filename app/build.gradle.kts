@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
@@ -9,14 +10,14 @@ plugins {
 
 android {
     namespace = "com.anthonyessaye.opentv"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.anthonyessaye.opentv"
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 5
+        versionName = "0.1.2"
 
     }
 
@@ -33,9 +34,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_21.toString()
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.fromTarget(libs.versions.android.jvm.get()))
+        }
     }
+
 
     buildFeatures {
         compose = true
@@ -58,7 +63,7 @@ dependencies {
     implementation(libs.androidx.navigation.common.android)
     implementation(libs.androidx.navigation.runtime.android)
     implementation(libs.androidx.palette)
-    val media3Version = "1.8.0-alpha01"
+    val media3Version = "1.9.0"
     val fuelVersion = "2.3.1"
 
     implementation(project(":core:common"))
@@ -73,6 +78,21 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.leanback)
     implementation(libs.glide)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)
+
+    // Compose
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtimeCompose)
+
+    implementation(libs.google.android.material)
+    implementation(libs.androidx.core.splashscreen)
     implementation("com.github.marlonlom:timeago:4.1.0")
 
     implementation("com.github.kittinunf.fuel:fuel:$fuelVersion")

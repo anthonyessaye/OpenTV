@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="about_description">Versión, créditos</string>
+    <string name="about_description">Versión, soporte, créditos</string>
     <string name="about_name">Acerca de</string>
     <string name="appearance_description">Configura la aplicación a tu gusto</string>
     <string name="appearance_name">Apariencia</string>
@@ -35,7 +35,7 @@
     <string name="quick_settings">Configuraciones rápidas</string>
     <string name="remember_brightness_level">Recordar el nivel de brillo</string>
     <string name="remember_brightness_level_description">Recordar el nivel de brillo entre las sesiones de reproducción</string>
-    <string name="remember_selections_description">Recordar elecciones para cada archivo como la pista de audio, la pista de subtitulo, etc</string>
+    <string name="remember_selections_description">Recordar las selecciones para cada archivo, como pista de audio, pista de subtítulos, etc.</string>
     <string name="resume">Resumir</string>
     <string name="resume_description">Selecciona si deseas reanudar los vídeos reproducidos desde el punto en que se detuvieron</string>
     <string name="seek_gesture">Gesto de búsqueda</string>
@@ -44,7 +44,6 @@
     <string name="settings">Ajustes</string>
     <string name="size">Tamaño</string>
     <string name="sort">Ordenar</string>
-    <string name="swipe_gesture_description">Desliza el dedo verticalmente para ajustar el brillo y el volumen</string>
     <string name="title">Título</string>
     <string name="unknown_error">Ha ocurrido un error desconocido</string>
     <string name="playback">Reproducción</string>
@@ -58,7 +57,6 @@
     <string name="permission_settings">La aplicación Next Player necesita el permiso \"%1$s\" para acceder y reproducir archivos multimedia. Sin él, el acceso y la reproducción multimedia no funcionarán. Para utilizar la aplicación correctamente, concede el permiso desde la configuración, ya que está denegado permanentemente.</string>
     <string name="remember_selections">Recordar elecciones</string>
     <string name="select_audio_track">Seleccionar pista de audio</string>
-    <string name="swipe_gesture">Gesto de deslizamiento</string>
     <string name="title_activity_player">Actividad de Next Player</string>
     <string name="longest">El más largo</string>
     <string name="largest">El más pesado</string>
@@ -138,7 +136,6 @@
     <string name="share">Compartir</string>
     <string name="delete">Borrar</string>
     <string name="delete_file">El siguiente archivo se eliminará de forma permanente</string>
-    <string name="delete_folder">Todos los archivos de vídeo de la siguiente carpeta se eliminarán de forma permanente.</string>
     <string name="best_fit">Mejor ajuste</string>
     <string name="stretch">Estirar</string>
     <string name="crop">Cortar</string>
@@ -192,8 +189,6 @@
     <string name="mark_last_played_media">Marcar el último medio reproducido</string>
     <string name="open_local_video">Abrir un video local</string>
     <string name="open_network_stream">Abrir videos en la red</string>
-    <string name="floating_play_button">Botón de reproducción flotante</string>
-    <string name="floating_play_button_desc">Mostrar el botón flotante para reproducir el último medio reproducido.</string>
     <string name="mark_last_played_media_desc">Marcar el último medio reproducido al inicio y en cada carpeta</string>
     <string name="exit">Salir</string>
     <string name="play_next_video">Reproducir el siguiente vídeo</string>
@@ -210,4 +205,36 @@
     <string name="enable_pip_from_settings">La función Imagen en imagen está deshabilitada. Habilítela en Configuración para usar esta función.</string>
     <string name="background_play">Reproducción en segundo plano</string>
     <string name="background_play_description">Reproducir en segundo plano cuando se toca en el inicio o la pantalla está bloqueada.</string>
+    <string name="loop_mode">Modo de bucle</string>
+    <string name="loop_mode_off">Bucle: Apagado</string>
+    <string name="loop_mode_one">Bucle: Uno</string>
+    <string name="loop_mode_all">Bucle: Todo</string>
+    <string name="by">por %1$s</string>
+    <string name="libraries">Librerías</string>
+    <string name="github">Github</string>
+    <string name="donate">Donar</string>
+    <string name="error_opening_link">No se encontró aplicación para abrir este enlace</string>
+    <string name="support_the_developer_on">Apoya al desarrollador en %1$s</string>
+    <string name="kofi">Ko-fi</string>
+    <string name="paypal">PayPal</string>
+    <string name="upi">UPI</string>
+    <string name="list">Lista</string>
+    <string name="grid">Cuadricula</string>
+    <string name="media_layout">Diseño</string>
+    <string name="info">Información</string>
+    <string name="play">Reproducir</string>
+    <string name="recently_played">Reproducido recientemente</string>
+    <string name="delete_one_video">¿Eliminar 1 vídeo?</string>
+    <string name="delete_videos">¿Eliminar %1$d vídeos?</string>
+    <string name="delete_one_folder">¿Eliminar carpeta?</string>
+    <string name="delete_folders">¿Eliminar %1$d carpetas?</string>
+    <string name="delete_items">¿Eliminar %1$d elemento?</string>
+    <string name="delete_item_info">Esta acción no puede deshacerse. El elemento seleccionado se eliminará permanentemente</string>
+    <string name="delete_items_info">Esta acción no puede deshacerse. Los elementos seleccionados se eliminarán permanentemente</string>
+    <string name="gestures">Gestos</string>
+    <string name="volume_gesture">Gesto de volumen</string>
+    <string name="volume_gesture_description">Ajuste el volumen deslizando verticalmente</string>
+    <string name="brightness_gesture">Gesto de brillo</string>
+    <string name="brightness_gesture_description">Ajuste el brillo deslizando verticalmente</string>
+    <string name="pan_gesture">Gesto panorámico</string>
 </resources>

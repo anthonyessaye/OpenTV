@@ -901,6 +901,10 @@ int styleable FontFamilyFont_fontStyle 6
 int styleable FontFamilyFont_fontVariationSettings 7
 int styleable FontFamilyFont_fontWeight 8
 int styleable FontFamilyFont_ttcIndex 9
+int[] styleable FontFamilyProviderFallback { 0x7f02000b, 0x7f02000c, 0x7f02000e }
+int styleable FontFamilyProviderFallback_fontProviderQuery 0
+int styleable FontFamilyProviderFallback_fontProviderSystemFontFamily 1
+int styleable FontFamilyProviderFallback_fontVariationSettings 2
 int[] styleable GradientColor { 0x0101019d, 0x0101019e, 0x010101a1, 0x010101a2, 0x010101a3, 0x010101a4, 0x01010201, 0x0101020b, 0x01010510, 0x01010511, 0x01010512, 0x01010513 }
 int styleable GradientColor_android_startColor 0
 int styleable GradientColor_android_endColor 1

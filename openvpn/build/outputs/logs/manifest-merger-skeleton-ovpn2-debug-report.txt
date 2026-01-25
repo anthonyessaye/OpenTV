@@ -5,17 +5,17 @@ MERGED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/ma
 INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml:6:1-29:12
 INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml:6:1-29:12
 INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml:6:1-29:12
-MERGED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:17:1-30:12
-MERGED from [androidx.core:core-ktx:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/64b8b1b0a0431039bd2b8d14cc49357a/transformed/core-ktx-1.16.0/AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/1e1a51237d330be2d648bc0c809dcc16/transformed/interpolator-1.0.0/AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/935974693773068a2e292c41875df047/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:17:1-55:12
-MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/4c0f3b59fce9ecbc707d9e8857ccbce5/transformed/startup-runtime-1.1.1/AndroidManifest.xml:17:1-33:12
-MERGED from [androidx.tracing:tracing:1.2.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/edc35e98124a884180567df0a83e9159/transformed/tracing-1.2.0/AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/cdb9a786d74d8bcd6907f551af0955f0/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:17:1-27:12
-MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/b0f0a3d2a2a2cd1bdcc7a5c8d837151e/transformed/core-runtime-2.2.0/AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/507f7e6b3c3d019cab1dca0105faf100/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.core:core-viewtree:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/cf642fab62f0771f03f5753a540b1819/transformed/core-viewtree-1.0.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:17:1-30:12
+MERGED from [androidx.core:core-ktx:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/42cdfa3fb0165c5f2feccd5f489d7331/transformed/core-ktx-1.17.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/69d367d7f0a0c77c4987cb8c5a3c4f33/transformed/interpolator-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/0e05568dff39404463069d0e99c471f7/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:17:1-55:12
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/21bba1db63ed1ab0a473e5efcab470dc/transformed/startup-runtime-1.1.1/AndroidManifest.xml:17:1-33:12
+MERGED from [androidx.tracing:tracing:1.2.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/c3ec54d795a0188b9ca74c5f698f7009/transformed/tracing-1.2.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/94d9374c69ea1c0fffac50f7a70848e5/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/9dad0e4bafc6d1fd68af326c4a809937/transformed/core-runtime-2.2.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/a497f96e549ff0c714bec0de69783062/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.core:core-viewtree:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/fd601f43a6cfdce8b9665fbb9a203bf7/transformed/core-viewtree-1.0.0/AndroidManifest.xml:2:1-7:12
 	package
 		INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml
 	android:versionName
@@ -65,18 +65,18 @@ ADDED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/mai
 MERGED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/AndroidManifest.xml:19:5-143:19
 MERGED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/AndroidManifest.xml:19:5-143:19
 INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml:9:5-27:19
-MERGED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:28:5-89
-MERGED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:28:5-89
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:23:5-53:19
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:23:5-53:19
-MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/4c0f3b59fce9ecbc707d9e8857ccbce5/transformed/startup-runtime-1.1.1/AndroidManifest.xml:25:5-31:19
-MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/4c0f3b59fce9ecbc707d9e8857ccbce5/transformed/startup-runtime-1.1.1/AndroidManifest.xml:25:5-31:19
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/cdb9a786d74d8bcd6907f551af0955f0/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/cdb9a786d74d8bcd6907f551af0955f0/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:28:5-89
+MERGED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:28:5-89
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/21bba1db63ed1ab0a473e5efcab470dc/transformed/startup-runtime-1.1.1/AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/21bba1db63ed1ab0a473e5efcab470dc/transformed/startup-runtime-1.1.1/AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/94d9374c69ea1c0fffac50f7a70848e5/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/94d9374c69ea1c0fffac50f7a70848e5/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
 	android:extractNativeLibs
 		INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml
 	android:appComponentFactory
-		ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:28:18-86
+		ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:28:18-86
 	android:supportsRtl
 		ADDED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/AndroidManifest.xml:26:9-35
 		ADDED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/main/AndroidManifest.xml:26:9-35
@@ -315,103 +315,103 @@ uses-sdk
 INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml
 INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml
-MERGED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.core:core-ktx:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/64b8b1b0a0431039bd2b8d14cc49357a/transformed/core-ktx-1.16.0/AndroidManifest.xml:5:5-44
-MERGED from [androidx.core:core-ktx:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/64b8b1b0a0431039bd2b8d14cc49357a/transformed/core-ktx-1.16.0/AndroidManifest.xml:5:5-44
-MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/1e1a51237d330be2d648bc0c809dcc16/transformed/interpolator-1.0.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/1e1a51237d330be2d648bc0c809dcc16/transformed/interpolator-1.0.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/935974693773068a2e292c41875df047/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:5:5-44
-MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/935974693773068a2e292c41875df047/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:5:5-44
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:21:5-44
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:21:5-44
-MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/4c0f3b59fce9ecbc707d9e8857ccbce5/transformed/startup-runtime-1.1.1/AndroidManifest.xml:21:5-23:41
-MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/4c0f3b59fce9ecbc707d9e8857ccbce5/transformed/startup-runtime-1.1.1/AndroidManifest.xml:21:5-23:41
-MERGED from [androidx.tracing:tracing:1.2.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/edc35e98124a884180567df0a83e9159/transformed/tracing-1.2.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.tracing:tracing:1.2.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/edc35e98124a884180567df0a83e9159/transformed/tracing-1.2.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/cdb9a786d74d8bcd6907f551af0955f0/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/cdb9a786d74d8bcd6907f551af0955f0/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/b0f0a3d2a2a2cd1bdcc7a5c8d837151e/transformed/core-runtime-2.2.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/b0f0a3d2a2a2cd1bdcc7a5c8d837151e/transformed/core-runtime-2.2.0/AndroidManifest.xml:20:5-44
-MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/507f7e6b3c3d019cab1dca0105faf100/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:5:5-44
-MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/507f7e6b3c3d019cab1dca0105faf100/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:5:5-44
-MERGED from [androidx.core:core-viewtree:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/cf642fab62f0771f03f5753a540b1819/transformed/core-viewtree-1.0.0/AndroidManifest.xml:5:5-44
-MERGED from [androidx.core:core-viewtree:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/cf642fab62f0771f03f5753a540b1819/transformed/core-viewtree-1.0.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core-ktx:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/42cdfa3fb0165c5f2feccd5f489d7331/transformed/core-ktx-1.17.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-ktx:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/42cdfa3fb0165c5f2feccd5f489d7331/transformed/core-ktx-1.17.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/69d367d7f0a0c77c4987cb8c5a3c4f33/transformed/interpolator-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/69d367d7f0a0c77c4987cb8c5a3c4f33/transformed/interpolator-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/0e05568dff39404463069d0e99c471f7/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/0e05568dff39404463069d0e99c471f7/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:5:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/21bba1db63ed1ab0a473e5efcab470dc/transformed/startup-runtime-1.1.1/AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/21bba1db63ed1ab0a473e5efcab470dc/transformed/startup-runtime-1.1.1/AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.tracing:tracing:1.2.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/c3ec54d795a0188b9ca74c5f698f7009/transformed/tracing-1.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing:1.2.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/c3ec54d795a0188b9ca74c5f698f7009/transformed/tracing-1.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/94d9374c69ea1c0fffac50f7a70848e5/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/94d9374c69ea1c0fffac50f7a70848e5/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/9dad0e4bafc6d1fd68af326c4a809937/transformed/core-runtime-2.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/9dad0e4bafc6d1fd68af326c4a809937/transformed/core-runtime-2.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/a497f96e549ff0c714bec0de69783062/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/a497f96e549ff0c714bec0de69783062/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/fd601f43a6cfdce8b9665fbb9a203bf7/transformed/core-viewtree-1.0.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/fd601f43a6cfdce8b9665fbb9a203bf7/transformed/core-viewtree-1.0.0/AndroidManifest.xml:5:5-44
 	android:targetSdkVersion
 		INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml
 	android:minSdkVersion
 		INJECTED from /Users/anthonyessaye_podeo/Development/Android/OpenTV/openvpn/src/skeleton/AndroidManifest.xml
 permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:22:5-24:47
+ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:22:5-24:47
 	android:protectionLevel
-		ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:24:9-44
+		ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:24:9-44
 	android:name
-		ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:23:9-81
+		ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:23:9-81
 permission#de.blinkt.openvpn.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:22:5-24:47
+ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:22:5-24:47
 	android:protectionLevel
-		ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:24:9-44
+		ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:24:9-44
 	android:name
-		ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:23:9-81
+		ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:23:9-81
 uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:26:5-97
+ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:26:5-97
 	android:name
-		ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:26:22-94
+		ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:26:22-94
 uses-permission#de.blinkt.openvpn.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:26:5-97
+ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:26:5-97
 	android:name
-		ADDED from [androidx.core:core:1.16.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/c46293b73bfab632a9ca50f1c63e7ba4/transformed/core-1.16.0/AndroidManifest.xml:26:22-94
+		ADDED from [androidx.core:core:1.17.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/f1691473b7ce019c877203e6dc0450fe/transformed/core-1.17.0/AndroidManifest.xml:26:22-94
 provider#androidx.startup.InitializationProvider
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:24:9-32:20
-MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/4c0f3b59fce9ecbc707d9e8857ccbce5/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
-MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/4c0f3b59fce9ecbc707d9e8857ccbce5/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/21bba1db63ed1ab0a473e5efcab470dc/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/21bba1db63ed1ab0a473e5efcab470dc/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
 	tools:node
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:28:13-31
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:28:13-31
 	android:authorities
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:26:13-68
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:26:13-68
 	android:exported
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:27:13-37
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:27:13-37
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:25:13-67
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:25:13-67
 meta-data#androidx.profileinstaller.ProfileInstallerInitializer
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
 	android:value
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
 receiver#androidx.profileinstaller.ProfileInstallReceiver
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
 	android:enabled
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
 	android:exported
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
 	android:permission
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
 	android:directBootAware
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
 intent-filter#action:name:androidx.profileinstaller.action.INSTALL_PROFILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
 action#androidx.profileinstaller.action.INSTALL_PROFILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
 intent-filter#action:name:androidx.profileinstaller.action.SKIP_FILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
 action#androidx.profileinstaller.action.SKIP_FILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
 intent-filter#action:name:androidx.profileinstaller.action.SAVE_PROFILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
 action#androidx.profileinstaller.action.SAVE_PROFILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
 intent-filter#action:name:androidx.profileinstaller.action.BENCHMARK_OPERATION
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
 action#androidx.profileinstaller.action.BENCHMARK_OPERATION
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/8.14.2/transforms/98007a143c6c7d1a10f8161dc6eda921/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:25-92
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] /Users/anthonyessaye_podeo/.gradle/caches/9.3.0/transforms/eb9f76cab069c1dfc5796d8059d7383c/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:25-92

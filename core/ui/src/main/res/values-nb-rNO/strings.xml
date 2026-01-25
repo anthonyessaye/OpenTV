@@ -51,8 +51,6 @@
     <string name="unknown_error">En ukjent feil oppstod</string>
     <string name="dynamic_theme_description">Bruk farger fra systembakgrunnen i programdrakten</string>
     <string name="sort">Sorter</string>
-    <string name="swipe_gesture">Dragningshåndvending</string>
-    <string name="swipe_gesture_description">Dra loddrett for å justere lys- og lydstyrke</string>
     <string name="title_activity_player">Avspilleraktivitet</string>
     <string name="about_description">Versjon, bidragsytere</string>
     <string name="error_playing_video">Feil: Kan ikke spille video</string>
@@ -142,7 +140,6 @@
     <string name="best_fit">Beste passform</string>
     <string name="stretch">Strekk</string>
     <string name="subtitle_text_encoding">Tegnkoding for undertekster</string>
-    <string name="delete_folder">Alle videofiler i følgende mappe vil bli slettet for godt.</string>
     <string name="crop">Beskjær</string>
     <string name="zoom_gesture">Forstørrelseshåndvending</string>
     <string name="zoom_gesture_description">Klyp for å forstørre videoen</string>

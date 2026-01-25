@@ -1,4 +1,6 @@
 import com.mikepenz.aboutlibraries.plugin.DuplicateMode
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
@@ -15,7 +17,7 @@ plugins {
 
 subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
-    apply(plugin = "com.mikepenz.aboutlibraries.plugin")
+    apply(plugin = "com.mikepenz.aboutlibraries.plugin.android")
 
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
         android.set(true)
@@ -23,10 +25,10 @@ subprojects {
         ignoreFailures.set(false)
     }
 
-    configure<com.mikepenz.aboutlibraries.plugin.AboutLibrariesExtension> {
+    /*configure<com.mikepenz.aboutlibraries.plugin.AboutLibrariesExtension> {
         // Remove the "generated" timestamp to allow for reproducible builds
         excludeFields = arrayOf("generated")
         duplicationMode = DuplicateMode.MERGE
-    }
+    }*/
 
 }

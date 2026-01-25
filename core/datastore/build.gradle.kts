@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.jetbrains.kotlin.android)
@@ -19,8 +21,10 @@ android {
         targetCompatibility = JavaVersion.toVersion(libs.versions.android.jvm.get().toInt())
     }
 
-    kotlinOptions {
-        jvmTarget = libs.versions.android.jvm.get()
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.fromTarget(libs.versions.android.jvm.get()))
+        }
     }
 }
 
@@ -33,11 +37,11 @@ dependencies {
 
     implementation(libs.androidx.datastore.core)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.timber)
 
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    ksp(libs.kotlin.metadata.jvm)
     kspAndroidTest(libs.hilt.compiler)
 
     testImplementation(libs.junit4)

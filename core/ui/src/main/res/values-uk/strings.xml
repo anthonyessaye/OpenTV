@@ -18,7 +18,7 @@
     <string name="unknown_error">Виникла невідома помилка</string>
     <string name="dynamic_theme_description">Застосувати кольори з системних шпалер до теми застосунку</string>
     <string name="controls_unlock">Розблокувати</string>
-    <string name="about_description">Версія, подяка</string>
+    <string name="about_description">Версія, підтримка, подяка</string>
     <string name="cancel">Скасувати</string>
     <string name="appearance_name">Зовнішній вигляд</string>
     <string name="descending">За спаданням</string>
@@ -45,7 +45,7 @@
     <string name="player_name">Плеєр</string>
     <string name="remember_brightness_level">Запам\'ятати рівень яскравості</string>
     <string name="remember_brightness_level_description">Запам\'ятовує рівень яскравості між сеансами відтворення</string>
-    <string name="remember_selections_description">Запам\'ятовує вибір для кожного файлу, наприклад, звукову доріжку, доріжку субтитрів тощо</string>
+    <string name="remember_selections_description">Запам\'ятовує вибір для кожного файлу, наприклад, звукову доріжку, доріжку субтитрів тощо.</string>
     <string name="seek_gesture">Горизонтальний жест</string>
     <string name="playback">Відтворення</string>
     <string name="remember_selections">Запам\'ятати вибір</string>
@@ -53,12 +53,10 @@
     <string name="largest">Найбільший</string>
     <string name="select_audio_track">Виберіть звукову доріжку</string>
     <string name="seek_gesture_description">Проведіть по горизонталі, щоб перейти вперед або назад</string>
-    <string name="swipe_gesture_description">Проведіть по вертикалі, щоб відрегулювати яскравість і гучність</string>
     <string name="interface_name">Інтерфейс</string>
     <string name="shortest">Найкоротший</string>
     <string name="select_subtitle_track">Виберіть доріжку субтитрів</string>
     <string name="settings">Налаштування</string>
-    <string name="swipe_gesture">Вертикальний жест</string>
     <string name="title">Назва</string>
     <string name="z_a">Я-А</string>
     <string name="longest">Найдовший</string>
@@ -138,7 +136,6 @@
     <string name="share">Поділитися</string>
     <string name="delete">Видалити</string>
     <string name="delete_file">Наступний файл буде видалено назавжди</string>
-    <string name="delete_folder">Всі відео файли в наступній теці будуть видалені назавжди.</string>
     <string name="hundred_percent">100%</string>
     <string name="autoplay_settings">Автовідтворення</string>
     <string name="autoplay_settings_description">Автоматично відтворювати наступне відео у поточній теці</string>
@@ -189,8 +186,6 @@
     <string name="no_subtitle_tracks_found">Доріжки субтитрів для цього відео недоступні або не підтримуються.</string>
     <string name="rename">Перейменувати</string>
     <string name="rename_to">Перейменувати на</string>
-    <string name="floating_play_button">Плаваюча кнопка відтворення</string>
-    <string name="floating_play_button_desc">Показати плаваючу кнопку для відтворення останнього відтвореного медіафайлу.</string>
     <string name="mark_last_played_media">Позначити останній відтворений медіафайл</string>
     <string name="mark_last_played_media_desc">Позначити останній відтворений медіафайл на домашньому екрані та в кожній теці</string>
     <string name="open_local_video">Відкрити локальне відео</string>
@@ -214,4 +209,16 @@
     <string name="loop_mode_all">Повтор: усе</string>
     <string name="loop_mode_one">Повтор: один</string>
     <string name="loop_mode">Режим повтору</string>
+    <string name="libraries">Бібліотеки</string>
+    <string name="error_opening_link">Не знайдено застосунку для оброблення цього посилання</string>
+    <string name="paypal">PayPal</string>
+    <string name="upi">UPI</string>
+    <string name="by">від %1$s</string>
+    <string name="donate">Задонатити</string>
+    <string name="github">Github</string>
+    <string name="support_the_developer_on">Підтримати розробника на %1$s</string>
+    <string name="kofi">Ko-fi</string>
+    <string name="media_layout">Розміщення медіафайлів</string>
+    <string name="list">Список</string>
+    <string name="grid">Сітка</string>
 </resources>

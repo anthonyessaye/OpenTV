@@ -20,13 +20,13 @@
       "filters": [
         {
           "filterType": "ABI",
-          "value": "arm64-v8a"
+          "value": "armeabi-v7a"
         }
       ],
       "attributes": [],
       "versionCode": 218,
       "versionName": "0.7.63-o2",
-      "outputFile": "linked-resources-binary-format-skeletonOvpn2Arm64-v8aDebug.ap_"
+      "outputFile": "linked-resources-binary-format-skeletonOvpn2Armeabi-v7aDebug.ap_"
     },
     {
       "type": "ONE_OF_MANY",
@@ -59,13 +59,13 @@
       "filters": [
         {
           "filterType": "ABI",
-          "value": "armeabi-v7a"
+          "value": "arm64-v8a"
         }
       ],
       "attributes": [],
       "versionCode": 218,
       "versionName": "0.7.63-o2",
-      "outputFile": "linked-resources-binary-format-skeletonOvpn2Armeabi-v7aDebug.ap_"
+      "outputFile": "linked-resources-binary-format-skeletonOvpn2Arm64-v8aDebug.ap_"
     }
   ],
   "elementType": "File"

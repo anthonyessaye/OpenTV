@@ -1,4 +1,5 @@
 import com.android.build.gradle.api.ApplicationVariant
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 /*
  * Copyright (c) 2012-2016 Arne Schwabe
@@ -140,12 +141,14 @@ android {
     }
 
     compileOptions {
-        targetCompatibility = JavaVersion.VERSION_17
-        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.fromTarget(libs.versions.android.jvm.get()))
+        }
     }
 
     splits {

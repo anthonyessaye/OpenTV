@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="about_description">Sürüm, katkıda bulunanlar</string>
+    <string name="about_description">Sürüm, destek, katkıda bulunanlar</string>
     <string name="about_name">Hakkında</string>
     <string name="appearance_description">Uygulamayı istediğiniz gibi ayarlayın</string>
     <string name="appearance_name">Görünüm</string>
@@ -41,7 +41,7 @@
     <string name="remember_brightness_level">Parlaklık seviyesini hatırla</string>
     <string name="remember_brightness_level_description">Oynatma oturumları arasında parlaklık seviyesini hatırla</string>
     <string name="remember_selections">Seçimleri hatırla</string>
-    <string name="remember_selections_description">Her dosya için ses parçası, altyazı parçası gibi seçimleri hatırla</string>
+    <string name="remember_selections_description">Her dosya için ses parçası, altyazı parçası gibi seçimleri hatırla.</string>
     <string name="resume">Kaldığı Yerden Devam Et</string>
     <string name="resume_description">Oynatılan videoların durduğunuz yerden devam edip etmeyeceğini seçin</string>
     <string name="seek_gesture">Arama hareketi</string>
@@ -51,8 +51,6 @@
     <string name="settings">Ayarlar</string>
     <string name="size">Boyut</string>
     <string name="sort">Sırala</string>
-    <string name="swipe_gesture">Kaydırma hareketi</string>
-    <string name="swipe_gesture_description">Parlaklığı ve sesi ayarlamak için dikey olarak kaydırın</string>
     <string name="title">Başlık</string>
     <string name="title_activity_player">Next Player Etkinliği</string>
     <string name="unknown_error">Bilinmeyen bir hata oluştu</string>
@@ -142,7 +140,6 @@
     <string name="delete">Sil</string>
     <string name="delete_file">Aşağıdaki dosya kalıcı olarak silinecek</string>
     <string name="subtitle_text_encoding">Altyazı metin kodlaması</string>
-    <string name="delete_folder">Aşağıdaki klasördeki tüm video dosyaları kalıcı olarak silinecek.</string>
     <string name="fast_playback_speed">%.1fx hız</string>
     <string name="long_press_gesture">Uzun basma hareketi</string>
     <string name="long_press_gesture_desc">%.1fx hızda oynatmak için uzun basın</string>
@@ -189,8 +186,6 @@
     <string name="no_audio_tracks_found">Bu video için ses parçaları ya mevcut değil ya da desteklenmiyor.</string>
     <string name="rename">Yeniden adlandır</string>
     <string name="rename_to">Şuna isimlendir</string>
-    <string name="floating_play_button">Yüzen oynatma düğmesi</string>
-    <string name="floating_play_button_desc">Son oynatılan medyayı oynatmak için yüzen düğmeyi göster.</string>
     <string name="mark_last_played_media">Son oynatılan medyayı işaretle</string>
     <string name="mark_last_played_media_desc">Son oynatılan medyayı ana ekranda ve her klasörde işaretle</string>
     <string name="open_local_video">Yerel video aç</string>
@@ -210,4 +205,20 @@
     <string name="stop_player_session">Oynatıcı oturumunu durdur</string>
     <string name="background_play">Arka planda oynat</string>
     <string name="background_play_description">Arka planda oynat.</string>
+    <string name="loop_mode">Döngü modu</string>
+    <string name="loop_mode_off">Döngü: Kapalı</string>
+    <string name="loop_mode_one">Döngü: Bir</string>
+    <string name="loop_mode_all">Döngü: Tümü</string>
+    <string name="libraries">Kütüphaneler</string>
+    <string name="github">Github</string>
+    <string name="donate">Bağış yap</string>
+    <string name="support_the_developer_on">Geliştiriciyi %1$s aracılığıyla destekle</string>
+    <string name="kofi">Ko-fi</string>
+    <string name="paypal">PayPal</string>
+    <string name="upi">UPI</string>
+    <string name="list">Liste</string>
+    <string name="by">%1$s tarafından</string>
+    <string name="media_layout">Medya Düzeni</string>
+    <string name="grid">Izgara</string>
+    <string name="error_opening_link">Bu bağlantıyı işleyecek bir uygulama bulunamadı</string>
 </resources>

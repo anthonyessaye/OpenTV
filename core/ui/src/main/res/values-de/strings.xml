@@ -15,14 +15,13 @@
     <string name="player_controls_next">Nächster Player</string>
     <string name="player_controls_play_pause">Player: Wiedergabe/Pause</string>
     <string name="remember_brightness_level_description">Helligkeitsstufe zwischen Wiedergabesitzungen merken</string>
-    <string name="remember_selections_description">Merke Auswahl für jede Datei, wie z.B. Audiospur, Untertitelspur usw.</string>
+    <string name="remember_selections_description">Merke Auswahl für jede Datei, wie z.B. Audiospur, Untertitelspur, usw.</string>
     <string name="resume">Fortsetzen</string>
     <string name="resume_description">Wähle, ob wiedergegebene Videos an der Stelle fortgesetzt werden sollen, wo du aufgehört hast</string>
     <string name="seek_gesture">Such-Geste</string>
     <string name="seek_gesture_description">Horizontal wischen, um vor- oder zurückzuspulen</string>
     <string name="select_audio_track">Audiospur wählen</string>
     <string name="settings">Einstellungen</string>
-    <string name="swipe_gesture_description">Vertikal wischen, um Helligkeit und Lautstärke anzupassen</string>
     <string name="title">Titel</string>
     <string name="title_activity_player">Next Player-Aktivität</string>
     <string name="unknown_error">Ein unbekannter Fehler ist aufgetreten</string>
@@ -45,7 +44,7 @@
     <string name="about_name">Über</string>
     <string name="ascending">Aufsteigend</string>
     <string name="disable">Deaktivieren</string>
-    <string name="about_description">Version, Credits</string>
+    <string name="about_description">Version, Unterstützung, Mitwirkende</string>
     <string name="appearance_description">Passe die App deinen Bedürfnissen an</string>
     <string name="appearance_name">Aussehen</string>
     <string name="cancel">Abbrechen</string>
@@ -60,7 +59,6 @@
     <string name="player_name">Player</string>
     <string name="quick_settings">Schnelleinstellungen</string>
     <string name="select_subtitle_track">Untertitelspur wählen</string>
-    <string name="swipe_gesture">Wisch-Geste</string>
     <string name="size">Größe</string>
     <string name="sort">Sortieren</string>
     <string name="largest">Größtes</string>
@@ -85,7 +83,7 @@
     <string name="media_library_description">Medienbibliothek scannen und verwalten</string>
     <string name="scanning_storage">Scanne Speicher…</string>
     <string name="video">Video</string>
-    <string name="videos">Videos</string>
+    <string name="videos">Die videos</string>
     <string name="manage_folders">Ordner verwalten</string>
     <string name="manage_folders_desc">Wähle in der Medienbibliothek zu ignorierende Ordner aus</string>
     <string name="force_rescan_storage_desc">Vorsicht: Ein vollständiger Speicherscan kann zu einer erhöhten Ressourcennutzung auf dem Gerät führen</string>
@@ -124,7 +122,6 @@
     <string name="high_contrast_dark_theme_desc">Verwenden Sie einen rein schwarzen Hintergrund für das dunkles Thema</string>
     <string name="fields">Felder</string>
     <string name="zoom_gesture_description">Zum Zoomen des Videos Finger auseinanderziehen</string>
-    <string name="delete_folder">Alle Videodateien im folgenden Ordner werden dauerhaft gelöscht.</string>
     <string name="controller_timeout">Controller-Zeitüberschreitung</string>
     <string name="pause_on_headset_disconnect_desc">Wiedergabe unterbrechen, wenn der Kopfhörer vom Gerät getrennt wird</string>
     <string name="video_software_decoders">Software-Videodecoder</string>
@@ -189,8 +186,6 @@
     <string name="no_audio_tracks_found">Die Tonspuren für dieses Video sind entweder nicht verfügbar oder werden nicht unterstützt.</string>
     <string name="open_subtitle">Lokale Untertitel öffnen</string>
     <string name="no_subtitle_tracks_found">Die Untertitelspuren für dieses Video sind entweder nicht verfügbar oder werden nicht unterstützt.</string>
-    <string name="floating_play_button">Schwebende Wiedergabe-Taste</string>
-    <string name="floating_play_button_desc">Schwebende Wiedergabe-Taste zum Abspielen der zuletzt abgespielten Medien anzeigen.</string>
     <string name="mark_last_played_media_desc">Markiere die zuletzt wiedergegebenen Medien auf der Startseite und in jedem Ordner</string>
     <string name="mark_last_played_media">Markiere die zuletzt wiedergegebenen Medien</string>
     <string name="play_next_video">Nächstes Video abspielen</string>
@@ -210,4 +205,20 @@
     <string name="background_play">Hintergrundwiedergabe</string>
     <string name="stop_player_session">Aktuelle Session beenden</string>
     <string name="background_play_description">Wiedergabe erfolgt im Hintergrund, sobald die Home Taste gedrückt oder der Bildschirm gesperrt wird.</string>
+    <string name="loop_mode_off">Wiederholung: Aus</string>
+    <string name="loop_mode_one">Wiederholung: Einzel</string>
+    <string name="loop_mode_all">Wiederholung: Alle</string>
+    <string name="by">Von %1$s</string>
+    <string name="libraries">Bibliotheken</string>
+    <string name="github">GitHub</string>
+    <string name="donate">Spenden</string>
+    <string name="error_opening_link">Keine App zum Öffnen des Links gefunden</string>
+    <string name="support_the_developer_on">Unterstütze den Entwickler auf %1$s</string>
+    <string name="kofi">Ko-fi</string>
+    <string name="paypal">PayPal</string>
+    <string name="upi">UPI</string>
+    <string name="media_layout">Medienlayout</string>
+    <string name="list">Liste</string>
+    <string name="grid">Raster</string>
+    <string name="loop_mode">Wiedergabemodus</string>
 </resources>

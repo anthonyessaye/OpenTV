@@ -1,29 +1,48 @@
 package dev.anilbeesetti.nextplayer.feature.videopicker.navigation
 
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptions
-import androidx.navigation.navOptions
-import dev.anilbeesetti.nextplayer.core.ui.designsystem.animatedComposable
-import dev.anilbeesetti.nextplayer.feature.videopicker.screens.media.MediaPickerRoute
+import androidx.navigation.compose.composable
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.MediaPickerRoute
+import kotlinx.serialization.Serializable
 
-const val mediaPickerNavigationRoute = "media_picker_screen"
+internal const val folderIdArg = "folderId"
 
-fun NavController.navigateToMediaPickerScreen(navOptions: NavOptions? = navOptions { launchSingleTop = true }) {
-    this.navigate(mediaPickerNavigationRoute, navOptions)
+internal class FolderArgs(val folderId: String?) {
+    constructor(savedStateHandle: SavedStateHandle) :
+        this(savedStateHandle.get<String>(folderIdArg)?.let { Uri.decode(it) })
+}
+
+@Serializable
+data class MediaPickerRoute(
+    val folderId: String? = null,
+)
+
+fun NavController.navigateToMediaPickerScreen(
+    folderId: String,
+    navOptions: NavOptions? = null,
+) {
+    val encodedFolderId = Uri.encode(folderId)
+    this.navigate(MediaPickerRoute(encodedFolderId), navOptions)
 }
 
 fun NavGraphBuilder.mediaPickerScreen(
-    onSettingsClick: () -> Unit,
+    onNavigateUp: () -> Unit,
     onPlayVideo: (uri: Uri) -> Unit,
-    onFolderClick: (path: String) -> Unit,
+    onPlayVideos: (uris: List<Uri>) -> Unit,
+    onFolderClick: (folderPath: String) -> Unit,
+    onSettingsClick: () -> Unit,
 ) {
-    animatedComposable(route = mediaPickerNavigationRoute) {
+    composable<MediaPickerRoute> {
         MediaPickerRoute(
-            onSettingsClick = onSettingsClick,
             onPlayVideo = onPlayVideo,
+            onPlayVideos = onPlayVideos,
+            onNavigateUp = onNavigateUp,
             onFolderClick = onFolderClick,
+            onSettingsClick = onSettingsClick,
         )
     }
 }

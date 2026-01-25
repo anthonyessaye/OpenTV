@@ -18,7 +18,7 @@
     <string name="open_settings">Abrir configurações</string>
     <string name="permission_not_granted">Permissão não concedida</string>
     <string name="fast_seek">Busca rápida</string>
-    <string name="fast_seek_description">Procura o quadro-chave mais próximo em vez de um exato</string>
+    <string name="fast_seek_description">Buscar o quadro-chave mais próximo em vez de um quadro exato.</string>
     <string name="error_playing_video">Erro: não foi possível reproduzir o vídeo</string>
     <string name="permission_request">Solicitação de permissão</string>
     <string name="player_controls_exit">Navegar para cima</string>
@@ -32,7 +32,7 @@
     <string name="remember_brightness_level">Lembrar nível de brilho</string>
     <string name="remember_brightness_level_description">Lembrar o nível de brilho entre as sessões de reprodução</string>
     <string name="remember_selections">Lembrar ajustes</string>
-    <string name="remember_selections_description">Lembrar ajustes para cada arquivo, como faixa de áudio, faixa de legenda, etc</string>
+    <string name="remember_selections_description">Lembrar seleções para cada arquivo, como faixa de áudio, faixa de legenda, etc.</string>
     <string name="resume">Continuar</string>
     <string name="resume_description">Selecione se deseja continuar a reprodução de vídeos a partir do ponto em que você parou</string>
     <string name="select_audio_track">Selecionar faixa de áudio</string>
@@ -40,8 +40,6 @@
     <string name="settings">Configurações</string>
     <string name="size">Tamanho</string>
     <string name="sort">Organizar</string>
-    <string name="swipe_gesture">Gesto ao deslizar</string>
-    <string name="swipe_gesture_description">Deslize verticalmente para ajustar o brilho e o volume</string>
     <string name="title">Título</string>
     <string name="title_activity_player">Atividade do Next Player</string>
     <string name="unknown_error">Um erro desconhecido ocorreu</string>
@@ -62,9 +60,9 @@
     <string name="select_playback_speed">Selecionar velocidade de reprodução</string>
     <string name="seek_gesture">Gesto de busca</string>
     <string name="seek_gesture_description">Deslize horizontalmente para avançar ou retroceder</string>
-    <string name="about_description">Versão, créditos</string>
+    <string name="about_description">Versão, suporte, créditos</string>
     <string name="grant_permission">Conceder permissão</string>
-    <string name="done">Concluir</string>
+    <string name="done">OK</string>
     <string name="permission_info">O aplicativo Next Player precisa da permissão \"%1$s\" para acessar e reproduzir mídia. Sem ele, o acesso à mídia e a reprodução não funcionarão. Para usar o aplicativo completamente, conceda a permissão.</string>
     <string name="permission_settings">O aplicativo Next Player precisa da permissão \"%1$s\" para acessar e reproduzir mídia. Sem ele, o acesso à mídia e a reprodução não funcionarão. Para usar o aplicativo completamente, conceda a permissão nas configurações, pois ela foi negada permanentemente.</string>
     <string name="audio">Áudio</string>
@@ -138,7 +136,6 @@
     <string name="share">Compartilhar</string>
     <string name="delete">Excluir</string>
     <string name="delete_file">O seguinte arquivo será excluído permanentemente</string>
-    <string name="delete_folder">Todos os arquivos de vídeo na pasta a seguir serão excluídos permanentemente.</string>
     <string name="autoplay_settings">Reprodução automática</string>
     <string name="best_fit">Melhor ajuste</string>
     <string name="stretch">Esticar</string>
@@ -192,8 +189,6 @@
     <string name="mark_last_played_media">Marcar a última mídia reproduzida</string>
     <string name="mark_last_played_media_desc">Marque a última mídia reproduzida na página inicial e em cada pasta</string>
     <string name="open_local_video">Abrir vídeo local</string>
-    <string name="floating_play_button">Botão de reprodução flutuante</string>
-    <string name="floating_play_button_desc">Mostrar botão flutuante para reproduzir a última mídia reproduzida.</string>
     <string name="open_network_stream">Abrir streaming</string>
     <string name="exit">Sair</string>
     <string name="play_next_video">Reproduzir próximo vídeo</string>
@@ -213,5 +208,17 @@
     <string name="loop_mode_off">Repetir: desligado</string>
     <string name="loop_mode_all">Repetir: tudo</string>
     <string name="loop_mode_one">Repetir: um</string>
-    <string name="loop_mode">Repetição</string>
+    <string name="loop_mode">Modo de repetição</string>
+    <string name="by">por %1$s</string>
+    <string name="libraries">Bibliotecas</string>
+    <string name="github">Github</string>
+    <string name="donate">Doar</string>
+    <string name="error_opening_link">Nenhum aplicativo encontrado para acessar este link</string>
+    <string name="support_the_developer_on">Apoie o desenvolvedor em %1$s</string>
+    <string name="kofi">Ko-fi</string>
+    <string name="paypal">PayPal</string>
+    <string name="upi">UPI</string>
+    <string name="media_layout">Layout de mídia</string>
+    <string name="list">Lista</string>
+    <string name="grid">Grade</string>
 </resources>

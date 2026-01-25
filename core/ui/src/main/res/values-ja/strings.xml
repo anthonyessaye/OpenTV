@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="about_description">バージョン、クレジット</string>
+    <string name="about_description">バージョン、サポート、クレジット</string>
     <string name="about_name">このアプリについて</string>
     <string name="appearance_description">お好みに合わせてアプリを設定</string>
     <string name="cancel">キャンセル</string>
@@ -36,7 +36,7 @@
     <string name="title">タイトル</string>
     <string name="interface_name">インターフェース</string>
     <string name="remember_selections">選択内容を記憶する</string>
-    <string name="remember_selections_description">オーディオトラック、字幕トラックなどの各ファイルの選択内容を記憶します</string>
+    <string name="remember_selections_description">オーディオトラック、字幕トラックなどの各ファイルの選択内容を記憶します。</string>
     <string name="landscape_reverse">横向き反転</string>
     <string name="oldest">最古</string>
     <string name="play_pause">再生/一時停止</string>
@@ -50,10 +50,8 @@
     <string name="force_rescan_storage_desc">警告: ストレージ全体の再スキャンを開始すると、デバイスのリソース使用量が増加する可能性があります</string>
     <string name="videos">ビデオ</string>
     <string name="newest">最新</string>
-    <string name="swipe_gesture_description">垂直にスワイプして明るさと音量を調整します</string>
     <string name="scanning_storage">ストレージをスキャンしています…</string>
     <string name="controls_unlock">コントロールのロックを解除</string>
-    <string name="swipe_gesture">スワイプジェスチャー</string>
     <string name="on">オン</string>
     <string name="none">なし</string>
     <string name="autoplay_settings">自動再生</string>
@@ -117,7 +115,6 @@
     <string name="long_press_gesture_desc">長押しすると %.1f 倍速で再生されます</string>
     <string name="network_stream">ネットワークストリーム</string>
     <string name="play_file">再生する動画ファイルを開いてください</string>
-    <string name="delete_folder">以下のフォルダー内の全ての動画ファイルは完全に削除されます。</string>
     <string name="long_press_gesture">長押しジェスチャー</string>
     <string name="require_audio_focus">音声フォーカスが必要です</string>
     <string name="controller_timeout">コントローラーのタイムアウト</string>
@@ -182,4 +179,46 @@
     <string name="format">形式</string>
     <string name="pip_settings">ピクチャインピクチャ</string>
     <string name="pip_settings_description">ホームボタンをタップすると、自動的にミニプレーヤーに切り替わります</string>
+    <string name="volume_boost">音量ブースト</string>
+    <string name="volume_boost_desc">オーディオの音量を最大 200% まで増幅します</string>
+    <string name="open_subtitle">ローカル字幕を開く</string>
+    <string name="no_subtitle_tracks_found">このビデオの字幕トラックは利用できないか、サポートされていません。</string>
+    <string name="no_audio_tracks_found">このビデオのオーディオトラックは利用できないか、サポートされていません。</string>
+    <string name="rename">名前を変更</string>
+    <string name="rename_to">に名前を変更</string>
+    <string name="mark_last_played_media">最後に再生したメディアをマークする</string>
+    <string name="mark_last_played_media_desc">ホームと各フォルダに最後に再生したメディアをマークします</string>
+    <string name="open_local_video">ローカルビデオを開く</string>
+    <string name="open_network_stream">ネットワークストリームを開く</string>
+    <string name="exit">終了</string>
+    <string name="play_next_video">次のビデオを再生する</string>
+    <string name="skip_silence">無音部分をスキップする</string>
+    <string name="folder">フォルダ</string>
+    <string name="folders">フォルダ</string>
+    <string name="enable_pip_from_settings">ピクチャーインピクチャーが無効になっています。この機能を使用するには、設定で有効にしてください。</string>
+    <string name="control_buttons_alignment_left">左</string>
+    <string name="control_buttons_alignment_right">右</string>
+    <string name="played_progress">再生の進捗</string>
+    <string name="media_view_mode">メディア表示モード</string>
+    <string name="control_buttons_alignment">コントロールボタンの配置</string>
+    <string name="stop_player_session">プレーヤーセッションを停止する</string>
+    <string name="background_play">バックグラウンド再生</string>
+    <string name="background_play_description">ホーム画面をタップした時、または画面がロックされている時は、バックグラウンドで再生されます。</string>
+    <string name="loop_mode">ループモード</string>
+    <string name="loop_mode_off">ループ: オフ</string>
+    <string name="loop_mode_one">ループ: 1 つのメディア</string>
+    <string name="loop_mode_all">ループ: すべて</string>
+    <string name="by">by %1$s</string>
+    <string name="github">Github</string>
+    <string name="donate">寄付</string>
+    <string name="error_opening_link">このリンクを処理できるアプリが見つかりません</string>
+    <string name="support_the_developer_on">%1$s の開発者を支援する</string>
+    <string name="kofi">Ko-fi</string>
+    <string name="paypal">PayPal</string>
+    <string name="upi">UPI</string>
+    <string name="media_layout">メディアのレイアウト</string>
+    <string name="list">リスト</string>
+    <string name="grid">グリッド</string>
+    <string name="libraries">ライブラリー</string>
+    <string name="tree">ツリー</string>
 </resources>

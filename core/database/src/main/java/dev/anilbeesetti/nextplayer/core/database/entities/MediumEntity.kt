@@ -9,7 +9,7 @@ import androidx.room.PrimaryKey
     tableName = "media",
     indices = [
         Index(value = ["uri"], unique = true),
-        Index(value = ["path"], unique = true),
+        Index(value = ["path"]),
     ],
 )
 data class MediumEntity(
@@ -29,13 +29,4 @@ data class MediumEntity(
     // Medium info
     @ColumnInfo(name = "format") val format: String? = null,
     @ColumnInfo(name = "thumbnail_path") val thumbnailPath: String? = null,
-
-    // Medium playback state
-    @ColumnInfo(name = "playback_position") val playbackPosition: Long = 0,
-    @ColumnInfo(name = "audio_track_index") val audioTrackIndex: Int? = null,
-    @ColumnInfo(name = "subtitle_track_index") val subtitleTrackIndex: Int? = null,
-    @ColumnInfo(name = "playback_speed") val playbackSpeed: Float? = null,
-    @ColumnInfo(name = "last_played_time") val lastPlayedTime: Long? = null,
-    @ColumnInfo(name = "external_subs") val externalSubs: String = "",
-    @ColumnInfo(name = "video_scale") val videoScale: Float = 1f,
 )

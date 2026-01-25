@@ -105,7 +105,6 @@
     <string name="bitrate">பிட்ரேட்</string>
     <string name="open_subtitle">உள்ளக வசனத் திறந்த</string>
     <string name="no_subtitle_tracks_found">இந்த வீடியோவிற்கான வசனத் தடங்கள் கிடைக்கவில்லை அல்லது ஆதரிக்கப்படவில்லை.</string>
-    <string name="floating_play_button">மிதக்கும் விளையாட்டு பொத்தான்</string>
     <string name="mark_last_played_media">மார்க் கடைசியாக ஊடகங்களில் நடித்தார்</string>
     <string name="open_local_video">உள்ளக வீடியோவைத் திறக்கவும்</string>
     <string name="exit">வெளியேறு</string>
@@ -148,8 +147,6 @@
     <string name="seek_gesture_description">முன்னோக்கி அல்லது பின்னோக்கி தேட கிடைமட்டமாக ச்வைப் செய்யவும்</string>
     <string name="select_audio_track">ஆடியோ டிராக்கைத் தேர்ந்தெடுக்கவும்</string>
     <string name="select_subtitle_track">வசனத் தடத்தைத் தேர்ந்தெடுக்கவும்</string>
-    <string name="swipe_gesture">சைகை ச்வைப்</string>
-    <string name="swipe_gesture_description">பிரகாசத்தையும் அளவையும் சரிசெய்ய செங்குத்தாக ச்வைப் செய்யவும்</string>
     <string name="unknown_error">தெரியாத பிழை ஏற்பட்டது</string>
     <string name="playback">பின்னணி</string>
     <string name="interface_name">இடைமுகம்</string>
@@ -185,14 +182,13 @@
     <string name="share">பங்கு</string>
     <string name="delete">நீக்கு</string>
     <string name="delete_file">பின்வரும் கோப்பு நிரந்தரமாக நீக்கப்படும்</string>
-    <string name="delete_folder">பின்வரும் கோப்புறையில் உள்ள அனைத்து வீடியோ கோப்புகளும் நிரந்தரமாக நீக்கப்படும்.</string>
     <string name="fast_playback_speed">%.1fx விரைவு</string>
     <string name="long_press_gesture">நீண்ட செய்தித் தாள் சைகை</string>
     <string name="long_press_gesture_desc">%.1fx வேகத்தில் விளையாட நீண்ட அழுத்தவும்</string>
     <string name="best_fit">சிறந்த பொருத்தம்</string>
     <string name="zoom_gesture_description">வீடியோவை பெரிதாக்க பிஞ்ச்</string>
     <string name="high_contrast_dark_theme">உயர் மாறுபட்ட இருண்ட கருப்பொருள்</string>
-    <string name="pause_on_headset_disconnect_desc">சாதனத்திலிருந்து எட்செட் துண்டிக்கும்போது பின்னணி பின்னணி</string>
+    <string name="pause_on_headset_disconnect_desc">சாதனத்திலிருந்து எட்செட் துண்டிக்கும்போது பின்னணி நிறுத்து</string>
     <string name="system_caption_style_desc">கணினி தலைப்பு விருப்பங்களை திறக்க சொடுக்கு செய்க</string>
     <string name="fields">புலங்கள்</string>
     <string name="extension">நீட்டிப்பு</string>
@@ -206,8 +202,23 @@
     <string name="volume_boost">தொகுதி ஊக்க</string>
     <string name="volume_boost_desc">ஆடியோ அளவை 200% வரை அதிகரிக்கும்</string>
     <string name="no_audio_tracks_found">இந்த வீடியோவுக்கான ஆடியோ தடங்கள் கிடைக்கவில்லை அல்லது ஆதரிக்கப்படவில்லை.</string>
-    <string name="floating_play_button_desc">கடைசியாக விளையாடிய மீடியாவை விளையாட மிதக்கும் பொத்தானைக் காட்டு.</string>
     <string name="mark_last_played_media_desc">மார்க் கடைசியாக வீட்டிலும் ஒவ்வொரு கோப்புறையிலும் ஊடகங்களில் விளையாடினார்</string>
     <string name="open_network_stream">பிணையம் ச்ட்ரீம் திறந்த</string>
     <string name="skip_silence">ம .னத்தைத் தவிர்க்கவும்</string>
+    <string name="loop_mode">லூப் பயன்முறை</string>
+    <string name="loop_mode_off">லூப்: ஆஃப்</string>
+    <string name="loop_mode_all">லூப்: அனைத்தும்</string>
+    <string name="by">%1$s மூலம்</string>
+    <string name="github">கிரப்</string>
+    <string name="loop_mode_one">லூப்: ஒன்று</string>
+    <string name="libraries">நூலகங்கள்</string>
+    <string name="donate">நன்கொடை</string>
+    <string name="error_opening_link">இந்த இணைப்பைக் கையாள எந்த பயன்பாடும் கிடைக்கவில்லை</string>
+    <string name="support_the_developer_on">டெவலப்பரை %1$s இல் ஆதரிக்கவும்</string>
+    <string name="kofi">காபி</string>
+    <string name="paypal">பேபால்</string>
+    <string name="upi">யுபிஐ</string>
+    <string name="media_layout">மீடியா தளவமைப்பு</string>
+    <string name="list">பட்டியல்</string>
+    <string name="grid">வலைவாய்</string>
 </resources>

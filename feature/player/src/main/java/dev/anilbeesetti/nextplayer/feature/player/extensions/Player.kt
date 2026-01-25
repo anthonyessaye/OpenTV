@@ -1,13 +1,15 @@
 package dev.anilbeesetti.nextplayer.feature.player.extensions
 
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.SeekParameters
-import timber.log.Timber
+import androidx.media3.session.MediaController
+import dev.anilbeesetti.nextplayer.core.common.Logger
+import dev.anilbeesetti.nextplayer.feature.player.service.setMediaControllerIsScrubbingModeEnabled
 
 /**
  * Switches to selected track.
@@ -26,7 +28,7 @@ fun Player.switchTrack(trackType: @C.TrackType Int, trackIndex: Int) {
     }
 
     if (trackIndex < 0) {
-        Timber.d("Disabling $trackTypeText")
+        Logger.logDebug("Player", "Disabling $trackTypeText")
         trackSelectionParameters = trackSelectionParameters
             .buildUpon()
             .setTrackTypeDisabled(trackType, true)
@@ -35,11 +37,11 @@ fun Player.switchTrack(trackType: @C.TrackType Int, trackIndex: Int) {
         val tracks = currentTracks.groups.filter { it.type == trackType }
 
         if (tracks.isEmpty() || trackIndex >= tracks.size) {
-            Timber.d("Operation failed: Invalid track index: $trackIndex")
+            Logger.logError("Player", "Operation failed: Invalid track index: $trackIndex")
             return
         }
 
-        Timber.d("Setting $trackTypeText track: $trackIndex")
+        Logger.logDebug("Player", "Setting $trackTypeText track: $trackIndex")
         val trackSelectionOverride = TrackSelectionOverride(tracks[trackIndex].mediaTrackGroup, 0)
 
         // Override the track selection parameters to force the selection of the specified track.
@@ -51,42 +53,16 @@ fun Player.switchTrack(trackType: @C.TrackType Int, trackIndex: Int) {
     }
 }
 
-/**
- * Sets the seek parameters for the player.
- *
- * @param seekParameters The seek parameters to set.
- */
 @UnstableApi
-fun Player.setSeekParameters(seekParameters: SeekParameters) {
-    when (this) {
-        is ExoPlayer -> this.setSeekParameters(seekParameters)
-    }
-}
+fun Player.getManuallySelectedTrackIndex(trackType: @C.TrackType Int): Int? {
+    val isDisabled = trackSelectionParameters.disabledTrackTypes.contains(trackType)
+    if (isDisabled) return -1
 
-/**
- * Seeks to the specified position.
- *
- * @param positionMs The position to seek to, in milliseconds.
- * @param shouldFastSeek Whether to seek to the nearest keyframe.
- */
-@UnstableApi
-fun Player.seekBack(positionMs: Long, shouldFastSeek: Boolean = false) {
-    if (currentMediaItem == null) return
-    setSeekParameters(if (shouldFastSeek) SeekParameters.PREVIOUS_SYNC else SeekParameters.DEFAULT)
-    this.seekTo(positionMs)
-}
+    val trackOverrides = trackSelectionParameters.overrides.values.map { it.mediaTrackGroup }
+    val trackOverride = trackOverrides.firstOrNull { it.type == trackType } ?: return null
+    val tracks = currentTracks.groups.filter { it.type == trackType }
 
-/**
- * Seeks to the specified position.
- *
- * @param positionMs The position to seek to, in milliseconds.
- * @param shouldFastSeek Whether to seek to the nearest keyframe.
- */
-@UnstableApi
-fun Player.seekForward(positionMs: Long, shouldFastSeek: Boolean = false) {
-    if (currentMediaItem == null) return
-    setSeekParameters(if (shouldFastSeek) SeekParameters.NEXT_SYNC else SeekParameters.DEFAULT)
-    this.seekTo(positionMs)
+    return tracks.indexOfFirst { it.mediaTrackGroup == trackOverride }.takeIf { it != -1 }
 }
 
 fun Player.addAdditionalSubtitleConfiguration(subtitle: MediaItem.SubtitleConfiguration) {
@@ -104,5 +80,14 @@ fun Player.addAdditionalSubtitleConfiguration(subtitle: MediaItem.SubtitleConfig
 
     val index = currentMediaItemIndex
     addMediaItem(index + 1, updateMediaItem)
+    seekToDefaultPosition(index + 1)
     removeMediaItem(index)
+}
+
+@OptIn(UnstableApi::class)
+fun Player.setIsScrubbingModeEnabled(enabled: Boolean) {
+    when (this) {
+        is MediaController -> this.setMediaControllerIsScrubbingModeEnabled(enabled)
+        is ExoPlayer -> this.isScrubbingModeEnabled = enabled
+    }
 }

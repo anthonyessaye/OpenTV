@@ -4,16 +4,16 @@
     <string name="fast_seek_description">رفتن به نزدیک ترین فریم بجای دقیق ترین.</string>
     <string name="group_videos">گروه بندی ویدیو‌ها بر اساس پوشه</string>
     <string name="appearance_name">ظاهر</string>
-    <string name="appearance_description">سفارشی سازی برنامه</string>
-    <string name="disable">خاموش کردن</string>
+    <string name="appearance_description">برنامه را مطابق میل خود تنظیم کنید</string>
+    <string name="disable">غیرفعالسازی</string>
     <string name="done">حله</string>
     <string name="double_tap">دوبار ضربه زدن</string>
     <string name="double_tap_description">انتخاب حرکت دوبار ضربه زدن</string>
     <string name="fast_seek">جلورفت سریع</string>
     <string name="grant_permission">اجازه دادن</string>
     <string name="cancel">لغو</string>
-    <string name="about_description">نگارش، سازندگان</string>
-    <string name="about_name">درباره ما</string>
+    <string name="about_description">نگارش، حمایت، سازندگان</string>
+    <string name="about_name">درباره</string>
     <string name="ascending">صعودی</string>
     <string name="descending">نزولی</string>
     <string name="duration">مدت</string>
@@ -59,8 +59,6 @@
     <string name="settings">تنظیمات</string>
     <string name="sort">چیدمان</string>
     <string name="title">عنوان</string>
-    <string name="swipe_gesture">کنش حرکتی کشیدن</string>
-    <string name="swipe_gesture_description">برای تنظیم روشنایی و صدا، انگشت خود را به صورت عمودی بکشید</string>
     <string name="title_activity_player">فعالیت‌های Next Player</string>
     <string name="unknown_error">خطایی ناشناخته اتفاق افتاده است</string>
     <string name="interface_name">رابط کاربری</string>
@@ -138,7 +136,6 @@
     <string name="share">اشتراک</string>
     <string name="delete">پاک‌کردن</string>
     <string name="delete_file">پرونده زیر برای همیشه پاک خواهد شد</string>
-    <string name="delete_folder">تمامی پرونده‌های ویدیویی موجود در پوشه زیر برای همیشه پاک خواهند شد.</string>
     <string name="best_fit">بهترین تناسب</string>
     <string name="stretch">کشیده</string>
     <string name="crop">بُرش</string>
@@ -161,7 +158,7 @@
     <string name="path">مسیر</string>
     <string name="language">زبان</string>
     <string name="okay">باشد</string>
-    <string name="require_audio_focus_desc">توقف پخش کننده های دیگر هنگامى که این پخش کننده، ویدیوها را پخش میکند، و برعکس</string>
+    <string name="require_audio_focus_desc">توقف پخش کننده های دیگر هنگامى که این پخش کننده، ویدیوها را پخش میکند، و برعکس.</string>
     <string name="resolution">ابعاد</string>
     <string name="volume_boost">تقویت صدا</string>
     <string name="system_volume_panel">صفحه صدای سامانه</string>
@@ -188,8 +185,6 @@
     <string name="rename_to">تغییر نام به</string>
     <string name="skip_silence">پرش از سکوت</string>
     <string name="exit">خروج</string>
-    <string name="floating_play_button">دکمه پخش شناور</string>
-    <string name="floating_play_button_desc">دکمه شناور را برای پخش آخرین رسانه پخش شده نمایش دهید.</string>
     <string name="mark_last_played_media">آخرین رسانه پخش شده را مشخص کنید</string>
     <string name="mark_last_played_media_desc">آخرین رسانه پخش شده را در خانه و در هر پوشه مشخص کنید</string>
     <string name="open_local_video">بازکردن ویدیو محلی</string>
@@ -210,4 +205,20 @@
     <string name="stop_player_session">توقف جلسه پخش</string>
     <string name="background_play">پخش در پس زمینه</string>
     <string name="background_play_description">وقتی روی صفحه اصلی ضربه بزنید یا صفحه قفل است، در پس‌زمینه پخش کنید.</string>
+    <string name="loop_mode">حالت حلقه</string>
+    <string name="loop_mode_off">حلقه: خاموش</string>
+    <string name="loop_mode_one">حلقه: روشن</string>
+    <string name="loop_mode_all">حلقه: همه</string>
+    <string name="by">به‌دست %1$s</string>
+    <string name="libraries">کتابخانه‌ها</string>
+    <string name="github">گیت‌هاب</string>
+    <string name="donate">حمایت مالی</string>
+    <string name="error_opening_link">هیچ برنامه‌ای ندارید که این پیوند را باز کند</string>
+    <string name="support_the_developer_on">از توسعه دهنده در %1$s حمایت کنید</string>
+    <string name="kofi">Ko-fi</string>
+    <string name="paypal">پی پال</string>
+    <string name="upi">UPI</string>
+    <string name="media_layout">چیدمان رسانه</string>
+    <string name="list">فهرست</string>
+    <string name="grid">شبکه</string>
 </resources>

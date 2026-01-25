@@ -1,16 +1,17 @@
 package com.anthonyessaye.opentv
 
 import android.app.Application
+import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.toLowerCase
 import com.anthonyessaye.opentv.Activities.ListAllActivities.ListAllEpisodesActivity
 import com.anthonyessaye.opentv.Enums.StreamType
 import com.anthonyessaye.opentv.Persistence.DatabaseManager
 import dagger.hilt.android.HiltAndroidApp
 import dev.anilbeesetti.nextplayer.core.common.player.PlayerCommonInterface
 import dev.anilbeesetti.nextplayer.core.common.player.PlayerCommonInterfaceObserver
+import io.ktor.util.toLowerCasePreservingASCIIRules
 import kotlinx.coroutines.runBlocking
 import java.lang.System
-import kotlin.Pair
-import kotlin.collections.first
 
 @HiltAndroidApp
 class OpenTVApplication: Application(), PlayerCommonInterface {
@@ -21,7 +22,7 @@ class OpenTVApplication: Application(), PlayerCommonInterface {
 
 
     override fun cache(stream_id: String, stream_type: String, position: Long) {
-       if (stream_type == StreamType.SERIES.toString().lowercase()) {
+       if (stream_type == StreamType.SERIES.toString().toLowerCase(Locale.current)) {
            DatabaseManager().openDatabase(this) { db ->
                db.seriesHistoryDao().updatePosition(position.toString(), stream_id.toInt())
                db.seriesHistoryDao().updateLastWatched((System.currentTimeMillis()/1000).toString(), stream_id.toInt())
