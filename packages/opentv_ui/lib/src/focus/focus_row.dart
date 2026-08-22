@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/widgets.dart';
 
 import '../tokens/tokens.dart';
@@ -105,7 +106,7 @@ class _FocusRowState extends State<FocusRow> {
         // nowhere to go — the row appears to stop dead at the viewport edge.
         // Building a screen's worth beyond the fold keeps a neighbour ready
         // without materialising the catalogue.
-        cacheExtent: widget.itemExtent * 3,
+        scrollCacheExtent: ScrollCacheExtent.pixels(widget.itemExtent * 3),
         itemBuilder: (context, index) {
           final child = widget.itemBuilder(context, index);
           if (child == null) return null;
