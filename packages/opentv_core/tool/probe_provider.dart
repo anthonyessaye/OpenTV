@@ -21,9 +21,32 @@ import 'package:opentv_core/opentv_core.dart';
 
 late final String _password;
 
-/// Removes the password from anything about to be printed.
-String redact(String text) =>
-    _password.isEmpty ? text : text.replaceAll(_password, '••••••');
+/// Query parameters that carry a secret.
+final _secretParam = RegExp(r'(password|pass)=([^&\s]*)', caseSensitive: false);
+
+/// The `/live/<user>/<pass>/` shape of a stream path.
+final _streamPath = RegExp(r'/(live|movie|series)/([^/\s]+)/([^/\s]+)/');
+
+/// Strips credentials from anything about to be printed.
+///
+/// Structural first: rewrite the two shapes a credential can appear in — a
+/// query parameter and a stream path — which is what catches URLs embedded in
+/// exception messages, the one place they leak by accident.
+///
+/// The literal password is only stripped as a backstop, and only when it is
+/// long enough that a coincidental match is implausible. Blindly replacing a
+/// short password rewrites innocent text: a password of "p" turned
+/// "video/mp2t" into "video/m******2t" and made the whole report unreadable.
+String redact(String text) {
+  var out = text
+      .replaceAllMapped(_secretParam, (m) => '${m[1]}=<redacted>')
+      .replaceAllMapped(_streamPath, (m) => '/${m[1]}/<user>/<pass>/');
+
+  if (_password.length >= 6) {
+    out = out.replaceAll(_password, '<redacted>');
+  }
+  return out;
+}
 
 void line([String text = '']) => stdout.writeln(redact(text));
 
@@ -163,8 +186,10 @@ Future<Map<String, int>> _catalogue(HttpClient client, XtreamUrls urls) async {
 
   final noContainer = containers['(none)'] ?? 0;
   if (noContainer > 0) {
-    line('    \$noContainer films carry no container extension and cannot');
-    line('    have a playable URL built for them.');
+    final plural = noContainer == 1 ? 'film has' : 'films have';
+    final them = noContainer == 1 ? 'it' : 'them';
+    line('    $noContainer $plural no container extension, so no playable');
+    line('    URL can be built for $them.');
   }
   line();
 
@@ -290,12 +315,14 @@ Future<void> _probeOne(HttpClient client, String label, Uri url) async {
       '${response.headers.contentType?.mimeType ?? 'not declared'}',
     );
 
+    // Read enough to recognise the container: seven MPEG-TS packets.
+    // Breaking out of the loop cancels the subscription, so there is
+    // nothing left to drain afterwards — trying to would throw.
     final head = <int>[];
     await for (final chunk in response) {
       head.addAll(chunk);
       if (head.length >= 1316) break;
     }
-    await response.drain<void>();
 
     line('    first bytes ${_identify(head)}');
   } on Object catch (e) {
