@@ -68,20 +68,37 @@ Future<void> main(List<String> args) async {
   _password = pass;
   stdout.writeln();
 
-  final credentials = XtreamCredentials(
+  line('OpenTV provider probe');
+  line('=' * 60);
+
+  var credentials = XtreamCredentials(
     host: host,
     username: user,
     password: pass,
   );
+
+  final tls = await _checkTransport(credentials);
+  if (tls.fallbackHost != null) {
+    credentials = XtreamCredentials(
+      host: tls.fallbackHost!,
+      username: user,
+      password: pass,
+    );
+  } else if (!tls.reachable) {
+    line('Cannot reach the portal at all, so nothing below would be');
+    line('meaningful. Check the address and try again.');
+    exitCode = 1;
+    return;
+  }
+
   final urls = XtreamUrls(credentials);
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
 
-  line('OpenTV provider probe');
-  line('=' * 60);
   line('host        ${credentials.host}');
+  final scheme = Uri.parse(credentials.host).scheme;
   line(
-    'scheme      ${Uri.parse(credentials.host).scheme}'
-    '${Uri.parse(credentials.host).scheme == 'http' ? '   (credentials travel in clear)' : ''}',
+    'scheme      $scheme'
+    '${scheme == 'http' ? '   (credentials travel in clear)' : ''}',
   );
   line();
 
@@ -109,6 +126,108 @@ Future<void> main(List<String> args) async {
     'share.',
   );
 }
+
+/// Result of working out how the portal can actually be reached.
+class _TransportCheck {
+  const _TransportCheck({required this.reachable, this.fallbackHost});
+
+  final bool reachable;
+
+  /// Set when the requested scheme failed but another one worked.
+  final String? fallbackHost;
+}
+
+/// Establishes whether the portal is reachable, and over which scheme.
+///
+/// IPTV portals are frequently served by long-unpatched web servers. A TLS
+/// handshake that the server rejects outright usually means it offers only
+/// TLS 1.0 or 1.1, or cipher suites that modern clients removed years ago —
+/// and Dart, like every current client, will not negotiate those. Since the
+/// same portal is nearly always available over plain HTTP, this falls back
+/// rather than stopping, and says plainly what that costs.
+Future<_TransportCheck> _checkTransport(XtreamCredentials credentials) async {
+  line('Connection');
+  line('-' * 60);
+
+  final uri = Uri.parse(credentials.host);
+  final probe = await _tryScheme(uri);
+
+  if (probe == null) {
+    line('  ${uri.scheme}   reachable');
+    line();
+    return const _TransportCheck(reachable: true);
+  }
+
+  if (uri.scheme == 'https') {
+    if (probe is HandshakeException) {
+      line('  https  TLS handshake rejected by the server');
+      line();
+      line('  The server answered, then refused the connection parameters.');
+      line('  That means it only offers TLS versions or ciphers that current');
+      line('  clients no longer accept — common on IPTV portals running very');
+      line('  old web servers. Dart cannot be told to negotiate down to them,');
+      line('  and neither can iOS or Android by default.');
+    } else {
+      line('  https  failed: ${_short(probe)}');
+      line();
+      line('  A server with unusable TLS often drops the connection rather');
+      line('  than answering cleanly, so this can look like a network fault.');
+    }
+    line();
+
+    final fallback = uri.replace(scheme: 'http');
+    final retry = await _tryScheme(fallback);
+    if (retry == null) {
+      line('  http   reachable — continuing over plain HTTP');
+      line();
+      line('  Note this is not merely a probe workaround. If the portal has');
+      line('  no usable TLS, the app talks to it in clear text too, and the');
+      line('  credentials in every stream URL travel unencrypted. That is');
+      line('  why the Android app sets usesCleartextTraffic.');
+      line();
+      return _TransportCheck(reachable: true, fallbackHost: '$fallback');
+    }
+
+    line('  http   also unreachable: ${_short(retry)}');
+    line();
+    return const _TransportCheck(reachable: false);
+  }
+
+  line('  ${uri.scheme}   unreachable: ${_short(probe)}');
+  line();
+  return const _TransportCheck(reachable: false);
+}
+
+/// Opens a socket to check a scheme. Returns null on success, or the error.
+Future<Object?> _tryScheme(Uri uri) async {
+  final port = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
+  try {
+    if (uri.scheme == 'https') {
+      final socket = await SecureSocket.connect(
+        uri.host,
+        port,
+        timeout: const Duration(seconds: 15),
+        // Certificate problems are a separate question from whether the
+        // handshake can be negotiated at all, and are not what this checks.
+        onBadCertificate: (_) => true,
+      );
+      socket.destroy();
+    } else {
+      final socket = await Socket.connect(
+        uri.host,
+        port,
+        timeout: const Duration(seconds: 15),
+      );
+      socket.destroy();
+    }
+    return null;
+  } on Object catch (e) {
+    return e;
+  }
+}
+
+/// First line of an error, so a multi-line OpenSSL dump stays readable.
+String _short(Object error) => '$error'.split('\n').first.trim();
 
 Future<Object?> _getJson(HttpClient client, Uri url) async {
   final request = await client.getUrl(url);
