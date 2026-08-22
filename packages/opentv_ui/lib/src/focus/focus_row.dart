@@ -29,6 +29,7 @@ class FocusRow extends StatefulWidget {
     ),
     this.restingAlignment = 0.0,
     this.controller,
+    this.focusHeadroom = 44.0,
   });
 
   final int itemCount;
@@ -47,6 +48,14 @@ class FocusRow extends StatefulWidget {
   final double restingAlignment;
 
   final ScrollController? controller;
+
+  /// Vertical room reserved above and below the tiles for the focus state.
+  ///
+  /// A focused tile grows and casts a glow, and without headroom the viewport
+  /// clips both — the ring loses its top and bottom edges and reads as two
+  /// stray vertical lines. [height] stays the tile height; the row itself is
+  /// taller by twice this.
+  final double focusHeadroom;
 
   @override
   State<FocusRow> createState() => _FocusRowState();
@@ -73,9 +82,22 @@ class _FocusRowState extends State<FocusRow> {
 
     final stride = widget.itemExtent + widget.gap;
     final viewport = _scroll.position.viewportDimension;
-    final resting = (viewport - widget.itemExtent) * widget.restingAlignment;
 
-    final target = (index * stride) - resting + widget.padding.left;
+    // Where the focused tile comes to rest, measured from the viewport's
+    // leading edge. It starts at the title-safe inset rather than the screen
+    // edge: parking it at zero pushes the tile under the bezel and clips its
+    // focus ring, which is the one cue that must stay visible.
+    final usable =
+        (viewport -
+                widget.padding.left -
+                widget.padding.right -
+                widget.itemExtent)
+            .clamp(0.0, double.infinity);
+    final resting = widget.padding.left + (usable * widget.restingAlignment);
+
+    // An item's leading edge in scroll coordinates already includes the
+    // list's leading padding.
+    final target = widget.padding.left + (index * stride) - resting;
     final clamped = target.clamp(
       _scroll.position.minScrollExtent,
       _scroll.position.maxScrollExtent,
@@ -91,11 +113,18 @@ class _FocusRowState extends State<FocusRow> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: widget.height,
+      height: widget.height == null
+          ? null
+          : widget.height! + (widget.focusHeadroom * 2),
       child: ListView.builder(
         controller: _scroll,
         scrollDirection: Axis.horizontal,
-        padding: widget.padding,
+        // Cross-axis padding is what gives the focus state its headroom: in a
+        // horizontal list the children's height is the viewport minus this.
+        padding: widget.padding.copyWith(
+          top: widget.focusHeadroom,
+          bottom: widget.focusHeadroom,
+        ),
         itemCount: widget.itemCount,
         // Remote focus drives this, not a finger. Letting it also respond to
         // drag makes the resting position fight the user on trackpad-style

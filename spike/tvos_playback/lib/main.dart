@@ -1,19 +1,9 @@
-import 'dart:async';
+import 'package:flutter/widgets.dart';
+import 'package:opentv_core/opentv_core.dart';
+import 'package:opentv_ui/opentv_ui.dart';
 
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
+import 'catalogue_screen.dart';
 import 'core_probe.dart';
-
-/// The stream under test. Overridden at build time so this can be pointed at
-/// a real portal without the URL — and therefore the credentials in its path
-/// — ever being committed:
-///
-///   flutter-tvos build tvos --dart-define=STREAM_URL=...
-const streamUrl = String.fromEnvironment(
-  'STREAM_URL',
-  defaultValue: 'http://127.0.0.1:8123/test_stream.ts',
-);
 
 void main() => runApp(const SpikeApp());
 
@@ -22,207 +12,98 @@ class SpikeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    // No MaterialApp: the point of M4 is that nothing inherits Google's
+    // design language. WidgetsApp gives routing and text direction, no more.
+    return WidgetsApp(
+      color: OpenTvColors.ground,
       debugShowCheckedModeBanner: false,
-      home: const PlaybackProbe(),
+      // WidgetsApp has no default text style; without this every Text below
+      // would need its own, and a missing one renders as the debug red-on-
+      // yellow rather than failing loudly.
+      textStyle: OpenTvType.body,
+      // Without Material there is no default route transition, so one has to
+      // be supplied. A plain fade suits a ten-foot interface: sliding pages
+      // read as phone gestures on a screen nobody touches.
+      pageRouteBuilder: <T>(RouteSettings settings, WidgetBuilder builder) {
+        return PageRouteBuilder<T>(
+          settings: settings,
+          transitionDuration: OpenTvMotion.fade,
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              builder(context),
+          transitionsBuilder: (context, animation, secondary, child) =>
+              FadeTransition(opacity: animation, child: child),
+        );
+      },
+      home: const Boot(),
     );
   }
 }
 
-class PlaybackProbe extends StatefulWidget {
-  const PlaybackProbe({super.key});
+class Boot extends StatefulWidget {
+  const Boot({super.key});
 
   @override
-  State<PlaybackProbe> createState() => _PlaybackProbeState();
+  State<Boot> createState() => _BootState();
 }
 
-class _PlaybackProbeState extends State<PlaybackProbe> {
-  MethodChannel? _channel;
-  Map<String, Object?> _state = const {};
-  Timer? _poll;
-  CoreProbeResult? _core;
+class _BootState extends State<Boot> {
+  CoreProbeResult? _probe;
+  List<Channel> _channels = const [];
 
   @override
   void initState() {
     super.initState();
-    // Runs the real schema, sync engine and parsers on this device.
-    runCoreProbe().then((r) {
-      if (mounted) setState(() => _core = r);
-    });
+    _load();
   }
 
-  @override
-  void dispose() {
-    _poll?.cancel();
-    super.dispose();
-  }
-
-  void _onViewCreated(int id) {
-    _channel = MethodChannel('opentv/vlc/$id');
-    // Poll rather than rely on notifications alone: the point is to observe
-    // decode progress over time, not just that the pipeline opened.
-    _poll = Timer.periodic(const Duration(milliseconds: 500), (_) async {
-      final result = await _channel?.invokeMapMethod<String, Object?>('state');
-      if (result != null && mounted) setState(() => _state = result);
-    });
+  Future<void> _load() async {
+    final probe = await runCoreProbe();
+    var channels = const <Channel>[];
+    if (probe.ok && probe.db != null && probe.sourceId != null) {
+      channels = await probe.db!.channelsIn(probe.sourceId!, limit: 40);
+    }
+    if (mounted) {
+      setState(() {
+        _probe = probe;
+        _channels = channels;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final playing = _state['isPlaying'] == true;
-    final frames = _state['framesSeen'] == true;
-    final width = _state['width'] ?? 0;
-    final height = _state['height'] ?? 0;
+    final probe = _probe;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          UiKitView(
-            viewType: 'opentv/vlc-player',
-            creationParams: const {'url': streamUrl},
-            creationParamsCodec: const StandardMessageCodec(),
-            onPlatformViewCreated: _onViewCreated,
-          ),
-          Positioned(
-            right: 60,
-            top: 60,
-            child: _panel(
-              title: 'opentv_core on tvOS',
-              accent: _core == null
-                  ? const Color(0xFFEDA231)
-                  : (_core!.ok ? const Color(0xFF5CC792) : const Color(0xFFF0857C)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_core == null)
-                    const Text('running…')
-                  else ...[
-                    for (final line in _core!.lines) Text(line),
-                    const SizedBox(height: 12),
-                    Text(
-                      _core!.ok
-                          ? 'CORE RUNS UNCHANGED ON TVOS'
-                          : 'CORE FAILED',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: _core!.ok
-                            ? const Color(0xFF5CC792)
-                            : const Color(0xFFF0857C),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 60,
-            top: 60,
-            child: Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: DefaultTextStyle(
-                style: const TextStyle(
-                  fontSize: 26,
-                  color: Colors.white,
-                  fontFamily: 'Menlo',
-                  height: 1.5,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'libVLC on tvOS — MPEG-TS',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _row('state', '${_state['state'] ?? '—'}'),
-                    _row('playing', '$playing'),
-                    _row('frames decoded', '$frames'),
-                    _row('video size', '${width}x$height'),
-                    _row('video tracks', '${_state['videoTracks'] ?? 0}'),
-                    _row('audio tracks', '${_state['audioTracks'] ?? 0}'),
-                    const SizedBox(height: 12),
-                    Text(
-                      frames && playing
-                          ? 'DECODING — AVPlayer cannot do this'
-                          : 'waiting for frames…',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: frames && playing
-                            ? const Color(0xFF5CC792)
-                            : const Color(0xFFEDA231),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    if (probe == null) {
+      return Container(
+        color: OpenTvColors.ground,
+        alignment: Alignment.center,
+        child: const Text('Loading catalogue…', style: OpenTvType.body),
+      );
+    }
+
+    if (!probe.ok || _channels.isEmpty) {
+      return Container(
+        color: OpenTvColors.ground,
+        padding: OpenTvSpace.safe,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Core probe failed', style: OpenTvType.title),
+            const SizedBox(height: OpenTvSpace.md),
+            for (final line in probe.lines)
+              Text(line, style: OpenTvType.bodyMuted),
+          ],
+        ),
+      );
+    }
+
+    return CatalogueScreen(
+      channels: _channels,
+      totalChannels: probe.channelCount,
+      totalFilms: probe.filmCount,
+      stats: 'SQLITE VIA ${probe.executor}  ·  '
+          '${probe.channelCount + probe.filmCount} ROWS ON DEVICE',
     );
   }
-
-  Widget _panel({
-    required String title,
-    required Color accent,
-    required Widget child,
-  }) => Container(
-    padding: const EdgeInsets.all(28),
-    constraints: const BoxConstraints(maxWidth: 900),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.72),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: accent.withValues(alpha: 0.45)),
-    ),
-    child: DefaultTextStyle(
-      style: const TextStyle(
-        fontSize: 24,
-        color: Colors.white,
-        fontFamily: 'Menlo',
-        height: 1.5,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
-    ),
-  );
-
-  Widget _row(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(width: 240, child: Text(label, style: const TextStyle(color: Color(0xFF8794A6)))),
-        Text(value),
-      ],
-    ),
-  );
 }

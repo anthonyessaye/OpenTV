@@ -13,11 +13,22 @@ class CoreProbeResult {
     required this.lines,
     required this.ok,
     this.executor = '—',
+    this.db,
+    this.sourceId,
+    this.channelCount = 0,
+    this.filmCount = 0,
   });
 
   final List<String> lines;
   final bool ok;
   final String executor;
+
+  /// Left open so the catalogue screen can read from the same database the
+  /// probe just populated, rather than rendering invented rows.
+  final OpenTvDatabase? db;
+  final int? sourceId;
+  final int channelCount;
+  final int filmCount;
 }
 
 /// Runs the real schema, sync engine and queries on whatever platform this is
@@ -121,10 +132,15 @@ Future<CoreProbeResult> runCoreProbe() async {
     );
     lines.add('xmltv     ${guide.programmes.length} programme parsed');
 
-    await db.close();
-    dir.deleteSync(recursive: true);
-
-    return CoreProbeResult(lines: lines, ok: true, executor: executorName);
+    return CoreProbeResult(
+      lines: lines,
+      ok: true,
+      executor: executorName,
+      db: db,
+      sourceId: sourceId,
+      channelCount: channels,
+      filmCount: films,
+    );
   } catch (e) {
     lines.add('FAILED: $e');
     try {

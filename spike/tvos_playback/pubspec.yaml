@@ -36,6 +36,9 @@ dependencies:
   opentv_core:
     path: ../../packages/opentv_core
 
+  opentv_ui:
+    path: ../../packages/opentv_ui
+
   drift: ^2.20.0
   sqlite3: ^2.4.0
 
