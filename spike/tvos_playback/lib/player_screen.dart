@@ -14,6 +14,7 @@ class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
     required this.streamUrl,
+    this.isLive = true,
     this.channelName,
     this.channelNumber,
     this.nowTitle,
@@ -22,6 +23,11 @@ class PlayerScreen extends StatefulWidget {
   });
 
   final String streamUrl;
+
+  /// Stated by the caller, which read it from the catalogue. See the note on
+  /// PlaybackStatus.isLive for why the engine cannot be asked.
+  final bool isLive;
+
   final String? channelName;
   final int? channelNumber;
   final String? nowTitle;
@@ -71,8 +77,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         'error' => PlaybackPhase.failed,
         _ => PlaybackPhase.opening,
       },
+      isLive: widget.isLive,
       position: Duration(milliseconds: (raw['timeMs'] as int?) ?? 0),
-      // Zero length means live: there is no end to count toward.
       duration: lengthMs > 0 ? Duration(milliseconds: lengthMs) : null,
       channelName: widget.channelName,
       channelNumber: widget.channelNumber,

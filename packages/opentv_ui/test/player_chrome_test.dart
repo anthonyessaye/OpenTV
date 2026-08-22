@@ -48,6 +48,7 @@ void main() {
     test('live uses the guide window instead', () {
       final status = PlaybackStatus(
         phase: PlaybackPhase.playing,
+        isLive: true,
         nowStart: DateTime.utc(2026, 8, 22, 18),
         nowEnd: DateTime.utc(2026, 8, 22, 19),
       );
@@ -57,13 +58,14 @@ void main() {
     });
 
     test('live with no guide has no progress to show', () {
-      const status = PlaybackStatus(phase: PlaybackPhase.playing);
+      const status = PlaybackStatus(phase: PlaybackPhase.playing, isLive: true);
       expect(status.progressAt(_now), isNull);
     });
 
     test('clamps rather than exceeding the window', () {
       final status = PlaybackStatus(
         phase: PlaybackPhase.playing,
+        isLive: true,
         nowStart: DateTime.utc(2026, 8, 22, 12),
         nowEnd: DateTime.utc(2026, 8, 22, 13),
       );
@@ -74,6 +76,7 @@ void main() {
     test('a zero-length programme does not divide by zero', () {
       final status = PlaybackStatus(
         phase: PlaybackPhase.playing,
+        isLive: true,
         nowStart: DateTime.utc(2026, 8, 22, 18),
         nowEnd: DateTime.utc(2026, 8, 22, 18),
       );
@@ -111,6 +114,7 @@ void main() {
             now: _now,
             status: PlaybackStatus(
               phase: PlaybackPhase.playing,
+              isLive: true,
               channelNumber: 7,
               channelName: 'BBC One HD',
               nowTitle: 'Evening News',
@@ -175,6 +179,7 @@ void main() {
             now: _now,
             status: PlaybackStatus(
               phase: PlaybackPhase.playing,
+              isLive: true,
               nowStart: DateTime.utc(2026, 8, 22, 18),
               nowEnd: DateTime.utc(2026, 8, 22, 19),
             ),
@@ -299,7 +304,10 @@ void main() {
         _wrap(
           PlayerChrome(
             now: _now,
-            status: const PlaybackStatus(phase: PlaybackPhase.playing),
+            status: const PlaybackStatus(
+              phase: PlaybackPhase.playing,
+              isLive: true,
+            ),
             onNextChannel: () => next++,
             onPreviousChannel: () => previous++,
           ),
@@ -361,6 +369,39 @@ void main() {
         find.byType(AnimatedOpacity),
       );
       expect(opacity.opacity, 0);
+    });
+  });
+  group('liveness is stated, not inferred', () {
+    // Regression: a live HLS stream reports the length of its DVR window, so
+    // inferring live from a null duration read it as a finished recording —
+    // full progress bar, nothing remaining.
+    final hlsLive = PlaybackStatus(
+      phase: PlaybackPhase.playing,
+      isLive: true,
+      position: const Duration(seconds: 26),
+      duration: const Duration(seconds: 26),
+      nowStart: DateTime.utc(2026, 8, 22, 18),
+      nowEnd: DateTime.utc(2026, 8, 22, 19),
+    );
+
+    test('a live stream with a reported duration is still live', () {
+      expect(hlsLive.isLive, isTrue);
+      // Progress comes from the guide window, not the DVR window.
+      expect(hlsLive.progressAt(_now), closeTo(0.5, 0.001));
+    });
+
+    testWidgets('reads LIVE rather than PLAYING', (tester) async {
+      await tester.pumpWidget(_wrap(PlayerChrome(now: _now, status: hlsLive)));
+      expect(find.text('LIVE'), findsOneWidget);
+      expect(find.text('PLAYING'), findsNothing);
+    });
+
+    testWidgets('shows the programme window, not a countdown to zero', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_wrap(PlayerChrome(now: _now, status: hlsLive)));
+      expect(find.text('-00:00'), findsNothing);
+      expect(find.text('00:26'), findsNothing);
     });
   });
 }

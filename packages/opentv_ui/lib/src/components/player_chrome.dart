@@ -14,6 +14,7 @@ enum PlaybackPhase { opening, buffering, playing, paused, ended, failed }
 class PlaybackStatus {
   const PlaybackStatus({
     required this.phase,
+    this.isLive = false,
     this.position = Duration.zero,
     this.duration,
     this.channelName,
@@ -29,9 +30,20 @@ class PlaybackStatus {
   });
 
   final PlaybackPhase phase;
+
+  /// Whether this is a live channel, stated rather than inferred.
+  ///
+  /// The engine cannot be trusted to say. A raw transport stream reports a
+  /// length of zero, but live HLS reports the length of its DVR window — so
+  /// "no duration means live" reads a live channel as a finished recording,
+  /// complete with a full progress bar and nothing remaining. The catalogue
+  /// already knows which it is; this is where it says so.
+  final bool isLive;
+
   final Duration position;
 
-  /// Absent for live, which has no end.
+  /// Runtime for on-demand. For live this is whatever seekable window the
+  /// engine reports, which is not something to count down toward.
   final Duration? duration;
 
   final String? channelName;
@@ -49,12 +61,10 @@ class PlaybackStatus {
 
   final String? error;
 
-  bool get isLive => duration == null;
-
   /// Progress through the current programme for live, or the file for VOD.
   double? progressAt(DateTime now) {
     final total = duration;
-    if (total != null && total > Duration.zero) {
+    if (!isLive && total != null && total > Duration.zero) {
       return (position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
     }
     final start = nowStart;
@@ -277,7 +287,7 @@ class _ProgressLine extends StatelessWidget {
 
   String _trailing() {
     final total = status.duration;
-    if (total != null) {
+    if (!status.isLive && total != null) {
       final left = total - status.position;
       return '-${_clock(left.isNegative ? Duration.zero : left)}';
     }
