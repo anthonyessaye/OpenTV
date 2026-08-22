@@ -5,6 +5,7 @@ import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
 import 'catalogue_screen.dart';
+import 'player_screen.dart';
 import 'core_probe.dart';
 
 void main() => runApp(const SpikeApp());
@@ -97,6 +98,22 @@ class _BootState extends State<Boot> {
               Text(line, style: OpenTvType.bodyMuted),
           ],
         ),
+      );
+    }
+
+    // --dart-define=SHOW_PLAYER=true swaps the catalogue for the player, so
+    // both screens can be captured from one build.
+    if (const bool.fromEnvironment('SHOW_PLAYER')) {
+      return PlayerScreen(
+        streamUrl: const String.fromEnvironment(
+          'STREAM_URL',
+          defaultValue: 'http://127.0.0.1:8123/test_stream.ts',
+        ),
+        channelName: _channels.first.name,
+        channelNumber: _channels.first.number,
+        nowTitle: 'Evening News',
+        nowStart: DateTime.now().toUtc().subtract(const Duration(minutes: 18)),
+        nowEnd: DateTime.now().toUtc().add(const Duration(minutes: 42)),
       );
     }
 

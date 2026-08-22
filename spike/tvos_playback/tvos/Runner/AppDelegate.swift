@@ -155,6 +155,10 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
     /// Everything a test needs to decide whether decoding actually happened.
     private func snapshot() -> [String: Any] {
         let size = player.videoSize
+        // VLC reports a duration of 0 for live streams, which is how the
+        // chrome tells "no end" from "not known yet".
+        let lengthMs = player.media?.length.intValue ?? 0
+
         return [
             "state": describe(player.state),
             "isPlaying": player.isPlaying,
@@ -163,8 +167,11 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             "width": Int(size.width),
             "height": Int(size.height),
             "position": player.position,
+            "timeMs": player.time.intValue ?? 0,
+            "lengthMs": lengthMs,
             "audioTracks": player.numberOfAudioTracks,
             "videoTracks": player.numberOfVideoTracks,
+            "subtitleTracks": player.numberOfSubtitlesTracks,
         ]
     }
 
