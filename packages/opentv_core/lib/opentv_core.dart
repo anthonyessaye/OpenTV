@@ -11,4 +11,5 @@ export 'src/playlist/m3u_parser.dart';
 export 'src/playlist/playlist_entry.dart';
 export 'src/xtream/coerce.dart';
 export 'src/xtream/xtream_credentials.dart';
+export 'src/xtream/xtream_models.dart';
 export 'src/xtream/xtream_urls.dart';
