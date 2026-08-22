@@ -1,0 +1,6 @@
+build/
+.dart_tool/
+.flutter-plugins*
+tvos/Flutter/ephemeral/
+tvos/Pods/
+tvos/.symlinks/
