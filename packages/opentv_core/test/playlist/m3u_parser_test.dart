@@ -37,10 +37,7 @@ http://a/3.ts
 ''');
 
       expect(result.errors, isEmpty);
-      expect(
-        result.entries.map((e) => e.displayName),
-        ['One', 'Two', 'Three'],
-      );
+      expect(result.entries.map((e) => e.displayName), ['One', 'Two', 'Three']);
     });
 
     test('reads a positive duration as VOD runtime', () {
@@ -57,8 +54,10 @@ http://server/movie/user/pass/9.mkv
 
     test('accepts a fractional duration', () {
       final result = M3uParser.parse('#EXTINF:12.5,Clip\nhttp://a/c.mp4');
-      expect(result.entries.single.duration,
-          const Duration(seconds: 12, milliseconds: 500));
+      expect(
+        result.entries.single.duration,
+        const Duration(seconds: 12, milliseconds: 500),
+      );
     });
 
     test('treats a zero duration as unknown rather than a real runtime', () {
@@ -181,10 +180,14 @@ http://a/10.mpd
 ''');
 
       final e = result.entries.single;
-      expect(e.kodiProps['inputstream.adaptive.license_type'],
-          'com.widevine.alpha');
-      expect(e.kodiProps['inputstream.adaptive.license_key'],
-          'https://lic.example');
+      expect(
+        e.kodiProps['inputstream.adaptive.license_type'],
+        'com.widevine.alpha',
+      );
+      expect(
+        e.kodiProps['inputstream.adaptive.license_key'],
+        'https://lic.example',
+      );
     });
 
     test('decodes #EXTHTTP headers from JSON', () {
@@ -250,8 +253,10 @@ http://a/15.ts
       final result = M3uParser.parse(
         '#EXTM3U url-tvg="http://a.example/1.xml,http://b.example/2.xml"\n',
       );
-      expect(result.header.epgUrls,
-          ['http://a.example/1.xml', 'http://b.example/2.xml']);
+      expect(result.header.epgUrls, [
+        'http://a.example/1.xml',
+        'http://b.example/2.xml',
+      ]);
     });
 
     test('reports no EPG urls when the header has none', () {
@@ -363,8 +368,10 @@ http://a/two.ts
 
       PlaylistHeader? header;
       final seen = <String>[];
-      await for (final entry
-          in M3uParser.stream(lines, onHeader: (h) => header = h)) {
+      await for (final entry in M3uParser.stream(
+        lines,
+        onHeader: (h) => header = h,
+      )) {
         seen.add(entry.displayName);
       }
 

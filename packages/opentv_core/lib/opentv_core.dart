@@ -1,0 +1,14 @@
+/// Provider-agnostic domain core for OpenTV.
+///
+/// Deliberately a plain Dart package with no Flutter dependency: it runs on
+/// the VM, tests in milliseconds, and is unaffected by decisions about the
+/// UI or the playback engine.
+library;
+
+export 'src/epg/epg_models.dart';
+export 'src/epg/xmltv_parser.dart';
+export 'src/playlist/m3u_parser.dart';
+export 'src/playlist/playlist_entry.dart';
+export 'src/xtream/coerce.dart';
+export 'src/xtream/xtream_credentials.dart';
+export 'src/xtream/xtream_urls.dart';

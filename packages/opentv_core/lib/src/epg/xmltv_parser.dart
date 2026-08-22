@@ -26,7 +26,9 @@ class XmltvParser {
       return EpgParseResult(
         channels: const [],
         programmes: const [],
-        errors: [EpgParseError(message: 'guide is not valid XML: ${e.message}')],
+        errors: [
+          EpgParseError(message: 'guide is not valid XML: ${e.message}'),
+        ],
       );
     }
 
@@ -132,27 +134,31 @@ class XmltvParser {
   ) {
     final channelId = element.getAttribute('channel')?.trim();
     if (channelId == null || channelId.isEmpty) {
-      report(const EpgParseError(
-        message: '<programme> has no channel attribute',
-      ));
+      report(
+        const EpgParseError(message: '<programme> has no channel attribute'),
+      );
       return null;
     }
 
     final rawStart = element.getAttribute('start');
     if (rawStart == null || rawStart.trim().isEmpty) {
-      report(EpgParseError(
-        message: '<programme> has no start time',
-        context: channelId,
-      ));
+      report(
+        EpgParseError(
+          message: '<programme> has no start time',
+          context: channelId,
+        ),
+      );
       return null;
     }
 
     final start = parseTimestamp(rawStart);
     if (start == null) {
-      report(EpgParseError(
-        message: 'unreadable start time "$rawStart"',
-        context: channelId,
-      ));
+      report(
+        EpgParseError(
+          message: 'unreadable start time "$rawStart"',
+          context: channelId,
+        ),
+      );
       return null;
     }
 
@@ -162,10 +168,12 @@ class XmltvParser {
       stop = parseTimestamp(rawStop);
       if (stop == null) {
         // A programme with a readable start is still useful without an end.
-        report(EpgParseError(
-          message: 'unreadable stop time "$rawStop"',
-          context: channelId,
-        ));
+        report(
+          EpgParseError(
+            message: 'unreadable stop time "$rawStop"',
+            context: channelId,
+          ),
+        );
       }
     }
 

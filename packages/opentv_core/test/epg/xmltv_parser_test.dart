@@ -313,17 +313,19 @@ void main() {
   });
 
   group('streaming', () {
-    test('emits programmes and reports channels through the callback',
-        () async {
-      final channels = <EpgChannel>[];
-      final programmes = await XmltvParser.streamProgrammes(
-        Stream.value(_guide),
-        onChannel: channels.add,
-      ).toList();
+    test(
+      'emits programmes and reports channels through the callback',
+      () async {
+        final channels = <EpgChannel>[];
+        final programmes = await XmltvParser.streamProgrammes(
+          Stream.value(_guide),
+          onChannel: channels.add,
+        ).toList();
 
-      expect(channels.map((c) => c.id), ['bbc1.uk', 'itv.uk']);
-      expect(programmes.map((p) => p.title), ['Evening News', 'Drama Hour']);
-    });
+        expect(channels.map((c) => c.id), ['bbc1.uk', 'itv.uk']);
+        expect(programmes.map((p) => p.title), ['Evening News', 'Drama Hour']);
+      },
+    );
 
     test('handles a guide split across arbitrary chunk boundaries', () async {
       // Split mid-element to prove the decoder reassembles across chunks.

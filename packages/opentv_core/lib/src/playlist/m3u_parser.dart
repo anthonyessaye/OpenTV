@@ -18,10 +18,7 @@ class M3uParser {
   static PlaylistParseResult parse(String text) {
     final entries = <PlaylistEntry>[];
     final errors = <PlaylistParseError>[];
-    final state = _ParserState(
-      onEntry: entries.add,
-      onError: errors.add,
-    );
+    final state = _ParserState(onEntry: entries.add, onError: errors.add);
     for (final line in const LineSplitter().convert(text)) {
       state.accept(line);
     }
@@ -37,10 +34,7 @@ class M3uParser {
   static Future<PlaylistParseResult> parseStream(Stream<String> lines) async {
     final entries = <PlaylistEntry>[];
     final errors = <PlaylistParseError>[];
-    final state = _ParserState(
-      onEntry: entries.add,
-      onError: errors.add,
-    );
+    final state = _ParserState(onEntry: entries.add, onError: errors.add);
     await for (final line in lines) {
       state.accept(line);
     }
@@ -87,11 +81,7 @@ class M3uParser {
 
 /// Incremental line-at-a-time parser backing every entry point above.
 class _ParserState {
-  _ParserState({
-    required this.onEntry,
-    required this.onError,
-    this.onHeader,
-  });
+  _ParserState({required this.onEntry, required this.onError, this.onHeader});
 
   final void Function(PlaylistEntry) onEntry;
   final void Function(PlaylistParseError) onError;
@@ -194,8 +184,9 @@ class _ParserState {
 
     final trimmed = meta.trimLeft();
     final durationEnd = _indexOfWhitespace(trimmed);
-    final durationToken =
-        durationEnd < 0 ? trimmed : trimmed.substring(0, durationEnd);
+    final durationToken = durationEnd < 0
+        ? trimmed
+        : trimmed.substring(0, durationEnd);
 
     _duration = _parseDuration(durationToken);
     _attributes = durationEnd < 0
@@ -216,25 +207,29 @@ class _ParserState {
         _error('expected a stream URL');
         return;
       }
-      onEntry(PlaylistEntry(
-        url: line,
-        displayName: _deriveNameFromUrl(line),
-        sourceLine: _lineNumber,
-      ));
+      onEntry(
+        PlaylistEntry(
+          url: line,
+          displayName: _deriveNameFromUrl(line),
+          sourceLine: _lineNumber,
+        ),
+      );
       return;
     }
 
-    onEntry(PlaylistEntry(
-      url: line,
-      displayName: _displayName!,
-      duration: _duration,
-      attributes: Map.unmodifiable(_attributes),
-      vlcOptions: Map.unmodifiable(Map.of(_vlcOptions)),
-      kodiProps: Map.unmodifiable(Map.of(_kodiProps)),
-      httpHeaders: Map.unmodifiable(Map.of(_httpHeaders)),
-      groupOverride: _groupOverride,
-      sourceLine: _extinfLine,
-    ));
+    onEntry(
+      PlaylistEntry(
+        url: line,
+        displayName: _displayName!,
+        duration: _duration,
+        attributes: Map.unmodifiable(_attributes),
+        vlcOptions: Map.unmodifiable(Map.of(_vlcOptions)),
+        kodiProps: Map.unmodifiable(Map.of(_kodiProps)),
+        httpHeaders: Map.unmodifiable(Map.of(_httpHeaders)),
+        groupOverride: _groupOverride,
+        sourceLine: _extinfLine,
+      ),
+    );
     _resetPending();
   }
 
@@ -244,8 +239,9 @@ class _ParserState {
       _error('malformed option, expected key=value');
       return;
     }
-    into[rest.substring(0, eq).trim().toLowerCase()] =
-        rest.substring(eq + 1).trim();
+    into[rest.substring(0, eq).trim().toLowerCase()] = rest
+        .substring(eq + 1)
+        .trim();
   }
 
   void _acceptExtHttp(String rest) {
@@ -282,11 +278,13 @@ class _ParserState {
   }
 
   void _error(String message) {
-    onError(PlaylistParseError(
-      line: _lineNumber,
-      content: _currentLine,
-      message: message,
-    ));
+    onError(
+      PlaylistParseError(
+        line: _lineNumber,
+        content: _currentLine,
+        message: message,
+      ),
+    );
   }
 
   // --- scanning helpers -------------------------------------------------

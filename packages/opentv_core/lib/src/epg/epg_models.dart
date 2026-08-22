@@ -15,8 +15,7 @@ class EpgChannel {
 
   final String? iconUrl;
 
-  String? get displayName =>
-      displayNames.isEmpty ? null : displayNames.first;
+  String? get displayName => displayNames.isEmpty ? null : displayNames.first;
 
   @override
   String toString() => 'EpgChannel($id, ${displayName ?? '?'})';
@@ -68,8 +67,7 @@ class EpgProgramme {
   }
 
   @override
-  String toString() =>
-      'EpgProgramme($channelId, $start, ${title ?? '?'})';
+  String toString() => 'EpgProgramme($channelId, $start, ${title ?? '?'})';
 }
 
 /// A part of the guide that could not be read.
@@ -83,8 +81,7 @@ class EpgParseError {
   final String? context;
 
   @override
-  String toString() =>
-      context == null ? message : '$message ($context)';
+  String toString() => context == null ? message : '$message ($context)';
 }
 
 /// Outcome of reading a whole guide.
@@ -102,6 +99,7 @@ class EpgParseResult {
   bool get hasErrors => errors.isNotEmpty;
 
   @override
-  String toString() => 'EpgParseResult(${channels.length} channels, '
+  String toString() =>
+      'EpgParseResult(${channels.length} channels, '
       '${programmes.length} programmes, ${errors.length} errors)';
 }
