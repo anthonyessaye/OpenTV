@@ -1,0 +1,747 @@
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
+import 'package:opentv_core/src/store/database.dart';
+import 'package:opentv_core/src/store/tables.dart';
+import 'package:test/test.dart';
+
+late OpenTvDatabase db;
+
+Future<int> _addSource({String name = 'Portal', int sortOrder = 0}) {
+  return db.addSource(
+    SourcesCompanion.insert(
+      name: name,
+      kind: SourceKind.xtream,
+      url: 'http://portal.example',
+      createdAt: DateTime.utc(2026, 1, 1),
+      sortOrder: Value(sortOrder),
+    ),
+  );
+}
+
+ChannelsCompanion _channel(
+  int sourceId,
+  String remoteId,
+  String name, {
+  String? category,
+  String? epgId,
+  int? number,
+}) {
+  return ChannelsCompanion.insert(
+    sourceId: sourceId,
+    remoteId: remoteId,
+    name: name,
+    searchName: name.toLowerCase(),
+    categoryRemoteId: Value(category),
+    epgChannelId: Value(epgId),
+    number: Value(number),
+  );
+}
+
+EpgProgrammesCompanion _programme(
+  int sourceId,
+  String channelId,
+  DateTime start,
+  DateTime? stop,
+  String title,
+) {
+  return EpgProgrammesCompanion.insert(
+    sourceId: sourceId,
+    channelId: channelId,
+    startUtc: start,
+    stopUtc: Value(stop),
+    title: Value(title),
+  );
+}
+
+void main() {
+  setUp(() => db = OpenTvDatabase(NativeDatabase.memory()));
+  tearDown(() => db.close());
+
+  group('sources', () {
+    test('adds and reads back in sort order', () async {
+      await _addSource(name: 'Second', sortOrder: 2);
+      await _addSource(name: 'First', sortOrder: 1);
+
+      final all = await db.allSources();
+      expect(all.map((s) => s.name), ['First', 'Second']);
+    });
+
+    test('lists only enabled sources', () async {
+      final a = await _addSource(name: 'On');
+      await _addSource(name: 'Off');
+      await (db.update(db.sources)..where((s) => s.name.equals('Off'))).write(
+        const SourcesCompanion(enabled: Value(false)),
+      );
+
+      final enabled = await db.enabledSources();
+      expect(enabled.map((s) => s.id), [a]);
+    });
+
+    test('never stores a password, only a keystore reference', () async {
+      final id = await db.addSource(
+        SourcesCompanion.insert(
+          name: 'Portal',
+          kind: SourceKind.xtream,
+          url: 'http://portal.example',
+          createdAt: DateTime.utc(2026),
+          username: const Value('someone'),
+          credentialRef: const Value('keychain://opentv/source/1'),
+        ),
+      );
+
+      final source = await db.findSource(id);
+      expect(source?.username, 'someone');
+      expect(source?.credentialRef, 'keychain://opentv/source/1');
+      // There is no column that could hold one.
+      expect(
+        db.sources.$columns.map((c) => c.name),
+        isNot(contains('password')),
+      );
+    });
+
+    test('records the last sync time', () async {
+      final id = await _addSource();
+      await db.markSourceSynced(id, DateTime.utc(2026, 5, 1));
+      expect((await db.findSource(id))?.lastSyncedAt, DateTime.utc(2026, 5, 1));
+    });
+  });
+
+  group('cascade delete', () {
+    test('removing a source removes its whole catalogue', () async {
+      final id = await _addSource();
+      await db.upsertChannels([_channel(id, '1', 'One')]);
+      await db.upsertMovies([
+        MoviesCompanion.insert(
+          sourceId: id,
+          remoteId: 'm1',
+          name: 'Film',
+          searchName: 'film',
+        ),
+      ]);
+      await db.insertProgrammes([
+        _programme(id, 'c1', DateTime.utc(2026, 8, 22, 18), null, 'Show'),
+      ]);
+      await db.addFavourite(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: '1',
+        at: DateTime.utc(2026),
+      );
+
+      await db.removeSource(id);
+
+      // Two things have to hold for this to pass, and neither is a default:
+      // the FOREIGN KEY clause must be in the DDL, and PRAGMA foreign_keys
+      // must be on. Drift emitted neither until both were made explicit.
+      expect(await db.select(db.channels).get(), isEmpty);
+      expect(await db.select(db.movies).get(), isEmpty);
+      expect(await db.select(db.epgProgrammes).get(), isEmpty);
+      expect(await db.select(db.favourites).get(), isEmpty);
+    });
+
+    test('one source is unaffected by another being removed', () async {
+      final keep = await _addSource(name: 'Keep');
+      final drop = await _addSource(name: 'Drop');
+      await db.upsertChannels([
+        _channel(keep, '1', 'Kept'),
+        _channel(drop, '1', 'Dropped'),
+      ]);
+
+      await db.removeSource(drop);
+
+      final remaining = await db.select(db.channels).get();
+      expect(remaining.map((c) => c.name), ['Kept']);
+    });
+  });
+
+  group('batch upserts', () {
+    test('re-running a sync updates rather than duplicating', () async {
+      final id = await _addSource();
+      await db.upsertChannels([_channel(id, '1', 'Old Name')]);
+      await db.upsertChannels([_channel(id, '1', 'New Name')]);
+
+      final rows = await db.select(db.channels).get();
+      expect(rows, hasLength(1));
+      expect(rows.single.name, 'New Name');
+    });
+
+    test('the same remote id in two sources is two rows', () async {
+      final a = await _addSource(name: 'A');
+      final b = await _addSource(name: 'B');
+      await db.upsertChannels([
+        _channel(a, '1', 'From A'),
+        _channel(b, '1', 'From B'),
+      ]);
+
+      expect(await db.select(db.channels).get(), hasLength(2));
+    });
+
+    test('writes a large batch in one transaction', () async {
+      final id = await _addSource();
+      await db.upsertChannels([
+        for (var i = 0; i < 5000; i++) _channel(id, '$i', 'Channel $i'),
+      ]);
+
+      final count = await db.channels.count().getSingle();
+      expect(count, 5000);
+    });
+  });
+
+  group('catalogue reads', () {
+    test('filters channels by category and orders by number', () async {
+      final id = await _addSource();
+      await db.upsertChannels([
+        _channel(id, '1', 'Third', category: 'news', number: 3),
+        _channel(id, '2', 'First', category: 'news', number: 1),
+        _channel(id, '3', 'Other', category: 'sport', number: 2),
+      ]);
+
+      final news = await db.channelsIn(id, categoryRemoteId: 'news');
+      expect(news.map((c) => c.name), ['First', 'Third']);
+    });
+
+    test('hidden channels are excluded', () async {
+      final id = await _addSource();
+      await db.upsertChannels([_channel(id, '1', 'Visible')]);
+      await db.upsertChannels([
+        _channel(id, '2', 'Hidden').copyWith(hidden: const Value(true)),
+      ]);
+
+      final visible = await db.channelsIn(id);
+      expect(visible.map((c) => c.name), ['Visible']);
+    });
+
+    test('paginates', () async {
+      final id = await _addSource();
+      await db.upsertChannels([
+        for (var i = 0; i < 50; i++)
+          _channel(id, '$i', 'Channel $i', number: i),
+      ]);
+
+      final page = await db.channelsIn(id, limit: 10, offset: 20);
+      expect(page, hasLength(10));
+      expect(page.first.number, 20);
+    });
+
+    test('orders episodes by season then episode number', () async {
+      final id = await _addSource();
+      await db.upsertEpisodes([
+        EpisodesCompanion.insert(
+          sourceId: id,
+          remoteId: 'e3',
+          seriesRemoteId: 's1',
+          title: 'S2E1',
+          season: const Value(2),
+          episodeNumber: const Value(1),
+        ),
+        EpisodesCompanion.insert(
+          sourceId: id,
+          remoteId: 'e2',
+          seriesRemoteId: 's1',
+          title: 'S1E2',
+          season: const Value(1),
+          episodeNumber: const Value(2),
+        ),
+        EpisodesCompanion.insert(
+          sourceId: id,
+          remoteId: 'e1',
+          seriesRemoteId: 's1',
+          title: 'S1E1',
+          season: const Value(1),
+          episodeNumber: const Value(1),
+        ),
+      ]);
+
+      final ordered = await db.episodesOf(id, 's1');
+      expect(ordered.map((e) => e.title), ['S1E1', 'S1E2', 'S2E1']);
+    });
+  });
+
+  group('search', () {
+    late int sourceId;
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.upsertChannels([
+        _channel(sourceId, '1', 'BBC One'),
+        _channel(sourceId, '2', 'BBC Two'),
+        _channel(sourceId, '3', 'Kids BBC'),
+        _channel(sourceId, '4', 'Sky Sports'),
+      ]);
+    });
+
+    test('finds substring matches', () async {
+      final results = await db.searchChannels(sourceId, 'bbc');
+      expect(results, hasLength(3));
+    });
+
+    test('ranks prefix matches ahead of contains matches', () async {
+      final results = await db.searchChannels(sourceId, 'bbc');
+      expect(results.last.name, 'Kids BBC');
+      expect(results.take(2).map((c) => c.name), ['BBC One', 'BBC Two']);
+    });
+
+    test('is case insensitive', () async {
+      expect(await db.searchChannels(sourceId, 'SKY'), hasLength(1));
+    });
+
+    test('returns nothing for an empty or punctuation-only term', () async {
+      expect(await db.searchChannels(sourceId, ''), isEmpty);
+      expect(await db.searchChannels(sourceId, '   '), isEmpty);
+      expect(await db.searchChannels(sourceId, '!!!'), isEmpty);
+    });
+
+    test('does not cross source boundaries', () async {
+      final other = await _addSource(name: 'Other');
+      await db.upsertChannels([_channel(other, '1', 'BBC Elsewhere')]);
+
+      final results = await db.searchChannels(sourceId, 'bbc');
+      expect(results.map((c) => c.name), isNot(contains('BBC Elsewhere')));
+    });
+  });
+
+  group('guide', () {
+    late int sourceId;
+    final base = DateTime.utc(2026, 8, 22, 18);
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.insertProgrammes([
+        _programme(
+          sourceId,
+          'bbc1',
+          base,
+          base.add(const Duration(hours: 1)),
+          'Now',
+        ),
+        _programme(
+          sourceId,
+          'bbc1',
+          base.add(const Duration(hours: 1)),
+          base.add(const Duration(hours: 2)),
+          'Next',
+        ),
+        _programme(
+          sourceId,
+          'bbc1',
+          base.add(const Duration(hours: 2)),
+          base.add(const Duration(hours: 3)),
+          'Later',
+        ),
+        _programme(
+          sourceId,
+          'bbc1',
+          base.subtract(const Duration(hours: 1)),
+          base,
+          'Finished',
+        ),
+      ]);
+    });
+
+    test('now and next skips what has already finished', () async {
+      final result = await db.nowAndNext(
+        sourceId,
+        'bbc1',
+        base.add(const Duration(minutes: 30)),
+      );
+      expect(result.map((p) => p.title), ['Now', 'Next']);
+    });
+
+    test('honours the requested count', () async {
+      final result = await db.nowAndNext(sourceId, 'bbc1', base, count: 3);
+      expect(result.map((p) => p.title), ['Now', 'Next', 'Later']);
+    });
+
+    test('an open-ended programme is always current', () async {
+      final id = await _addSource(name: 'Open');
+      await db.insertProgrammes([
+        _programme(id, 'c', DateTime.utc(2020), null, 'Endless'),
+      ]);
+      final result = await db.nowAndNext(id, 'c', DateTime.utc(2030));
+      expect(result.single.title, 'Endless');
+    });
+
+    test('window query returns everything overlapping, not just contained', () async {
+      final result = await db.programmesBetween(
+        sourceId,
+        'bbc1',
+        base.add(const Duration(minutes: 30)),
+        base.add(const Duration(minutes: 90)),
+      );
+      // "Now" starts before the window and "Next" ends after it; both overlap.
+      expect(result.map((p) => p.title), ['Now', 'Next']);
+    });
+
+    test(
+      'replacing a guide clears the previous one for that source only',
+      () async {
+        final other = await _addSource(name: 'Other');
+        await db.insertProgrammes([
+          _programme(other, 'x', base, null, 'Untouched'),
+        ]);
+
+        await db.replaceProgrammes(sourceId, [
+          _programme(sourceId, 'bbc1', base, null, 'Fresh'),
+        ]);
+
+        final mine = await db.nowAndNext(sourceId, 'bbc1', base);
+        expect(mine.single.title, 'Fresh');
+        final theirs = await db.nowAndNext(other, 'x', base);
+        expect(theirs.single.title, 'Untouched');
+      },
+    );
+
+    test(
+      'pruning drops only entries that finished before the cutoff',
+      () async {
+        // A programme ending exactly at the cutoff is not "before" it.
+        expect(await db.pruneProgrammesBefore(base), 0);
+
+        final removed = await db.pruneProgrammesBefore(
+          base.add(const Duration(minutes: 1)),
+        );
+        expect(removed, 1);
+
+        final remaining = await db.select(db.epgProgrammes).get();
+        expect(remaining.map((p) => p.title), isNot(contains('Finished')));
+        expect(remaining, hasLength(3));
+      },
+    );
+  });
+
+  group('favourites', () {
+    test('adds, checks and removes', () async {
+      final id = await _addSource();
+      final at = DateTime.utc(2026, 3, 1);
+
+      expect(
+        await db.isFavourite(sourceId: id, kind: ItemKind.live, remoteId: '1'),
+        isFalse,
+      );
+
+      await db.addFavourite(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: '1',
+        at: at,
+      );
+      expect(
+        await db.isFavourite(sourceId: id, kind: ItemKind.live, remoteId: '1'),
+        isTrue,
+      );
+
+      await db.removeFavourite(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: '1',
+      );
+      expect(
+        await db.isFavourite(sourceId: id, kind: ItemKind.live, remoteId: '1'),
+        isFalse,
+      );
+    });
+
+    test('favouriting twice does not duplicate', () async {
+      final id = await _addSource();
+      final at = DateTime.utc(2026);
+      await db.addFavourite(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: '1',
+        at: at,
+      );
+      await db.addFavourite(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: '1',
+        at: at,
+      );
+
+      expect(await db.favouritesOf(id, ItemKind.live), hasLength(1));
+    });
+
+    test('the same id under two kinds is two favourites', () async {
+      final id = await _addSource();
+      final at = DateTime.utc(2026);
+      await db.addFavourite(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: '7',
+        at: at,
+      );
+      await db.addFavourite(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: '7',
+        at: at,
+      );
+
+      expect(await db.favouritesOf(id, ItemKind.live), hasLength(1));
+      expect(await db.favouritesOf(id, ItemKind.movie), hasLength(1));
+    });
+
+    test('returns newest first', () async {
+      final id = await _addSource();
+      await db.addFavourite(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: 'old',
+        at: DateTime.utc(2026, 1),
+      );
+      await db.addFavourite(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: 'new',
+        at: DateTime.utc(2026, 6),
+      );
+
+      final list = await db.favouritesOf(id, ItemKind.live);
+      expect(list.map((f) => f.itemRemoteId), ['new', 'old']);
+    });
+  });
+
+  group('playback state', () {
+    test('one table serves every item kind', () async {
+      final id = await _addSource();
+      final at = DateTime.utc(2026, 4, 1);
+
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.live,
+        remoteId: '1',
+        at: at,
+      );
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: '2',
+        at: at,
+        positionMs: 60000,
+        durationMs: 7200000,
+      );
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.episode,
+        remoteId: '3',
+        at: at,
+        positionMs: 30000,
+        parentRemoteId: 'series-9',
+      );
+
+      expect(await db.history(sourceId: id), hasLength(3));
+    });
+
+    test('recording the same item twice updates in place', () async {
+      final id = await _addSource();
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: '2',
+        at: DateTime.utc(2026, 1, 1),
+        positionMs: 1000,
+      );
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: '2',
+        at: DateTime.utc(2026, 1, 2),
+        positionMs: 500000,
+      );
+
+      final rows = await db.history(sourceId: id);
+      expect(rows, hasLength(1));
+      expect(rows.single.positionMs, 500000);
+    });
+
+    test('resume position round-trips', () async {
+      final id = await _addSource();
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: '2',
+        at: DateTime.utc(2026),
+        positionMs: 123456,
+        durationMs: 7200000,
+      );
+
+      final state = await db.playbackStateFor(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: '2',
+      );
+      expect(state?.positionMs, 123456);
+      expect(state?.durationMs, 7200000);
+    });
+
+    test('an episode remembers its series for next-episode lookup', () async {
+      final id = await _addSource();
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.episode,
+        remoteId: 'e5',
+        at: DateTime.utc(2026),
+        parentRemoteId: 'series-9',
+      );
+
+      final state = await db.playbackStateFor(
+        sourceId: id,
+        kind: ItemKind.episode,
+        remoteId: 'e5',
+      );
+      expect(state?.parentRemoteId, 'series-9');
+    });
+
+    test('continue watching excludes completed items, newest first', () async {
+      final id = await _addSource();
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: 'finished',
+        at: DateTime.utc(2026, 6),
+        completed: true,
+      );
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: 'older',
+        at: DateTime.utc(2026, 1),
+      );
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: 'newer',
+        at: DateTime.utc(2026, 5),
+      );
+
+      final resume = await db.continueWatching(sourceId: id);
+      expect(resume.map((p) => p.itemRemoteId), ['newer', 'older']);
+    });
+
+    test('a completed item stays in history', () async {
+      final id = await _addSource();
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: 'finished',
+        at: DateTime.utc(2026),
+        completed: true,
+      );
+
+      expect(await db.continueWatching(sourceId: id), isEmpty);
+      expect(await db.history(sourceId: id), hasLength(1));
+    });
+
+    test(
+      'clearing history and favourites can be scoped to one source',
+      () async {
+        final a = await _addSource(name: 'A');
+        final b = await _addSource(name: 'B');
+        final at = DateTime.utc(2026);
+
+        for (final id in [a, b]) {
+          await db.recordPlayback(
+            sourceId: id,
+            kind: ItemKind.live,
+            remoteId: '1',
+            at: at,
+          );
+          await db.addFavourite(
+            sourceId: id,
+            kind: ItemKind.live,
+            remoteId: '1',
+            at: at,
+          );
+        }
+
+        await db.clearHistory(sourceId: a);
+        await db.clearFavourites(sourceId: a);
+
+        expect(await db.history(sourceId: a), isEmpty);
+        expect(await db.history(sourceId: b), hasLength(1));
+        expect(await db.favouritesOf(a, ItemKind.live), isEmpty);
+        expect(await db.favouritesOf(b, ItemKind.live), hasLength(1));
+      },
+    );
+
+    test('clearing without a source clears everything', () async {
+      final a = await _addSource(name: 'A');
+      final b = await _addSource(name: 'B');
+      final at = DateTime.utc(2026);
+      for (final id in [a, b]) {
+        await db.recordPlayback(
+          sourceId: id,
+          kind: ItemKind.live,
+          remoteId: '1',
+          at: at,
+        );
+      }
+
+      await db.clearHistory();
+      expect(await db.history(), isEmpty);
+    });
+  });
+
+  group('sync stages', () {
+    test('records and updates a stage', () async {
+      final id = await _addSource();
+      await db.writeStage(
+        sourceId: id,
+        stage: 'liveStreams',
+        status: SyncStatus.running,
+        at: DateTime.utc(2026, 1, 1),
+      );
+      await db.writeStage(
+        sourceId: id,
+        stage: 'liveStreams',
+        status: SyncStatus.done,
+        at: DateTime.utc(2026, 1, 2),
+        itemsWritten: 4200,
+      );
+
+      final stage = await db.stageFor(id, 'liveStreams');
+      expect(stage?.status, SyncStatus.done);
+      expect(stage?.itemsWritten, 4200);
+      expect(await db.stagesFor(id), hasLength(1));
+    });
+
+    test('keeps the failure message', () async {
+      final id = await _addSource();
+      await db.writeStage(
+        sourceId: id,
+        stage: 'movies',
+        status: SyncStatus.failed,
+        at: DateTime.utc(2026),
+        error: 'connection closed',
+      );
+
+      expect((await db.stageFor(id, 'movies'))?.error, 'connection closed');
+    });
+
+    test('stages are per source', () async {
+      final a = await _addSource(name: 'A');
+      final b = await _addSource(name: 'B');
+      await db.writeStage(
+        sourceId: a,
+        stage: 'movies',
+        status: SyncStatus.done,
+        at: DateTime.utc(2026),
+      );
+
+      expect(await db.stagesFor(a), hasLength(1));
+      expect(await db.stagesFor(b), isEmpty);
+    });
+
+    test('resetting clears progress for a full resync', () async {
+      final id = await _addSource();
+      await db.writeStage(
+        sourceId: id,
+        stage: 'movies',
+        status: SyncStatus.done,
+        at: DateTime.utc(2026),
+      );
+
+      await db.resetStages(id);
+      expect(await db.stagesFor(id), isEmpty);
+    });
+  });
+}

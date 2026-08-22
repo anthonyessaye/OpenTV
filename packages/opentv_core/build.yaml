@@ -1,0 +1,11 @@
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          # Store DateTime as ISO-8601 text rather than a unix timestamp.
+          # The integer encoding drops the UTC flag, so a UTC instant written
+          # to the guide came back as a local DateTime for the same moment —
+          # equal in time but not equal by ==, and a trap for every downstream
+          # comparison. EPG is inherently UTC, so preserve it.
+          store_date_time_values_as_text: true
