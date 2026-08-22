@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core_probe.dart';
+
 /// The stream under test. Overridden at build time so this can be pointed at
 /// a real portal without the URL — and therefore the credentials in its path
 /// — ever being committed:
@@ -38,6 +40,16 @@ class _PlaybackProbeState extends State<PlaybackProbe> {
   MethodChannel? _channel;
   Map<String, Object?> _state = const {};
   Timer? _poll;
+  CoreProbeResult? _core;
+
+  @override
+  void initState() {
+    super.initState();
+    // Runs the real schema, sync engine and parsers on this device.
+    runCoreProbe().then((r) {
+      if (mounted) setState(() => _core = r);
+    });
+  }
 
   @override
   void dispose() {
@@ -72,6 +84,40 @@ class _PlaybackProbeState extends State<PlaybackProbe> {
             creationParams: const {'url': streamUrl},
             creationParamsCodec: const StandardMessageCodec(),
             onPlatformViewCreated: _onViewCreated,
+          ),
+          Positioned(
+            right: 60,
+            top: 60,
+            child: _panel(
+              title: 'opentv_core on tvOS',
+              accent: _core == null
+                  ? const Color(0xFFEDA231)
+                  : (_core!.ok ? const Color(0xFF5CC792) : const Color(0xFFF0857C)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_core == null)
+                    const Text('running…')
+                  else ...[
+                    for (final line in _core!.lines) Text(line),
+                    const SizedBox(height: 12),
+                    Text(
+                      _core!.ok
+                          ? 'CORE RUNS UNCHANGED ON TVOS'
+                          : 'CORE FAILED',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: _core!.ok
+                            ? const Color(0xFF5CC792)
+                            : const Color(0xFFF0857C),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
           Positioned(
             left: 60,
@@ -130,6 +176,44 @@ class _PlaybackProbeState extends State<PlaybackProbe> {
       ),
     );
   }
+
+  Widget _panel({
+    required String title,
+    required Color accent,
+    required Widget child,
+  }) => Container(
+    padding: const EdgeInsets.all(28),
+    constraints: const BoxConstraints(maxWidth: 900),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.72),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: accent.withValues(alpha: 0.45)),
+    ),
+    child: DefaultTextStyle(
+      style: const TextStyle(
+        fontSize: 24,
+        color: Colors.white,
+        fontFamily: 'Menlo',
+        height: 1.5,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    ),
+  );
 
   Widget _row(String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 2),
