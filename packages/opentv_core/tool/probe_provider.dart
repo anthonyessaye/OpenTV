@@ -5,14 +5,14 @@
 // visible to `ps` and lands in shell history. Nothing this prints contains
 // the password: every URL is redacted before it is logged.
 //
-// Run:
-//   export OPENTV_HOST='http://portal.example:8080'
-//   export OPENTV_USER='yourusername'
-//   export OPENTV_PASS='yourpassword'
+// Run it with no arguments and it will ask for the three things:
+//
+//   cd packages/opentv_core
 //   dart run tool/probe_provider.dart
 //
-// Add --probe-streams to also open a few streams and report what actually
-// comes back on the wire. That is the number the whole plan turns on.
+// The password is not echoed as you type it. Add --probe-streams to also open
+// a few streams and report what actually comes back on the wire — that is the
+// number the whole plan turns on.
 
 import 'dart:convert';
 import 'dart:io';
@@ -28,19 +28,22 @@ String redact(String text) =>
 void line([String text = '']) => stdout.writeln(redact(text));
 
 Future<void> main(List<String> args) async {
-  final host = Platform.environment['OPENTV_HOST'];
-  final user = Platform.environment['OPENTV_USER'];
-  final pass = Platform.environment['OPENTV_PASS'];
+  // Environment first, so this can run unattended in a script; otherwise ask.
+  final host =
+      Platform.environment['OPENTV_HOST'] ??
+      _ask('Portal address (e.g. http://portal.example:8080): ');
+  final user = Platform.environment['OPENTV_USER'] ?? _ask('Username: ');
+  final pass =
+      Platform.environment['OPENTV_PASS'] ??
+      _ask('Password (not shown as you type): ', secret: true);
 
-  if (host == null || user == null || pass == null) {
-    stderr.writeln(
-      'Set OPENTV_HOST, OPENTV_USER and OPENTV_PASS first. See the header '
-      'of this file.',
-    );
+  if (host.isEmpty || user.isEmpty || pass.isEmpty) {
+    stderr.writeln('All three are needed. Nothing was sent anywhere.');
     exitCode = 2;
     return;
   }
   _password = pass;
+  stdout.writeln();
 
   final credentials = XtreamCredentials(
     host: host,
@@ -338,4 +341,27 @@ String _shape(Uri url) {
     segments[2] = '<pass>';
   }
   return '${url.origin}/${segments.join('/')}';
+}
+
+/// Asks for one value on the terminal.
+///
+/// Reads from stdin rather than taking arguments, because argv is visible to
+/// `ps` and is written to shell history. Secrets are read with the terminal
+/// echo turned off, so the password never appears on screen either.
+String _ask(String prompt, {bool secret = false}) {
+  stdout.write(prompt);
+
+  if (!secret || !stdin.hasTerminal) {
+    return stdin.readLineSync()?.trim() ?? '';
+  }
+
+  final wasEchoing = stdin.echoMode;
+  try {
+    stdin.echoMode = false;
+    final value = stdin.readLineSync()?.trim() ?? '';
+    stdout.writeln();
+    return value;
+  } finally {
+    stdin.echoMode = wasEchoing;
+  }
 }
