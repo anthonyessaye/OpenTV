@@ -7,6 +7,7 @@ library;
 
 export 'src/epg/epg_models.dart';
 export 'src/epg/xmltv_parser.dart';
+export 'src/legacy/legacy_import.dart';
 export 'src/playlist/m3u_parser.dart';
 export 'src/playlist/playlist_entry.dart';
 export 'src/store/database.dart';
