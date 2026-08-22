@@ -1,1 +1,34 @@
+# Secrets
 app/src/main/java/com/anthonyessaye/opentv/REST/APIKeys.kt
+
+# Build output
+build/
+*/build/
+*/*/build/
+.gradle/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Machine-specific
+local.properties
+.idea/
+*.iml
+.kotlin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Dart
+.dart_tool/
+packages/*/.dart_tool/
+
+# Library packages do not pin transitive versions; the app will commit its own.
+packages/*/pubspec.lock
