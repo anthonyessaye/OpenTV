@@ -54,6 +54,13 @@ android {
     }
 }
 
+// Exports the Room schema to app/schemas so version 1 is captured as a baseline.
+// Without this there is nothing to diff a future schema against, which is why the
+// destructive-migration fallback was doing the work a real migration should do.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.navigation.common.android)
     implementation(libs.androidx.navigation.runtime.android)
