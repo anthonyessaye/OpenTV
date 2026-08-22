@@ -323,6 +323,8 @@ Future<void> _guide(HttpClient client, XtreamUrls urls) async {
   line('Guide');
   line('-' * 60);
 
+  const budget = 24 * 1024 * 1024;
+
   try {
     final request = await client.getUrl(urls.fullEpg());
     final response = await request.close();
@@ -333,49 +335,71 @@ Future<void> _guide(HttpClient client, XtreamUrls urls) async {
       return;
     }
 
-    // Read a bounded prefix: the point is the shape, not the whole guide.
     var bytes = 0;
-    final sample = StringBuffer();
-    await for (final chunk in response) {
-      bytes += chunk.length;
-      if (sample.length < 4000) {
-        sample.write(utf8.decode(chunk, allowMalformed: true));
+    var truncated = false;
+
+    // Feed the real streaming parser rather than a fixed-size sample. The
+    // earlier version parsed the first few thousand characters, which sit
+    // entirely inside the <channel> block, so it always reported zero
+    // programmes no matter how healthy the guide was.
+    Stream<String> capped() async* {
+      await for (final chunk in response) {
+        bytes += chunk.length;
+        if (bytes > budget) {
+          truncated = true;
+          break;
+        }
+        yield utf8.decode(chunk, allowMalformed: true);
       }
-      if (bytes > 4 * 1024 * 1024) break;
+    }
+
+    var channels = 0;
+    var programmes = 0;
+    DateTime? earliest;
+    DateTime? latest;
+    final errors = <String>[];
+
+    await for (final programme in XmltvParser.streamProgrammes(
+      capped(),
+      onChannel: (_) => channels++,
+      onError: (e) {
+        if (errors.length < 3) errors.add(e.message);
+      },
+    )) {
+      programmes++;
+      if (earliest == null || programme.start.isBefore(earliest)) {
+        earliest = programme.start;
+      }
+      final stop = programme.stop ?? programme.start;
+      if (latest == null || stop.isAfter(latest)) latest = stop;
     }
 
     line('  reachable      yes');
     line(
-      '  read           ${(bytes / 1024 / 1024).toStringAsFixed(1)} MB '
-      '${bytes > 4 * 1024 * 1024 ? '(stopped early)' : '(complete)'}',
+      '  read           ${(bytes / 1024 / 1024).toStringAsFixed(1)} MB'
+      '${truncated ? ' (stopped at the $budget byte budget)' : ' (complete)'}',
     );
-
-    final text = sample.toString();
-    line('  looks like xml ${text.trimLeft().startsWith('<') ? 'yes' : 'no'}');
-    final parsed = XmltvParser.parse('${_rootOf(text)}</tv>');
-    line(
-      '  parsed sample  ${parsed.channels.length} channels, '
-      '${parsed.programmes.length} programmes',
-    );
-    if (parsed.programmes.isNotEmpty) {
-      line(
-        '  first start    ${parsed.programmes.first.start.toIso8601String()}',
-      );
+    line('  channels       $channels');
+    line('  programmes     $programmes');
+    if (earliest != null && latest != null) {
+      final span = latest.difference(earliest);
+      line('  covers         ${earliest.toIso8601String()}');
+      line('                 to ${latest.toIso8601String()}');
+      line('                 (${(span.inHours / 24).toStringAsFixed(1)} days)');
+    }
+    if (errors.isNotEmpty) {
+      line('  parse warnings ${errors.join('; ')}');
+    }
+    if (truncated) {
+      line();
+      line('  Only part of the guide was read. The real one is larger, which');
+      line('  is itself the finding: it has to be streamed and written in');
+      line('  batches, never held in memory.');
     }
   } on Object catch (e) {
-    line('  unreachable: $e');
+    line('  unreachable: ${_short(e)}');
   }
   line();
-}
-
-/// Trims a partial XMLTV document back to its last complete element so the
-/// sample can be parsed.
-String _rootOf(String text) {
-  final lastClose = text.lastIndexOf('</programme>');
-  if (lastClose > 0) return text.substring(0, lastClose + 12);
-  final lastChannel = text.lastIndexOf('</channel>');
-  if (lastChannel > 0) return text.substring(0, lastChannel + 10);
-  return text;
 }
 
 Future<void> _streams(
@@ -416,9 +440,15 @@ Future<void> _streams(
   line();
 }
 
-Future<void> _probeOne(HttpClient client, String label, Uri url) async {
+Future<void> _probeOne(HttpClient _, String label, Uri url) async {
   line('  $label');
   line('    url        ${_shape(url)}');
+
+  // A fresh client per stream, closed immediately afterwards. These accounts
+  // are usually limited to one concurrent connection, and a kept-alive socket
+  // from the previous stream is enough for the portal to answer the next one
+  // with 407.
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
 
   try {
     final request = await client.getUrl(url);
@@ -427,7 +457,8 @@ Future<void> _probeOne(HttpClient client, String label, Uri url) async {
 
     line(
       '    status     ${response.statusCode}'
-      '${response.isRedirect ? ' (redirected)' : ''}',
+      '${response.isRedirect ? ' (redirected)' : ''}'
+      '${response.statusCode == 407 ? '  <- connection limit reached, not a stream fault' : ''}',
     );
     line(
       '    type       '
@@ -445,7 +476,11 @@ Future<void> _probeOne(HttpClient client, String label, Uri url) async {
 
     line('    first bytes ${_identify(head)}');
   } on Object catch (e) {
-    line('    failed     $e');
+    line('    failed     ${_short(e)}');
+  } finally {
+    client.close(force: true);
+    // Give the portal a moment to release the slot before the next one.
+    await Future<void>.delayed(const Duration(milliseconds: 750));
   }
   line();
 }
