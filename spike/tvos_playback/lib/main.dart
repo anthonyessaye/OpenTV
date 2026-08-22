@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
@@ -98,12 +100,61 @@ class _BootState extends State<Boot> {
       );
     }
 
-    return CatalogueScreen(
-      channels: _channels,
+    return FocusDriver(
+      child: CatalogueScreen(
+        channels: _channels,
       totalChannels: probe.channelCount,
       totalFilms: probe.filmCount,
-      stats: 'SQLITE VIA ${probe.executor}  ·  '
-          '${probe.channelCount + probe.filmCount} ROWS ON DEVICE',
+        stats: 'SQLITE VIA ${probe.executor}  ·  '
+            '${probe.channelCount + probe.filmCount} ROWS ON DEVICE',
+      ),
     );
   }
+}
+
+/// Walks focus downward on a timer, when asked to.
+///
+/// Off unless built with --dart-define=AUTO_FOCUS_DEMO=true. It exists so a
+/// screenshot can show vertical navigation without a remote in hand, and it
+/// drives the same directional traversal the Siri Remote does rather than
+/// jumping focus synthetically.
+class FocusDriver extends StatefulWidget {
+  const FocusDriver({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<FocusDriver> createState() => _FocusDriverState();
+}
+
+class _FocusDriverState extends State<FocusDriver> {
+  Timer? _timer;
+  var _steps = 0;
+
+  static const _enabled = bool.fromEnvironment('AUTO_FOCUS_DEMO');
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_enabled) return;
+    _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (!mounted || _steps >= 3) {
+        timer.cancel();
+        return;
+      }
+      _steps++;
+      FocusManager.instance.primaryFocus?.focusInDirection(
+        TraversalDirection.down,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

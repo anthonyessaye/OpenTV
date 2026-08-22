@@ -374,4 +374,143 @@ void main() {
       expect(find.text('Favourites'), findsOneWidget);
     });
   });
+  group('FocusColumn', () {
+    testWidgets('brings a focused section to its resting position', (
+      tester,
+    ) async {
+      final nodes = List.generate(8, (_) => FocusNode());
+      addTearDown(() {
+        for (final n in nodes) {
+          n.dispose();
+        }
+      });
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          FocusColumn(
+            controller: controller,
+            itemCount: nodes.length,
+            itemBuilder: (context, index) => FocusableTile(
+              focusNode: nodes[index],
+              child: SizedBox(height: 400, child: Text('section $index')),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.offset, 0);
+
+      // Stepped rather than jumped. A lazy list has not built section 3 yet,
+      // so requesting focus on its detached node would do nothing — and a
+      // remote moves one section at a time anyway.
+      for (final index in [1, 2, 3]) {
+        nodes[index].requestFocus();
+        await tester.pumpAndSettle();
+      }
+
+      expect(controller.offset, greaterThan(0));
+    });
+
+    testWidgets('handles sections of differing heights', (tester) async {
+      // The reason this cannot use FocusRow's index-times-stride maths.
+      final nodes = List.generate(6, (_) => FocusNode());
+      addTearDown(() {
+        for (final n in nodes) {
+          n.dispose();
+        }
+      });
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      const heights = [700.0, 200.0, 450.0, 200.0, 640.0, 300.0];
+
+      await tester.pumpWidget(
+        _wrap(
+          FocusColumn(
+            controller: controller,
+            itemCount: nodes.length,
+            itemBuilder: (context, index) => FocusableTile(
+              focusNode: nodes[index],
+              child: SizedBox(
+                height: heights[index],
+                child: Text('section $index'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      for (final index in [1, 2]) {
+        nodes[index].requestFocus();
+        await tester.pumpAndSettle();
+      }
+      final afterThird = controller.offset;
+
+      for (final index in [3, 4]) {
+        nodes[index].requestFocus();
+        await tester.pumpAndSettle();
+      }
+
+      expect(afterThird, greaterThan(0));
+      expect(controller.offset, greaterThan(afterThird));
+    });
+
+    testWidgets('builds lazily', (tester) async {
+      var built = 0;
+
+      await tester.pumpWidget(
+        _wrap(
+          FocusColumn(
+            itemCount: 5000,
+            itemBuilder: (context, index) {
+              built++;
+              return SizedBox(height: 400, child: Text('$index'));
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(built, lessThan(30));
+      expect(built, greaterThan(0));
+    });
+
+    testWidgets('does not scroll past the end', (tester) async {
+      final nodes = List.generate(3, (_) => FocusNode());
+      addTearDown(() {
+        for (final n in nodes) {
+          n.dispose();
+        }
+      });
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          FocusColumn(
+            controller: controller,
+            itemCount: nodes.length,
+            itemBuilder: (context, index) => FocusableTile(
+              focusNode: nodes[index],
+              child: SizedBox(height: 400, child: Text('$index')),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      for (final node in nodes) {
+        node.requestFocus();
+        await tester.pumpAndSettle();
+      }
+
+      expect(
+        controller.offset,
+        lessThanOrEqualTo(controller.position.maxScrollExtent),
+      );
+    });
+  });
 }
