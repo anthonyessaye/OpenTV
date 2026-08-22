@@ -101,6 +101,51 @@ class _BootState extends State<Boot> {
       );
     }
 
+    if (const bool.fromEnvironment('SHOW_DETAIL')) {
+      final channel = _channels.first;
+      return DetailScreen(
+        content: DetailContent(
+          kind: DetailKind.film,
+          title: 'The Weight of Water',
+          subtitle: '2019  ·  Drama, Thriller',
+          synopsis:
+              'A marine archaeologist returns to a coastal town to survey a '
+              'wreck, and finds the community has its own reasons for wanting '
+              'it left undisturbed.',
+          facts: const [
+            (label: 'container', value: 'mkv'),
+            (label: 'resolution', value: '1080p'),
+            (label: 'rating', value: '7.4'),
+            (label: 'added', value: '2023-11-14'),
+            (label: 'source', value: 'Portal'),
+          ],
+          resumePosition: const Duration(minutes: 42, seconds: 18),
+          duration: const Duration(hours: 2, minutes: 6),
+          isFavourite: true,
+        ),
+        onPlay: () {},
+        onToggleFavourite: () {},
+        onBack: () {},
+        trailing: SizedBox(
+          height: EpisodeTile.preferredHeight + 88,
+          child: FocusRow(
+            height: EpisodeTile.preferredHeight,
+            itemExtent: EpisodeTile.preferredWidth,
+            itemCount: _channels.length,
+            padding: EdgeInsets.zero,
+            itemBuilder: (context, index) => EpisodeTile(
+              title: _channels[index].name,
+              season: 1,
+              episodeNumber: index + 1,
+              duration: Duration(minutes: 38 + (index % 5) * 4),
+              watched: index < 2,
+              onSelect: () {},
+            ),
+          ),
+        ),
+      );
+    }
+
     // --dart-define=SHOW_PLAYER=true swaps the catalogue for the player, so
     // both screens can be captured from one build.
     if (const bool.fromEnvironment('SHOW_PLAYER')) {
