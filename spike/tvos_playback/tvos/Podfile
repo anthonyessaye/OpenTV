@@ -15,6 +15,13 @@ project 'Runner', {
 target 'Runner' do
   use_frameworks!
 
+  # libVLC for tvOS. AVPlayer cannot decode MPEG-TS or Matroska, which between
+  # them account for the great majority of a real IPTV catalogue, so playback
+  # has to come from somewhere else. 3.7.3 ships a
+  # tvos-arm64_x86_64-simulator slice, which is what makes this testable
+  # without hardware.
+  pod 'TVVLCKit', '3.7.3'
+
   # Install plugin pods from .flutter-plugins-dependencies
   flutter_plugins_deps = File.expand_path(File.join('..', '.flutter-plugins-dependencies'), File.dirname(__FILE__))
   if File.exist?(flutter_plugins_deps)

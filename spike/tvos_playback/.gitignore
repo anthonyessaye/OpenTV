@@ -2,5 +2,6 @@ build/
 .dart_tool/
 .flutter-plugins*
 tvos/Flutter/ephemeral/
+tvos/Flutter/Generated.xcconfig
 tvos/Pods/
 tvos/.symlinks/
