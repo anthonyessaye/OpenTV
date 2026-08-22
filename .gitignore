@@ -32,3 +32,4 @@ packages/*/.dart_tool/
 
 # Library packages do not pin transitive versions; the app will commit its own.
 packages/*/pubspec.lock
+packages/*/.flutter-plugins*
