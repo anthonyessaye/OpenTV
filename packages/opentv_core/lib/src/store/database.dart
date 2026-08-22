@@ -113,6 +113,11 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     });
   }
 
+  /// Removes a source's entire guide. Used before reloading, since guides
+  /// are republished whole and diffing costs more than reloading.
+  Future<int> clearProgrammes(int sourceId) =>
+      (delete(epgProgrammes)..where((p) => p.sourceId.equals(sourceId))).go();
+
   /// Drops guide entries that finished before [before], which is the bulk of
   /// the table within a day of loading a week-long guide.
   Future<int> pruneProgrammesBefore(DateTime before) => (delete(
@@ -260,7 +265,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   ///
   /// Takes the current instant rather than reading the clock, so the caller
   /// controls it and the behaviour is testable.
-  Future<List<EpgProgramme>> nowAndNext(
+  Future<List<EpgProgrammeRow>> nowAndNext(
     int sourceId,
     String epgChannelId,
     DateTime now, {
@@ -281,7 +286,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
 
   /// Everything scheduled on a channel that overlaps a window. The query a
   /// guide grid is built from.
-  Future<List<EpgProgramme>> programmesBetween(
+  Future<List<EpgProgrammeRow>> programmesBetween(
     int sourceId,
     String epgChannelId,
     DateTime from,
@@ -455,10 +460,10 @@ class OpenTvDatabase extends _$OpenTvDatabase {
 
   // --- sync progress ----------------------------------------------------
 
-  Future<List<SyncStage>> stagesFor(int sourceId) =>
+  Future<List<SyncStageRow>> stagesFor(int sourceId) =>
       (select(syncStages)..where((s) => s.sourceId.equals(sourceId))).get();
 
-  Future<SyncStage?> stageFor(int sourceId, String stage) =>
+  Future<SyncStageRow?> stageFor(int sourceId, String stage) =>
       (select(syncStages)
             ..where((s) => s.sourceId.equals(sourceId) & s.stage.equals(stage)))
           .getSingleOrNull();

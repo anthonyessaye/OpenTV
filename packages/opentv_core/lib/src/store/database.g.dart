@@ -4351,7 +4351,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
 }
 
 class $EpgChannelsTable extends EpgChannels
-    with TableInfo<$EpgChannelsTable, EpgChannel> {
+    with TableInfo<$EpgChannelsTable, EpgChannelRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -4414,7 +4414,7 @@ class $EpgChannelsTable extends EpgChannels
   static const String $name = 'epg_channels';
   @override
   VerificationContext validateIntegrity(
-    Insertable<EpgChannel> instance, {
+    Insertable<EpgChannelRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -4456,9 +4456,9 @@ class $EpgChannelsTable extends EpgChannels
   @override
   Set<GeneratedColumn> get $primaryKey => {sourceId, channelId};
   @override
-  EpgChannel map(Map<String, dynamic> data, {String? tablePrefix}) {
+  EpgChannelRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return EpgChannel(
+    return EpgChannelRow(
       sourceId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}source_id'],
@@ -4484,14 +4484,14 @@ class $EpgChannelsTable extends EpgChannels
   }
 }
 
-class EpgChannel extends DataClass implements Insertable<EpgChannel> {
+class EpgChannelRow extends DataClass implements Insertable<EpgChannelRow> {
   final int sourceId;
 
   /// The XMLTV channel id, which `Channels.epgChannelId` points at.
   final String channelId;
   final String? displayName;
   final String? iconUrl;
-  const EpgChannel({
+  const EpgChannelRow({
     required this.sourceId,
     required this.channelId,
     this.displayName,
@@ -4524,12 +4524,12 @@ class EpgChannel extends DataClass implements Insertable<EpgChannel> {
     );
   }
 
-  factory EpgChannel.fromJson(
+  factory EpgChannelRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return EpgChannel(
+    return EpgChannelRow(
       sourceId: serializer.fromJson<int>(json['sourceId']),
       channelId: serializer.fromJson<String>(json['channelId']),
       displayName: serializer.fromJson<String?>(json['displayName']),
@@ -4547,19 +4547,19 @@ class EpgChannel extends DataClass implements Insertable<EpgChannel> {
     };
   }
 
-  EpgChannel copyWith({
+  EpgChannelRow copyWith({
     int? sourceId,
     String? channelId,
     Value<String?> displayName = const Value.absent(),
     Value<String?> iconUrl = const Value.absent(),
-  }) => EpgChannel(
+  }) => EpgChannelRow(
     sourceId: sourceId ?? this.sourceId,
     channelId: channelId ?? this.channelId,
     displayName: displayName.present ? displayName.value : this.displayName,
     iconUrl: iconUrl.present ? iconUrl.value : this.iconUrl,
   );
-  EpgChannel copyWithCompanion(EpgChannelsCompanion data) {
-    return EpgChannel(
+  EpgChannelRow copyWithCompanion(EpgChannelsCompanion data) {
+    return EpgChannelRow(
       sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
       channelId: data.channelId.present ? data.channelId.value : this.channelId,
       displayName: data.displayName.present
@@ -4571,7 +4571,7 @@ class EpgChannel extends DataClass implements Insertable<EpgChannel> {
 
   @override
   String toString() {
-    return (StringBuffer('EpgChannel(')
+    return (StringBuffer('EpgChannelRow(')
           ..write('sourceId: $sourceId, ')
           ..write('channelId: $channelId, ')
           ..write('displayName: $displayName, ')
@@ -4585,14 +4585,14 @@ class EpgChannel extends DataClass implements Insertable<EpgChannel> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is EpgChannel &&
+      (other is EpgChannelRow &&
           other.sourceId == this.sourceId &&
           other.channelId == this.channelId &&
           other.displayName == this.displayName &&
           other.iconUrl == this.iconUrl);
 }
 
-class EpgChannelsCompanion extends UpdateCompanion<EpgChannel> {
+class EpgChannelsCompanion extends UpdateCompanion<EpgChannelRow> {
   final Value<int> sourceId;
   final Value<String> channelId;
   final Value<String?> displayName;
@@ -4613,7 +4613,7 @@ class EpgChannelsCompanion extends UpdateCompanion<EpgChannel> {
     this.rowid = const Value.absent(),
   }) : sourceId = Value(sourceId),
        channelId = Value(channelId);
-  static Insertable<EpgChannel> custom({
+  static Insertable<EpgChannelRow> custom({
     Expression<int>? sourceId,
     Expression<String>? channelId,
     Expression<String>? displayName,
@@ -4680,7 +4680,7 @@ class EpgChannelsCompanion extends UpdateCompanion<EpgChannel> {
 }
 
 class $EpgProgrammesTable extends EpgProgrammes
-    with TableInfo<$EpgProgrammesTable, EpgProgramme> {
+    with TableInfo<$EpgProgrammesTable, EpgProgrammeRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -4827,7 +4827,7 @@ class $EpgProgrammesTable extends EpgProgrammes
   static const String $name = 'epg_programmes';
   @override
   VerificationContext validateIntegrity(
-    Insertable<EpgProgramme> instance, {
+    Insertable<EpgProgrammeRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -4913,9 +4913,9 @@ class $EpgProgrammesTable extends EpgProgrammes
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  EpgProgramme map(Map<String, dynamic> data, {String? tablePrefix}) {
+  EpgProgrammeRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return EpgProgramme(
+    return EpgProgrammeRow(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
@@ -4969,7 +4969,7 @@ class $EpgProgrammesTable extends EpgProgrammes
   }
 }
 
-class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
+class EpgProgrammeRow extends DataClass implements Insertable<EpgProgrammeRow> {
   final int id;
   final int sourceId;
   final String channelId;
@@ -4983,7 +4983,7 @@ class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
   final String? categories;
   final String? iconUrl;
   final String? episodeNumber;
-  const EpgProgramme({
+  const EpgProgrammeRow({
     required this.id,
     required this.sourceId,
     required this.channelId,
@@ -5057,12 +5057,12 @@ class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
     );
   }
 
-  factory EpgProgramme.fromJson(
+  factory EpgProgrammeRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return EpgProgramme(
+    return EpgProgrammeRow(
       id: serializer.fromJson<int>(json['id']),
       sourceId: serializer.fromJson<int>(json['sourceId']),
       channelId: serializer.fromJson<String>(json['channelId']),
@@ -5094,7 +5094,7 @@ class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
     };
   }
 
-  EpgProgramme copyWith({
+  EpgProgrammeRow copyWith({
     int? id,
     int? sourceId,
     String? channelId,
@@ -5106,7 +5106,7 @@ class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
     Value<String?> categories = const Value.absent(),
     Value<String?> iconUrl = const Value.absent(),
     Value<String?> episodeNumber = const Value.absent(),
-  }) => EpgProgramme(
+  }) => EpgProgrammeRow(
     id: id ?? this.id,
     sourceId: sourceId ?? this.sourceId,
     channelId: channelId ?? this.channelId,
@@ -5121,8 +5121,8 @@ class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
         ? episodeNumber.value
         : this.episodeNumber,
   );
-  EpgProgramme copyWithCompanion(EpgProgrammesCompanion data) {
-    return EpgProgramme(
+  EpgProgrammeRow copyWithCompanion(EpgProgrammesCompanion data) {
+    return EpgProgrammeRow(
       id: data.id.present ? data.id.value : this.id,
       sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
       channelId: data.channelId.present ? data.channelId.value : this.channelId,
@@ -5145,7 +5145,7 @@ class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
 
   @override
   String toString() {
-    return (StringBuffer('EpgProgramme(')
+    return (StringBuffer('EpgProgrammeRow(')
           ..write('id: $id, ')
           ..write('sourceId: $sourceId, ')
           ..write('channelId: $channelId, ')
@@ -5178,7 +5178,7 @@ class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is EpgProgramme &&
+      (other is EpgProgrammeRow &&
           other.id == this.id &&
           other.sourceId == this.sourceId &&
           other.channelId == this.channelId &&
@@ -5192,7 +5192,7 @@ class EpgProgramme extends DataClass implements Insertable<EpgProgramme> {
           other.episodeNumber == this.episodeNumber);
 }
 
-class EpgProgrammesCompanion extends UpdateCompanion<EpgProgramme> {
+class EpgProgrammesCompanion extends UpdateCompanion<EpgProgrammeRow> {
   final Value<int> id;
   final Value<int> sourceId;
   final Value<String> channelId;
@@ -5232,7 +5232,7 @@ class EpgProgrammesCompanion extends UpdateCompanion<EpgProgramme> {
   }) : sourceId = Value(sourceId),
        channelId = Value(channelId),
        startUtc = Value(startUtc);
-  static Insertable<EpgProgramme> custom({
+  static Insertable<EpgProgrammeRow> custom({
     Expression<int>? id,
     Expression<int>? sourceId,
     Expression<String>? channelId,
@@ -6233,7 +6233,7 @@ class PlaybackStatesCompanion extends UpdateCompanion<PlaybackState> {
 }
 
 class $SyncStagesTable extends SyncStages
-    with TableInfo<$SyncStagesTable, SyncStage> {
+    with TableInfo<$SyncStagesTable, SyncStageRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -6315,7 +6315,7 @@ class $SyncStagesTable extends SyncStages
   static const String $name = 'sync_stages';
   @override
   VerificationContext validateIntegrity(
-    Insertable<SyncStage> instance, {
+    Insertable<SyncStageRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -6365,9 +6365,9 @@ class $SyncStagesTable extends SyncStages
   @override
   Set<GeneratedColumn> get $primaryKey => {sourceId, stage};
   @override
-  SyncStage map(Map<String, dynamic> data, {String? tablePrefix}) {
+  SyncStageRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return SyncStage(
+    return SyncStageRow(
       sourceId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}source_id'],
@@ -6406,7 +6406,7 @@ class $SyncStagesTable extends SyncStages
       const EnumNameConverter<SyncStatus>(SyncStatus.values);
 }
 
-class SyncStage extends DataClass implements Insertable<SyncStage> {
+class SyncStageRow extends DataClass implements Insertable<SyncStageRow> {
   final int sourceId;
 
   /// Stage name, from `SyncStage.name`.
@@ -6415,7 +6415,7 @@ class SyncStage extends DataClass implements Insertable<SyncStage> {
   final DateTime updatedAt;
   final int itemsWritten;
   final String? error;
-  const SyncStage({
+  const SyncStageRow({
     required this.sourceId,
     required this.stage,
     required this.status,
@@ -6454,12 +6454,12 @@ class SyncStage extends DataClass implements Insertable<SyncStage> {
     );
   }
 
-  factory SyncStage.fromJson(
+  factory SyncStageRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return SyncStage(
+    return SyncStageRow(
       sourceId: serializer.fromJson<int>(json['sourceId']),
       stage: serializer.fromJson<String>(json['stage']),
       status: $SyncStagesTable.$converterstatus.fromJson(
@@ -6485,14 +6485,14 @@ class SyncStage extends DataClass implements Insertable<SyncStage> {
     };
   }
 
-  SyncStage copyWith({
+  SyncStageRow copyWith({
     int? sourceId,
     String? stage,
     SyncStatus? status,
     DateTime? updatedAt,
     int? itemsWritten,
     Value<String?> error = const Value.absent(),
-  }) => SyncStage(
+  }) => SyncStageRow(
     sourceId: sourceId ?? this.sourceId,
     stage: stage ?? this.stage,
     status: status ?? this.status,
@@ -6500,8 +6500,8 @@ class SyncStage extends DataClass implements Insertable<SyncStage> {
     itemsWritten: itemsWritten ?? this.itemsWritten,
     error: error.present ? error.value : this.error,
   );
-  SyncStage copyWithCompanion(SyncStagesCompanion data) {
-    return SyncStage(
+  SyncStageRow copyWithCompanion(SyncStagesCompanion data) {
+    return SyncStageRow(
       sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
       stage: data.stage.present ? data.stage.value : this.stage,
       status: data.status.present ? data.status.value : this.status,
@@ -6515,7 +6515,7 @@ class SyncStage extends DataClass implements Insertable<SyncStage> {
 
   @override
   String toString() {
-    return (StringBuffer('SyncStage(')
+    return (StringBuffer('SyncStageRow(')
           ..write('sourceId: $sourceId, ')
           ..write('stage: $stage, ')
           ..write('status: $status, ')
@@ -6532,7 +6532,7 @@ class SyncStage extends DataClass implements Insertable<SyncStage> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is SyncStage &&
+      (other is SyncStageRow &&
           other.sourceId == this.sourceId &&
           other.stage == this.stage &&
           other.status == this.status &&
@@ -6541,7 +6541,7 @@ class SyncStage extends DataClass implements Insertable<SyncStage> {
           other.error == this.error);
 }
 
-class SyncStagesCompanion extends UpdateCompanion<SyncStage> {
+class SyncStagesCompanion extends UpdateCompanion<SyncStageRow> {
   final Value<int> sourceId;
   final Value<String> stage;
   final Value<SyncStatus> status;
@@ -6570,7 +6570,7 @@ class SyncStagesCompanion extends UpdateCompanion<SyncStage> {
        stage = Value(stage),
        status = Value(status),
        updatedAt = Value(updatedAt);
-  static Insertable<SyncStage> custom({
+  static Insertable<SyncStageRow> custom({
     Expression<int>? sourceId,
     Expression<String>? stage,
     Expression<String>? status,
@@ -8838,17 +8838,17 @@ class $$EpgChannelsTableTableManager
         RootTableManager<
           _$OpenTvDatabase,
           $EpgChannelsTable,
-          EpgChannel,
+          EpgChannelRow,
           $$EpgChannelsTableFilterComposer,
           $$EpgChannelsTableOrderingComposer,
           $$EpgChannelsTableAnnotationComposer,
           $$EpgChannelsTableCreateCompanionBuilder,
           $$EpgChannelsTableUpdateCompanionBuilder,
           (
-            EpgChannel,
-            BaseReferences<_$OpenTvDatabase, $EpgChannelsTable, EpgChannel>,
+            EpgChannelRow,
+            BaseReferences<_$OpenTvDatabase, $EpgChannelsTable, EpgChannelRow>,
           ),
-          EpgChannel,
+          EpgChannelRow,
           PrefetchHooks Function()
         > {
   $$EpgChannelsTableTableManager(_$OpenTvDatabase db, $EpgChannelsTable table)
@@ -8902,17 +8902,17 @@ typedef $$EpgChannelsTableProcessedTableManager =
     ProcessedTableManager<
       _$OpenTvDatabase,
       $EpgChannelsTable,
-      EpgChannel,
+      EpgChannelRow,
       $$EpgChannelsTableFilterComposer,
       $$EpgChannelsTableOrderingComposer,
       $$EpgChannelsTableAnnotationComposer,
       $$EpgChannelsTableCreateCompanionBuilder,
       $$EpgChannelsTableUpdateCompanionBuilder,
       (
-        EpgChannel,
-        BaseReferences<_$OpenTvDatabase, $EpgChannelsTable, EpgChannel>,
+        EpgChannelRow,
+        BaseReferences<_$OpenTvDatabase, $EpgChannelsTable, EpgChannelRow>,
       ),
-      EpgChannel,
+      EpgChannelRow,
       PrefetchHooks Function()
     >;
 typedef $$EpgProgrammesTableCreateCompanionBuilder =
@@ -9128,17 +9128,21 @@ class $$EpgProgrammesTableTableManager
         RootTableManager<
           _$OpenTvDatabase,
           $EpgProgrammesTable,
-          EpgProgramme,
+          EpgProgrammeRow,
           $$EpgProgrammesTableFilterComposer,
           $$EpgProgrammesTableOrderingComposer,
           $$EpgProgrammesTableAnnotationComposer,
           $$EpgProgrammesTableCreateCompanionBuilder,
           $$EpgProgrammesTableUpdateCompanionBuilder,
           (
-            EpgProgramme,
-            BaseReferences<_$OpenTvDatabase, $EpgProgrammesTable, EpgProgramme>,
+            EpgProgrammeRow,
+            BaseReferences<
+              _$OpenTvDatabase,
+              $EpgProgrammesTable,
+              EpgProgrammeRow
+            >,
           ),
-          EpgProgramme,
+          EpgProgrammeRow,
           PrefetchHooks Function()
         > {
   $$EpgProgrammesTableTableManager(
@@ -9218,17 +9222,17 @@ typedef $$EpgProgrammesTableProcessedTableManager =
     ProcessedTableManager<
       _$OpenTvDatabase,
       $EpgProgrammesTable,
-      EpgProgramme,
+      EpgProgrammeRow,
       $$EpgProgrammesTableFilterComposer,
       $$EpgProgrammesTableOrderingComposer,
       $$EpgProgrammesTableAnnotationComposer,
       $$EpgProgrammesTableCreateCompanionBuilder,
       $$EpgProgrammesTableUpdateCompanionBuilder,
       (
-        EpgProgramme,
-        BaseReferences<_$OpenTvDatabase, $EpgProgrammesTable, EpgProgramme>,
+        EpgProgrammeRow,
+        BaseReferences<_$OpenTvDatabase, $EpgProgrammesTable, EpgProgrammeRow>,
       ),
-      EpgProgramme,
+      EpgProgrammeRow,
       PrefetchHooks Function()
     >;
 typedef $$FavouritesTableCreateCompanionBuilder = FavouritesCompanion Function({
@@ -9822,17 +9826,17 @@ class $$SyncStagesTableTableManager
         RootTableManager<
           _$OpenTvDatabase,
           $SyncStagesTable,
-          SyncStage,
+          SyncStageRow,
           $$SyncStagesTableFilterComposer,
           $$SyncStagesTableOrderingComposer,
           $$SyncStagesTableAnnotationComposer,
           $$SyncStagesTableCreateCompanionBuilder,
           $$SyncStagesTableUpdateCompanionBuilder,
           (
-            SyncStage,
-            BaseReferences<_$OpenTvDatabase, $SyncStagesTable, SyncStage>,
+            SyncStageRow,
+            BaseReferences<_$OpenTvDatabase, $SyncStagesTable, SyncStageRow>,
           ),
-          SyncStage,
+          SyncStageRow,
           PrefetchHooks Function()
         > {
   $$SyncStagesTableTableManager(_$OpenTvDatabase db, $SyncStagesTable table)
@@ -9894,17 +9898,17 @@ typedef $$SyncStagesTableProcessedTableManager =
     ProcessedTableManager<
       _$OpenTvDatabase,
       $SyncStagesTable,
-      SyncStage,
+      SyncStageRow,
       $$SyncStagesTableFilterComposer,
       $$SyncStagesTableOrderingComposer,
       $$SyncStagesTableAnnotationComposer,
       $$SyncStagesTableCreateCompanionBuilder,
       $$SyncStagesTableUpdateCompanionBuilder,
       (
-        SyncStage,
-        BaseReferences<_$OpenTvDatabase, $SyncStagesTable, SyncStage>,
+        SyncStageRow,
+        BaseReferences<_$OpenTvDatabase, $SyncStagesTable, SyncStageRow>,
       ),
-      SyncStage,
+      SyncStageRow,
       PrefetchHooks Function()
     >;
 

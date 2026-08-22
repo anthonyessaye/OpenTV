@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:opentv_core/src/store/database.dart';
 import 'package:opentv_core/src/store/tables.dart';
@@ -182,7 +182,7 @@ void main() {
         for (var i = 0; i < 5000; i++) _channel(id, '$i', 'Channel $i'),
       ]);
 
-      final count = await db.channels.count().getSingle();
+      final count = (await db.select(db.channels).get()).length;
       expect(count, 5000);
     });
   });

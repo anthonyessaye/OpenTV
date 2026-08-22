@@ -240,7 +240,11 @@ class Episodes extends Table {
   ];
 }
 
-/// A channel declared by an XMLTV guide.
+/// A channel declared by an XMLTV guide, as persisted.
+///
+/// Named explicitly to leave `EpgChannel` to the XMLTV parse model, which is
+/// the name callers reach for.
+@DataClassName('EpgChannelRow')
 class EpgChannels extends Table {
   IntColumn get sourceId =>
       integer().references(Sources, #id, onDelete: KeyAction.cascade)();
@@ -260,7 +264,10 @@ class EpgChannels extends Table {
   ];
 }
 
-/// A scheduled broadcast. The largest table by a wide margin.
+/// A scheduled broadcast, as persisted. The largest table by a wide margin.
+///
+/// Named explicitly for the same reason as EpgChannelRow.
+@DataClassName('EpgProgrammeRow')
 @TableIndex(name: 'epg_lookup', columns: {#sourceId, #channelId, #startUtc})
 class EpgProgrammes extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -339,6 +346,11 @@ class PlaybackStates extends Table {
 }
 
 /// Per-stage progress of a catalogue sync.
+///
+/// The row class is named explicitly: drift would call it `SyncStage`, which
+/// collides with the enum of the same name in the sync engine. The enum is
+/// the better public name, so the persistence row yields.
+@DataClassName('SyncStageRow')
 ///
 /// This is what makes a sync resumable. The Android app fetched the whole
 /// catalogue through six nested callbacks with no record of progress, so any
