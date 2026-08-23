@@ -127,6 +127,29 @@ and needs a separate extension target. Android's equivalent — Leanback home
 channels — is also not implemented, so this is a gap on both, but the tvOS one
 is more conspicuous.
 
+### Driving a remote at all
+
+*verified as a tooling gap, not a code gap.*
+
+Android TV can be driven key by key over adb, which is how onboarding, the
+drawn keyboard and playback were all verified there. Apple TV has no
+equivalent on this machine: Xcode 27 ships no `Simulator.app`, `simctl` has
+no remote-input command, and the iOS simulator control tooling speaks touch
+events — a tap sent to the tvOS device exits the app rather than selecting
+anything.
+
+The practical consequence is narrow but real. The catalogue can be seeded
+directly (`apps/opentv/tool/seed_catalogue.dart`) and the home screen renders
+from it correctly, so everything up to that point is verified. What has never
+been run in one continuous sequence on an Apple TV is **home to player**: the
+composition is shared Dart that Android exercises, and libVLC decoding in a
+platform view was verified on its own, but nothing has pressed select on a
+channel tile on tvOS.
+
+Closing this needs either a machine with `Simulator.app` installed, or real
+hardware, or a deep-link entry point into playback — the last of which tvOS
+will need anyway for Top Shelf.
+
 ### Hardware decode
 
 *unverified, and unverifiable here.* Everything on Apple TV so far has been the
