@@ -294,41 +294,56 @@ class _KindStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The notice sits at the foot of the screen rather than in the flow of
+    // the question. Two reasons: it reads as a standing statement about the
+    // app rather than a step to get past, and it stops the choice above it
+    // being pushed off a 1080-line screen, which is what happened when it
+    // was simply appended to the column.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const _Masthead(caption: 'Nothing has been added yet.'),
-        const SizedBox(height: OpenTvSpace.xl),
-        const Text('Where do your channels come from?',
-            style: OpenTvType.hero),
-        const SizedBox(height: OpenTvSpace.lg),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _KindCard(
-                title: 'A provider account',
-                detail: 'An Xtream Codes portal address with a username '
-                    'and password. Brings channels, films, series and the '
-                    'guide.',
-                autofocus: true,
-                onSelect: () => onChoose(OnboardingSourceKind.xtream),
+              const _Masthead(caption: 'Nothing has been added yet.'),
+              const SizedBox(height: OpenTvSpace.lg),
+              const Text(
+                'Where do your channels come from?',
+                style: OpenTvType.hero,
               ),
-              const SizedBox(width: OpenTvSpace.md),
-              _KindCard(
-                title: 'A playlist address',
-                detail: 'An M3U or M3U8 link. Brings whatever the playlist '
-                    'lists; a guide can be added afterwards.',
-                onSelect: () => onChoose(OnboardingSourceKind.m3u),
+              const SizedBox(height: OpenTvSpace.md),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _KindCard(
+                      title: 'A provider account',
+                      detail: 'An Xtream Codes portal address with a username '
+                          'and password. Brings channels, films, series and '
+                          'the guide.',
+                      autofocus: true,
+                      onSelect: () => onChoose(OnboardingSourceKind.xtream),
+                    ),
+                    const SizedBox(width: OpenTvSpace.md),
+                    _KindCard(
+                      title: 'A playlist address',
+                      detail: 'An M3U or M3U8 link. Brings whatever the '
+                          'playlist lists; a guide can be added afterwards.',
+                      onSelect: () => onChoose(OnboardingSourceKind.m3u),
+                    ),
+                  ],
+                ),
               ),
+              if (onCancel != null) ...[
+                const SizedBox(height: OpenTvSpace.md),
+                PlayerButton(label: 'BACK', onSelect: onCancel),
+              ],
             ],
           ),
         ),
-        if (onCancel != null) ...[
-          const SizedBox(height: OpenTvSpace.lg),
-          PlayerButton(label: 'BACK', onSelect: onCancel),
-        ],
+        const ContentDisclaimer(),
       ],
     );
   }
@@ -557,6 +572,47 @@ class _FailedStep extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// States plainly that the app carries no content of its own.
+///
+/// This is a player. It ships with no channels, no films and no playlists, it
+/// hosts nothing, and it transmits nothing — everything a viewer sees comes
+/// from an address they typed in themselves, from a provider they chose and
+/// pay. Saying so on the first screen, before any address is entered, is the
+/// point: it is the moment the viewer is deciding what to connect, and it is
+/// the only screen every viewer is guaranteed to see.
+///
+/// Deliberately not buried in an "about" page nobody opens, and deliberately
+/// not a dialog to dismiss — a notice that must be clicked away teaches
+/// people to click it away.
+class ContentDisclaimer extends StatelessWidget {
+  const ContentDisclaimer({super.key, this.width = 1180});
+
+  final double width;
+
+  static const text =
+      'OpenTV supplies no channels, films or playlists. It hosts no content '
+      'and transmits none. Everything you see comes from a provider you '
+      'choose and an address you enter. You are responsible for holding the '
+      'rights to whatever you connect it to.';
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(width: 3, height: 56, color: OpenTvColors.rule),
+          const SizedBox(width: OpenTvSpace.sm),
+          const Expanded(
+            child: Text(text, style: OpenTvType.bodyMuted),
+          ),
+        ],
+      ),
     );
   }
 }
