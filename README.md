@@ -60,6 +60,8 @@ what it did and where each part went.
 - [What Apple TV still lacks](docs/tvos-status.md)
 - [Retiring the Android app](docs/android-app-retirement.md)
 - [TMDB, not TheTVDB](docs/metadata-provider.md)
+- [Where we stand against IPTV Smarters Pro](docs/feature-gap.md)
+- [Built-in VPN — WireGuard, not OpenVPN](docs/vpn.md)
 
 ## Licensing
 
