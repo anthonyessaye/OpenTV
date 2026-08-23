@@ -12,3 +12,4 @@ export 'src/focus/focus_column.dart';
 export 'src/focus/focus_row.dart';
 export 'src/focus/focusable_tile.dart';
 export 'src/tokens/tokens.dart';
+export 'src/tokens/tv_canvas.dart';

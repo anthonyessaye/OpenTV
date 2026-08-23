@@ -153,9 +153,23 @@ Future<CoreProbeResult> runCoreProbe() async {
 
 /// Points `package:sqlite3` at a library that exists on this platform.
 ///
-/// Apple platforms link libsqlite3, so the process image already has the
-/// symbols; sqlite3_flutter_libs has no tvOS support and is not needed.
+/// The platforms differ here, and not in the direction expected. Apple links
+/// libsqlite3 into every process, so the symbols are already present and
+/// nothing needs bundling. Android does not expose its system SQLite to
+/// applications at all — dlopen of it is blocked — so the library has to ship
+/// inside the APK, which is what sqlite3_flutter_libs does.
 String _openSqlite() {
+  if (Platform.isAndroid) {
+    // sqlite3_flutter_libs puts libsqlite3.so beside the app's other native
+    // libraries; opening it by name is what its README prescribes.
+    open.overrideFor(
+      OperatingSystem.android,
+      () => DynamicLibrary.open('libsqlite3.so'),
+    );
+    sqlite.sqlite3.version;
+    return 'bundled libsqlite3.so';
+  }
+
   try {
     open.overrideFor(OperatingSystem.iOS, DynamicLibrary.process);
     open.overrideFor(OperatingSystem.macOS, DynamicLibrary.process);

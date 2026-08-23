@@ -28,6 +28,10 @@ class SpikeApp extends StatelessWidget {
       // Without Material there is no default route transition, so one has to
       // be supplied. A plain fade suits a ten-foot interface: sliding pages
       // read as phone gestures on a screen nobody touches.
+      // Every screen is authored on a 1920x1080 canvas and scaled to fit,
+      // because Android TV and tvOS disagree about how many logical pixels
+      // describe the same panel.
+      builder: (context, child) => TvCanvas(child: child ?? const SizedBox()),
       pageRouteBuilder: <T>(RouteSettings settings, WidgetBuilder builder) {
         return PageRouteBuilder<T>(
           settings: settings,
