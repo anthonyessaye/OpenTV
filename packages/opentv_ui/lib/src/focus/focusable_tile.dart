@@ -61,7 +61,14 @@ class _FocusableTileState extends State<FocusableTile> {
   FocusNode? _owned;
   bool _focused = false;
 
-  FocusNode get _node => widget.focusNode ?? (_owned ??= FocusNode());
+  /// The node carries the semantic label as its debug label.
+  ///
+  /// Focus is the cursor here, and when it goes to the wrong place the only
+  /// question worth asking is which tile holds it. Without a label the
+  /// answer is an anonymous FocusNode, in a tree of hundreds.
+  FocusNode get _node =>
+      widget.focusNode ??
+      (_owned ??= FocusNode(debugLabel: widget.semanticLabel));
 
   @override
   void dispose() {

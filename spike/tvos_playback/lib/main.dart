@@ -78,8 +78,42 @@ class _BootState extends State<Boot> {
     }
   }
 
+  /// Stands in for the sync engine's stage reporting.
+  final _progress = ValueNotifier<String>('Contacting the provider…');
+
+  @override
+  void dispose() {
+    _progress.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // --dart-define=SHOW_ONBOARDING=true renders the first-run flow. It needs
+    // no catalogue, since it is what runs before there is one.
+    if (const bool.fromEnvironment('SHOW_ONBOARDING')) {
+      return OnboardingScreen(
+        progress: _progress,
+        onSubmit: (draft) async {
+          // The real submit hands the password to the keystore and the rest
+          // to the sync engine. Here it only has to prove the flow reaches
+          // this point with the right values, and that a refusal is stated.
+          for (final stage in const [
+            'Reading channels…',
+            'Reading films…',
+            'Reading series…',
+          ]) {
+            _progress.value = stage;
+            await Future<void>.delayed(const Duration(milliseconds: 700));
+          }
+          return draft.username == 'demo'
+              ? null
+              : 'The provider rejected those credentials. Check the username '
+                    'and password, then try again.';
+        },
+      );
+    }
+
     final probe = _probe;
 
     if (probe == null) {
