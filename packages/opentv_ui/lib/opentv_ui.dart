@@ -12,6 +12,7 @@ export 'src/components/onboarding.dart';
 export 'src/components/player_chrome.dart';
 export 'src/components/player_surface.dart';
 export 'src/components/text_entry.dart';
+export 'src/components/track_sheet.dart';
 export 'src/components/tv_keyboard.dart';
 export 'src/focus/back_keys.dart';
 export 'src/focus/focus_column.dart';

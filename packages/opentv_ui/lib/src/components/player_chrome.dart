@@ -106,6 +106,9 @@ class PlayerChrome extends StatelessWidget {
     this.onSubtitles,
     this.onToggleFavourite,
     this.isFavourite = false,
+    this.onAspect,
+    this.dynamicRange,
+    this.videoCodec,
   });
 
   final PlaybackStatus status;
@@ -127,6 +130,18 @@ class PlayerChrome extends StatelessWidget {
   final VoidCallback? onToggleFavourite;
 
   final bool isFavourite;
+
+  /// Opens the picture-fitting chooser.
+  final VoidCallback? onAspect;
+
+  /// `HDR10`, `HLG`, or null for ordinary SDR.
+  ///
+  /// Shown because a viewer cannot otherwise tell whether a dim picture is
+  /// the grade, the panel or the app — and because when it is the app, this
+  /// is the readout that says so.
+  final String? dynamicRange;
+
+  final String? videoCodec;
 
   @override
   Widget build(BuildContext context) {
@@ -163,7 +178,12 @@ class PlayerChrome extends StatelessWidget {
                   if (status.phase == PlaybackPhase.failed)
                     _FailureBanner(message: status.error)
                   else
-                    _NowPlaying(status: status, now: now),
+                    _NowPlaying(
+                      status: status,
+                      now: now,
+                      dynamicRange: dynamicRange,
+                      videoCodec: videoCodec,
+                    ),
                   const SizedBox(height: OpenTvSpace.md),
                   _ProgressLine(status: status, now: now),
                   const SizedBox(height: OpenTvSpace.lg),
@@ -176,6 +196,7 @@ class PlayerChrome extends StatelessWidget {
                     onSubtitles: onSubtitles,
                     onToggleFavourite: onToggleFavourite,
                     isFavourite: isFavourite,
+                    onAspect: onAspect,
                   ),
                 ],
               ),
@@ -188,10 +209,21 @@ class PlayerChrome extends StatelessWidget {
 }
 
 class _NowPlaying extends StatelessWidget {
-  const _NowPlaying({required this.status, required this.now});
+  const _NowPlaying({
+    required this.status,
+    required this.now,
+    this.dynamicRange,
+    this.videoCodec,
+  });
 
   final PlaybackStatus status;
   final DateTime now;
+
+  /// Shown beside the resolution so a viewer can tell HDR from SDR, and so a
+  /// picture that looks wrong can be diagnosed from the screen.
+  final String? dynamicRange;
+
+  final String? videoCodec;
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +237,14 @@ class _NowPlaying extends StatelessWidget {
             if (status.qualityLabel != null) ...[
               const SizedBox(width: OpenTvSpace.sm),
               _Chip(label: status.qualityLabel!),
+            ],
+            if (dynamicRange != null) ...[
+              const SizedBox(width: OpenTvSpace.xs),
+              _Chip(label: dynamicRange!),
+            ],
+            if (videoCodec != null) ...[
+              const SizedBox(width: OpenTvSpace.xs),
+              _Chip(label: videoCodec!.toUpperCase()),
             ],
             if (status.audioTrackCount > 1) ...[
               const SizedBox(width: OpenTvSpace.sm),
@@ -329,6 +369,7 @@ class _Controls extends StatelessWidget {
     this.onSubtitles,
     this.onToggleFavourite,
     this.isFavourite = false,
+    this.onAspect,
   });
 
   final PlaybackStatus status;
@@ -345,6 +386,7 @@ class _Controls extends StatelessWidget {
   final VoidCallback? onToggleFavourite;
 
   final bool isFavourite;
+  final VoidCallback? onAspect;
 
   @override
   Widget build(BuildContext context) {
@@ -372,6 +414,10 @@ class _Controls extends StatelessWidget {
         if (status.subtitleTrackCount > 0) ...[
           const SizedBox(width: OpenTvSpace.sm),
           PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
+        ],
+        if (onAspect != null) ...[
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(label: 'PICTURE', onSelect: onAspect),
         ],
         if (onToggleFavourite != null) ...[
           const SizedBox(width: OpenTvSpace.lg),

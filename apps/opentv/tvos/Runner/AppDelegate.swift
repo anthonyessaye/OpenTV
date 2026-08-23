@@ -139,6 +139,25 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
         case "state":
             result(snapshot())
 
+        // The same three methods Android answers, so the Dart side never
+        // learns which engine is underneath.
+        case "tracks":
+            result(tracks())
+
+        case "selectTrack":
+            guard let args = call.arguments as? [String: Any],
+                  let type = args["type"] as? String else {
+                result(FlutterError(code: "bad-args", message: "type required", details: nil))
+                return
+            }
+            selectTrack(type: type, id: args["id"] as? String)
+            result(nil)
+
+        case "setAspect":
+            let mode = (call.arguments as? [String: Any])?["mode"] as? String ?? "fit"
+            applyAspect(mode)
+            result(nil)
+
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -170,6 +189,95 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
         player.play()
     }
 
+    /// How the picture is currently fitted to the panel.
+    private var aspectMode = "fit"
+
+    /// Every selectable track, in the shape the Dart chooser expects.
+    ///
+    /// libVLC describes tracks as parallel arrays of indexes and names, which
+    /// is nothing like Media3's groups — mapping both into one shape here is
+    /// what lets a single chooser serve both televisions.
+    ///
+    /// VLC's own "Disable" entry (index -1) is dropped: the interface already
+    /// offers Off as its own row, and two ways to say the same thing in one
+    /// list is a way to confuse a viewer.
+    private func tracks() -> [[String: Any?]] {
+        var out: [[String: Any?]] = []
+
+        func collect(_ indexes: [Any]?, _ names: [Any]?, kind: String) {
+            guard let indexes = indexes as? [NSNumber],
+                  let names = names as? [String] else { return }
+            let current: Int32 = kind == "audio"
+                ? player.currentAudioTrackIndex
+                : player.currentVideoSubTitleIndex
+
+            for (position, index) in indexes.enumerated() where index.int32Value >= 0 {
+                out.append([
+                    "type": kind,
+                    "id": "\(index.int32Value)",
+                    "label": position < names.count ? names[position] : "Track",
+                    "language": nil,
+                    "selected": index.int32Value == current,
+                    "codec": nil,
+                    "channels": nil,
+                    "width": nil,
+                    "height": nil,
+                    "hdr": nil,
+                ])
+            }
+        }
+
+        collect(player.audioTrackIndexes, player.audioTrackNames, kind: "audio")
+        collect(player.videoSubTitlesIndexes, player.videoSubTitlesNames, kind: "text")
+        return out
+    }
+
+    private func selectTrack(type: String, id: String?) {
+        // A nil id means Off for subtitles, and automatic for audio. VLC
+        // expresses both as index -1.
+        let index = id.flatMap { Int32($0) } ?? -1
+        switch type {
+        case "audio":
+            player.currentAudioTrackIndex = index
+        case "text":
+            player.currentVideoSubTitleIndex = index
+        default:
+            break
+        }
+    }
+
+    /// The four modes the Dart side offers, in VLC's vocabulary.
+    ///
+    /// VLC separates two ideas Media3 combines: `videoAspectRatio` reshapes
+    /// the picture, and `scaleFactor` zooms it. Fit is both cleared, which is
+    /// VLC's default and is correct; fill crops by scaling until the shorter
+    /// edge is covered; stretch forces the panel's own ratio; original pins
+    /// the scale to 1.
+    private func applyAspect(_ mode: String) {
+        aspectMode = mode
+
+        switch mode {
+        case "fill":
+            player.videoAspectRatio = nil
+            player.videoCropGeometry = UnsafeMutablePointer<Int8>(mutating: ("16:9" as NSString).utf8String)
+        case "stretch":
+            player.videoCropGeometry = nil
+            let bounds = container.bounds
+            if bounds.height > 0 {
+                let ratio = "\(Int(bounds.width)):\(Int(bounds.height))"
+                player.videoAspectRatio = UnsafeMutablePointer<Int8>(mutating: (ratio as NSString).utf8String)
+            }
+        case "original":
+            player.videoCropGeometry = nil
+            player.videoAspectRatio = nil
+            player.scaleFactor = 1
+        default:
+            player.videoCropGeometry = nil
+            player.videoAspectRatio = nil
+            player.scaleFactor = 0 // 0 means "fit the view", which is VLC's default
+        }
+    }
+
     /// Everything a test needs to decide whether decoding actually happened.
     private func snapshot() -> [String: Any] {
         let size = player.videoSize
@@ -190,6 +298,12 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             "audioTracks": player.numberOfAudioTracks,
             "videoTracks": player.numberOfVideoTracks,
             "subtitleTracks": player.numberOfSubtitlesTracks,
+            "aspectMode": aspectMode,
+            // dynamicRange and videoCodec are deliberately absent rather than
+            // present and empty. libVLC does not report a transfer function,
+            // so HDR cannot be named here the way Media3 names it, and the
+            // Dart side reads a missing key as "unknown" — which is honest.
+            // A wrong badge is worse than no badge.
         ]
     }
 

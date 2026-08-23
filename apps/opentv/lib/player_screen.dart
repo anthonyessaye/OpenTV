@@ -56,6 +56,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Timer? _poll;
   PlaybackStatus _status = const PlaybackStatus(phase: PlaybackPhase.opening);
 
+  /// Which chooser is open, if any. Only one at a time: they occupy the same
+  /// place and a remote has no way to address two.
+  _Sheet? _sheet;
+  List<MediaTrack> _tracks = const [];
+  AspectMode _aspect = AspectMode.fit;
+
+  /// What the engine says it is decoding, shown so a viewer can tell HDR from
+  /// SDR — and so a picture that looks wrong can be diagnosed from the screen
+  /// rather than from a log.
+  String? _dynamicRange;
+  String? _videoCodec;
+
   @override
   void dispose() {
     _poll?.cancel();
@@ -67,8 +79,83 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _poll = Timer.periodic(const Duration(milliseconds: 500), (_) async {
       final raw = await _channel?.invokeMapMethod<String, Object?>('state');
       if (raw == null || !mounted) return;
-      setState(() => _status = _toStatus(raw));
+      setState(() {
+        _status = _toStatus(raw);
+        _dynamicRange = raw['dynamicRange'] as String?;
+        _videoCodec = raw['videoCodec'] as String?;
+      });
     });
+  }
+
+  /// Opens a track chooser, asking the engine what it has first.
+  ///
+  /// Fetched on open rather than kept in sync: tracks change when the stream
+  /// changes, which is rare, and polling for them every half second would ask
+  /// the engine a question nobody is listening to.
+  Future<void> _openSheet(_Sheet sheet) async {
+    final raw = await _channel?.invokeListMethod<Object?>('tracks');
+    if (!mounted) return;
+    setState(() {
+      _tracks = [
+        for (final entry in raw ?? const [])
+          if (entry is Map) MediaTrack.fromMap(entry.cast<Object?, Object?>()),
+      ];
+      _sheet = sheet;
+    });
+  }
+
+  Widget _chooser() {
+    switch (_sheet!) {
+      case _Sheet.aspect:
+        return TrackSheet(
+          title: 'Picture',
+          options: [
+            for (final mode in AspectMode.values)
+              SheetOption(
+                id: mode.name,
+                label: mode.label,
+                detail: mode.detail,
+                selected: mode == _aspect,
+              ),
+          ],
+          onSelect: (id) {
+            final mode = AspectMode.values.firstWhere((m) => m.name == id);
+            _channel?.invokeMethod<void>('setAspect', {'mode': mode.name});
+            setState(() {
+              _aspect = mode;
+              _sheet = null;
+            });
+          },
+        );
+
+      case _Sheet.audio:
+      case _Sheet.subtitles:
+        final wanted = _sheet == _Sheet.audio ? 'audio' : 'text';
+        final tracks = [
+          for (final track in _tracks)
+            if (track.kindMatches(wanted)) track,
+        ];
+        return TrackSheet(
+          title: _sheet == _Sheet.audio ? 'Audio' : 'Subtitles',
+          options: [
+            // Subtitles can be turned off; an audio track cannot, so the
+            // equivalent there is handing the choice back to the engine.
+            SheetOption(
+              id: null,
+              label: _sheet == _Sheet.audio ? 'Automatic' : 'Off',
+              selected: !tracks.any((t) => t.selected),
+            ),
+            for (final track in tracks) SheetOption.track(track),
+          ],
+          onSelect: (id) {
+            _channel?.invokeMethod<void>('selectTrack', {
+              'type': wanted,
+              'id': id,
+            });
+            setState(() => _sheet = null);
+          },
+        );
+    }
   }
 
   PlaybackStatus _toStatus(Map<String, Object?> raw) {
@@ -136,11 +223,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
             isFavourite: widget.isFavourite,
             onPreviousChannel: () {},
             onNextChannel: () {},
-            onAudioTracks: () {},
-            onSubtitles: () {},
+            onAudioTracks: () => _openSheet(_Sheet.audio),
+            onSubtitles: () => _openSheet(_Sheet.subtitles),
+            onAspect: () => setState(() => _sheet = _Sheet.aspect),
+            dynamicRange: _dynamicRange,
+            videoCodec: _videoCodec,
           ),
+          if (_sheet != null) _chooser(),
         ],
       ),
     );
   }
 }
+
+/// Which chooser is open over the video.
+enum _Sheet { audio, subtitles, aspect }
