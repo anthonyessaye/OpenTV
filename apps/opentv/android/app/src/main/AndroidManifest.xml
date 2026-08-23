@@ -18,7 +18,8 @@
         android:usesCleartextTraffic="true"
         android:label="OpenTV"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/tv_banner">
         <activity
             android:name=".MainActivity"
             android:exported="true"

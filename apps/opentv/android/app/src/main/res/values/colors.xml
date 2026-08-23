@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- OpenTvColors.ground. Stated here too because the launch theme is
+         drawn by the platform before any Dart runs. -->
+    <color name="opentv_ground">#FF07090C</color>
+</resources>

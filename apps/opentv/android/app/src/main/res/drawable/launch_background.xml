@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+<!-- The first frame a viewer sees.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+     Drawn as the app's own ground with the mark centred, because the default
+     is white: on a television, in a dark room, a white flash before a
+     near-black interface is the brightest thing the app ever does. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/opentv_ground" />
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@drawable/splash" />
+    </item>
 </layer-list>
