@@ -81,8 +81,13 @@ class _RootState extends State<_Root> {
   OpenTvDatabase? _db;
   SourceService? _service;
   StreamResolver? _resolver;
+  List<Source> _sources = const [];
   Source? _source;
   String? _failure;
+
+  /// True while a second provider is being added, so onboarding is shown
+  /// over an app that already has one.
+  bool _addingSource = false;
 
   @override
   void initState() {
@@ -124,6 +129,7 @@ class _RootState extends State<_Root> {
         _db = db;
         _service = SourceService(db: db, host: _host);
         _resolver = StreamResolver(db: db, host: _host);
+        _sources = sources;
         _source = sources.isEmpty ? null : sources.first;
       });
     } on Object catch (error) {
@@ -131,11 +137,31 @@ class _RootState extends State<_Root> {
     }
   }
 
-  /// Called when onboarding has finished a first sync.
+  /// Called when onboarding has finished a sync.
+  ///
+  /// The newest source becomes the active one, because someone who has just
+  /// finished adding a provider wants to see it rather than the one they
+  /// already had.
   Future<void> _adopt() async {
     final sources = await _db!.allSources();
     if (!mounted || sources.isEmpty) return;
-    setState(() => _source = sources.first);
+    setState(() {
+      _sources = sources;
+      _source = sources.last;
+      _addingSource = false;
+    });
+  }
+
+  Future<void> _removeSource(Source source) async {
+    await _db!.removeSource(source.id);
+    final sources = await _db!.allSources();
+    if (!mounted) return;
+    setState(() {
+      _sources = sources;
+      if (_source?.id == source.id) {
+        _source = sources.isEmpty ? null : sources.first;
+      }
+    });
   }
 
   @override
@@ -169,8 +195,13 @@ class _RootState extends State<_Root> {
     }
 
     final source = _source;
-    if (source == null) {
+    if (source == null || _addingSource) {
       return OnboardingScreen(
+        // Adding a second provider can be abandoned; a first cannot, because
+        // there would be nothing behind it to go back to.
+        onCancel: _addingSource
+            ? () => setState(() => _addingSource = false)
+            : null,
         progress: service.progress,
         onSubmit: (draft) async {
           final failure = await service.add(draft);
@@ -182,6 +213,14 @@ class _RootState extends State<_Root> {
       );
     }
 
-    return BrowseScreen(db: db, source: source, resolver: _resolver!);
+    return BrowseScreen(
+      db: db,
+      source: source,
+      resolver: _resolver!,
+      sources: _sources,
+      onSwitchSource: (next) => setState(() => _source = next),
+      onAddSource: () => setState(() => _addingSource = true),
+      onRemoveSource: _removeSource,
+    );
   }
 }

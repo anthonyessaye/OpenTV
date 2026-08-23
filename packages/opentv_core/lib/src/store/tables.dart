@@ -376,3 +376,21 @@ class SyncStages extends Table {
     'FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE',
   ];
 }
+
+/// Small persistent settings, keyed by name.
+///
+/// A table rather than a platform preferences store for one reason: these
+/// have to survive alongside the catalogue and be readable in the same
+/// transaction as it. On tvOS the catalogue lives in a purgeable cache, so
+/// anything that must outlive a purge belongs in the keystore instead — which
+/// is where the parental PIN lives, and why it is not here.
+///
+/// Values are strings. Anything structured is JSON, because the alternative
+/// is a column per setting and a migration every time one is added.
+class Preferences extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {key};
+}

@@ -61,6 +61,7 @@ void main() {
   _guide();
   _episodeSync();
   _resolvingIds();
+  _preferences();
 
   group('sources', () {
     test('adds and reads back in sort order', () async {
@@ -1123,6 +1124,63 @@ void _resolvingIds() {
       await db.upsertChannels([_channel(other, 'c1', 'Elsewhere')]);
       final rows = await db.channelsByRemoteIds(other, ['c1']);
       expect(rows.single.name, 'Elsewhere');
+    });
+  });
+}
+
+/// Settings, and the parental lock built on them.
+void _preferences() {
+  group('preferences', () {
+    test('a value round-trips and can be replaced', () async {
+      await db.setPreference('greeting', 'hello');
+      expect(await db.preference('greeting'), 'hello');
+      await db.setPreference('greeting', 'goodbye');
+      expect(await db.preference('greeting'), 'goodbye');
+    });
+
+    test('an unset key reads as null rather than throwing', () async {
+      expect(await db.preference('never-written'), isNull);
+    });
+  });
+
+  group('parental lock', () {
+    test('locked categories round-trip', () async {
+      final sourceId = await _addSource();
+      await db.setLockedCategories(sourceId, {'adult', 'xxx'});
+      expect(
+        await db.lockedCategories(sourceId),
+        unorderedEquals(['adult', 'xxx']),
+      );
+    });
+
+    test('locks are per source', () async {
+      // Two providers, and one of them being locked says nothing about the
+      // other.
+      final first = await _addSource();
+      final second = await _addSource(name: 'Other');
+      await db.setLockedCategories(first, {'adult'});
+      expect(await db.lockedCategories(second), isEmpty);
+    });
+
+    test('clearing every lock leaves nothing behind', () async {
+      final sourceId = await _addSource();
+      await db.setLockedCategories(sourceId, {'adult'});
+      await db.setLockedCategories(sourceId, {});
+      expect(await db.lockedCategories(sourceId), isEmpty);
+    });
+
+    test('an unlocked source reads as empty, not as an error', () async {
+      final sourceId = await _addSource();
+      expect(await db.lockedCategories(sourceId), isEmpty);
+    });
+
+    test('a malformed value is treated as no lock, not a crash', () async {
+      // A hand-edited or half-written value must not stop the app opening.
+      // It fails open, which is the honest trade: a lock that crashes the
+      // app protects nothing and a parent would rather re-apply it.
+      final sourceId = await _addSource();
+      await db.setPreference('locked-categories:$sourceId', 'not json at all');
+      expect(await db.lockedCategories(sourceId), isEmpty);
     });
   });
 }

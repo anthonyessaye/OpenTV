@@ -204,6 +204,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // Black under the video surface, and not decoration.
+          //
+          // A platform view paints nothing until its first frame arrives, and
+          // in hybrid composition that hole is genuinely transparent — the
+          // screen behind shows through it. Between pressing a channel and
+          // the stream opening, a viewer would watch the catalogue sitting
+          // behind the transport controls.
+          const ColoredBox(color: OpenTvColors.sunken),
           PlayerSurface(
             url: widget.streamUrl,
             streamOptions: widget.streamOptions,

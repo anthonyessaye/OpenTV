@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 import 'search_text.dart';
@@ -24,16 +26,23 @@ part 'database.g.dart';
     Favourites,
     PlaybackStates,
     SyncStages,
+    Preferences,
   ],
 )
 class OpenTvDatabase extends _$OpenTvDatabase {
   OpenTvDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      // 2 adds Preferences. Created rather than recreated: an upgrade must
+      // not touch a catalogue that took minutes to sync, and on tvOS may be
+      // the only copy left after a cache purge.
+      if (from < 2) await m.createTable(preferences);
+    },
     beforeOpen: (details) async {
       // Off by default in SQLite. Without it the cascade deletes that clean
       // up a removed source silently do nothing.
@@ -515,6 +524,52 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         if (byId[id] case final T row) row,
     ];
   }
+
+  // --- preferences ------------------------------------------------------
+
+  Future<String?> preference(String key) async {
+    final row = await (select(preferences)
+          ..where((p) => p.key.equals(key))
+          ..limit(1))
+        .getSingleOrNull();
+    return row?.value;
+  }
+
+  Future<void> setPreference(String key, String value) =>
+      into(preferences).insertOnConflictUpdate(
+        PreferencesCompanion.insert(key: key, value: value),
+      );
+
+  Future<int> clearPreference(String key) =>
+      (delete(preferences)..where((p) => p.key.equals(key))).go();
+
+  /// Categories a parental lock is hiding, for one source.
+  ///
+  /// Stored as ids rather than names because a provider renaming a category
+  /// must not quietly unlock it — which is exactly the failure a parent would
+  /// never think to check for.
+  Future<Set<String>> lockedCategories(int sourceId) async {
+    final raw = await preference(_lockedKey(sourceId));
+    if (raw == null || raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const {};
+      return {for (final entry in decoded) '$entry'};
+    } on FormatException {
+      // Fails open, and that is the honest trade rather than an oversight: a
+      // half-written or hand-edited value would otherwise stop the app
+      // opening at all. A lock that crashes the app protects nothing, and a
+      // parent would rather re-apply one than lose the television.
+      return const {};
+    }
+  }
+
+  Future<void> setLockedCategories(int sourceId, Set<String> ids) =>
+      ids.isEmpty
+      ? clearPreference(_lockedKey(sourceId))
+      : setPreference(_lockedKey(sourceId), jsonEncode(ids.toList()));
+
+  static String _lockedKey(int sourceId) => 'locked-categories:$sourceId';
 
   /// Records that a series' episodes have been fetched.
   ///

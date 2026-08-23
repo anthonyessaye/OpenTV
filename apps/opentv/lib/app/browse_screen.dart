@@ -6,6 +6,7 @@ import '../player_screen.dart';
 import 'guide_screen.dart';
 import 'search_screen.dart';
 import 'series_screen.dart';
+import 'settings_screen.dart';
 import 'stream_resolver.dart';
 
 /// Browsing a real provider's catalogue.
@@ -27,11 +28,22 @@ class BrowseScreen extends StatefulWidget {
     required this.db,
     required this.source,
     required this.resolver,
+    this.sources = const [],
+    this.onSwitchSource,
+    this.onAddSource,
+    this.onRemoveSource,
   });
 
   final OpenTvDatabase db;
   final Source source;
   final StreamResolver resolver;
+
+  /// Every provider that has been added, for the switcher.
+  final List<Source> sources;
+
+  final ValueChanged<Source>? onSwitchSource;
+  final VoidCallback? onAddSource;
+  final ValueChanged<Source>? onRemoveSource;
 
   @override
   State<BrowseScreen> createState() => _BrowseScreenState();
@@ -78,6 +90,10 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
     final categories = await widget.db.categoriesFor(widget.source.id, _kind);
     final counts = await widget.db.countsByCategory(widget.source.id, _kind);
+    // A locked category is absent rather than shown greyed out. A list that
+    // advertises what it is hiding tells a child exactly where to look, and
+    // tells anyone else the television has something to hide.
+    final locked = await widget.db.lockedCategories(widget.source.id);
 
     if (!mounted || generation != _generation) return;
 
@@ -105,7 +121,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
           (id: _favouritesId, name: 'Favourites', count: favourites.length),
         (id: null, name: 'All', count: total),
         for (final category in categories)
-          if ((counts[category.remoteId] ?? 0) > 0)
+          if ((counts[category.remoteId] ?? 0) > 0 &&
+              !locked.contains(category.remoteId))
             (
               id: category.remoteId,
               name: category.name,
@@ -164,6 +181,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
       return;
     }
 
+    // Without this, All would list everything a locked category contains and
+    // the lock would be decorative.
+    final hidden = _category == null
+        ? await widget.db.lockedCategories(sourceId)
+        : const <String>{};
+
     final items = switch (_section) {
       TvSection.films => [
         for (final film in await widget.db.moviesIn(
@@ -171,7 +194,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
           categoryRemoteId: _category,
           limit: window,
         ))
-          _Item.film(film),
+          if (!hidden.contains(film.categoryRemoteId)) _Item.film(film),
       ],
       TvSection.series => [
         for (final entry in await widget.db.seriesIn(
@@ -179,7 +202,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
           categoryRemoteId: _category,
           limit: window,
         ))
-          _Item.series(entry),
+          if (!hidden.contains(entry.categoryRemoteId)) _Item.series(entry),
       ],
       _ => [
         for (final channel in await widget.db.channelsIn(
@@ -187,7 +210,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
           categoryRemoteId: _category,
           limit: window,
         ))
-          _Item.channel(channel),
+          if (!hidden.contains(channel.categoryRemoteId))
+            _Item.channel(channel),
       ],
     };
 
@@ -402,6 +426,16 @@ class _BrowseScreenState extends State<BrowseScreen> {
           ),
           onOpenCatchUp: _playCatchUp,
         );
+      case TvSection.settings:
+        return SettingsScreen(
+          db: widget.db,
+          sources: widget.sources.isEmpty ? [widget.source] : widget.sources,
+          active: widget.source,
+          onSwitch: (source) => widget.onSwitchSource?.call(source),
+          onAddSource: () => widget.onAddSource?.call(),
+          onRemoveSource: (source) => widget.onRemoveSource?.call(source),
+        );
+
       case TvSection.search:
         return SearchScreen(
           db: widget.db,

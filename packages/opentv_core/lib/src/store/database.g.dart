@@ -6654,6 +6654,214 @@ class SyncStagesCompanion extends UpdateCompanion<SyncStageRow> {
   }
 }
 
+class $PreferencesTable extends Preferences
+    with TableInfo<$PreferencesTable, Preference> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PreferencesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'preferences';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Preference> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  Preference map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Preference(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      )!,
+    );
+  }
+
+  @override
+  $PreferencesTable createAlias(String alias) {
+    return $PreferencesTable(attachedDatabase, alias);
+  }
+}
+
+class Preference extends DataClass implements Insertable<Preference> {
+  final String key;
+  final String value;
+  const Preference({required this.key, required this.value});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
+    return map;
+  }
+
+  PreferencesCompanion toCompanion(bool nullToAbsent) {
+    return PreferencesCompanion(key: Value(key), value: Value(value));
+  }
+
+  factory Preference.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Preference(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+    };
+  }
+
+  Preference copyWith({String? key, String? value}) =>
+      Preference(key: key ?? this.key, value: value ?? this.value);
+  Preference copyWithCompanion(PreferencesCompanion data) {
+    return Preference(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Preference(')
+          ..write('key: $key, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Preference &&
+          other.key == this.key &&
+          other.value == this.value);
+}
+
+class PreferencesCompanion extends UpdateCompanion<Preference> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<int> rowid;
+  const PreferencesCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PreferencesCompanion.insert({
+    required String key,
+    required String value,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       value = Value(value);
+  static Insertable<Preference> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PreferencesCompanion copyWith({
+    Value<String>? key,
+    Value<String>? value,
+    Value<int>? rowid,
+  }) {
+    return PreferencesCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PreferencesCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$OpenTvDatabase extends GeneratedDatabase {
   _$OpenTvDatabase(QueryExecutor e) : super(e);
   $OpenTvDatabaseManager get managers => $OpenTvDatabaseManager(this);
@@ -6668,6 +6876,7 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
   late final $FavouritesTable favourites = $FavouritesTable(this);
   late final $PlaybackStatesTable playbackStates = $PlaybackStatesTable(this);
   late final $SyncStagesTable syncStages = $SyncStagesTable(this);
+  late final $PreferencesTable preferences = $PreferencesTable(this);
   late final Index categorySourceKind = Index(
     'category_source_kind',
     'CREATE INDEX category_source_kind ON categories (source_id, kind)',
@@ -6732,6 +6941,7 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
     favourites,
     playbackStates,
     syncStages,
+    preferences,
     categorySourceKind,
     channelSourceCategory,
     channelSearch,
@@ -6750,32 +6960,34 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
       const DriftDatabaseOptions(storeDateTimeAsText: true);
 }
 
-typedef $$SourcesTableCreateCompanionBuilder = SourcesCompanion Function({
-  Value<int> id,
-  required String name,
-  required SourceKind kind,
-  required String url,
-  Value<String?> username,
-  Value<String?> credentialRef,
-  Value<String?> epgUrl,
-  Value<bool> enabled,
-  Value<int> sortOrder,
-  Value<DateTime?> lastSyncedAt,
-  required DateTime createdAt,
-});
-typedef $$SourcesTableUpdateCompanionBuilder = SourcesCompanion Function({
-  Value<int> id,
-  Value<String> name,
-  Value<SourceKind> kind,
-  Value<String> url,
-  Value<String?> username,
-  Value<String?> credentialRef,
-  Value<String?> epgUrl,
-  Value<bool> enabled,
-  Value<int> sortOrder,
-  Value<DateTime?> lastSyncedAt,
-  Value<DateTime> createdAt,
-});
+typedef $$SourcesTableCreateCompanionBuilder =
+    SourcesCompanion Function({
+      Value<int> id,
+      required String name,
+      required SourceKind kind,
+      required String url,
+      Value<String?> username,
+      Value<String?> credentialRef,
+      Value<String?> epgUrl,
+      Value<bool> enabled,
+      Value<int> sortOrder,
+      Value<DateTime?> lastSyncedAt,
+      required DateTime createdAt,
+    });
+typedef $$SourcesTableUpdateCompanionBuilder =
+    SourcesCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<SourceKind> kind,
+      Value<String> url,
+      Value<String?> username,
+      Value<String?> credentialRef,
+      Value<String?> epgUrl,
+      Value<bool> enabled,
+      Value<int> sortOrder,
+      Value<DateTime?> lastSyncedAt,
+      Value<DateTime> createdAt,
+    });
 
 class $$SourcesTableFilterComposer
     extends Composer<_$OpenTvDatabase, $SourcesTable> {
@@ -7055,24 +7267,26 @@ typedef $$SourcesTableProcessedTableManager =
       Source,
       PrefetchHooks Function()
     >;
-typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
-  required int sourceId,
-  required String remoteId,
-  required String name,
-  required ItemKind kind,
-  Value<int> sortOrder,
-  Value<bool> hidden,
-  Value<int> rowid,
-});
-typedef $$CategoriesTableUpdateCompanionBuilder = CategoriesCompanion Function({
-  Value<int> sourceId,
-  Value<String> remoteId,
-  Value<String> name,
-  Value<ItemKind> kind,
-  Value<int> sortOrder,
-  Value<bool> hidden,
-  Value<int> rowid,
-});
+typedef $$CategoriesTableCreateCompanionBuilder =
+    CategoriesCompanion Function({
+      required int sourceId,
+      required String remoteId,
+      required String name,
+      required ItemKind kind,
+      Value<int> sortOrder,
+      Value<bool> hidden,
+      Value<int> rowid,
+    });
+typedef $$CategoriesTableUpdateCompanionBuilder =
+    CategoriesCompanion Function({
+      Value<int> sourceId,
+      Value<String> remoteId,
+      Value<String> name,
+      Value<ItemKind> kind,
+      Value<int> sortOrder,
+      Value<bool> hidden,
+      Value<int> rowid,
+    });
 
 class $$CategoriesTableFilterComposer
     extends Composer<_$OpenTvDatabase, $CategoriesTable> {
@@ -7270,40 +7484,42 @@ typedef $$CategoriesTableProcessedTableManager =
       Category,
       PrefetchHooks Function()
     >;
-typedef $$ChannelsTableCreateCompanionBuilder = ChannelsCompanion Function({
-  required int sourceId,
-  required String remoteId,
-  required String name,
-  required String searchName,
-  Value<String?> iconUrl,
-  Value<String?> categoryRemoteId,
-  Value<String?> epgChannelId,
-  Value<int?> number,
-  Value<bool> hasArchive,
-  Value<int?> archiveDays,
-  Value<DateTime?> addedAt,
-  Value<bool> hidden,
-  Value<String?> streamOptions,
-  Value<String?> directUrl,
-  Value<int> rowid,
-});
-typedef $$ChannelsTableUpdateCompanionBuilder = ChannelsCompanion Function({
-  Value<int> sourceId,
-  Value<String> remoteId,
-  Value<String> name,
-  Value<String> searchName,
-  Value<String?> iconUrl,
-  Value<String?> categoryRemoteId,
-  Value<String?> epgChannelId,
-  Value<int?> number,
-  Value<bool> hasArchive,
-  Value<int?> archiveDays,
-  Value<DateTime?> addedAt,
-  Value<bool> hidden,
-  Value<String?> streamOptions,
-  Value<String?> directUrl,
-  Value<int> rowid,
-});
+typedef $$ChannelsTableCreateCompanionBuilder =
+    ChannelsCompanion Function({
+      required int sourceId,
+      required String remoteId,
+      required String name,
+      required String searchName,
+      Value<String?> iconUrl,
+      Value<String?> categoryRemoteId,
+      Value<String?> epgChannelId,
+      Value<int?> number,
+      Value<bool> hasArchive,
+      Value<int?> archiveDays,
+      Value<DateTime?> addedAt,
+      Value<bool> hidden,
+      Value<String?> streamOptions,
+      Value<String?> directUrl,
+      Value<int> rowid,
+    });
+typedef $$ChannelsTableUpdateCompanionBuilder =
+    ChannelsCompanion Function({
+      Value<int> sourceId,
+      Value<String> remoteId,
+      Value<String> name,
+      Value<String> searchName,
+      Value<String?> iconUrl,
+      Value<String?> categoryRemoteId,
+      Value<String?> epgChannelId,
+      Value<int?> number,
+      Value<bool> hasArchive,
+      Value<int?> archiveDays,
+      Value<DateTime?> addedAt,
+      Value<bool> hidden,
+      Value<String?> streamOptions,
+      Value<String?> directUrl,
+      Value<int> rowid,
+    });
 
 class $$ChannelsTableFilterComposer
     extends Composer<_$OpenTvDatabase, $ChannelsTable> {
@@ -7645,38 +7861,40 @@ typedef $$ChannelsTableProcessedTableManager =
       Channel,
       PrefetchHooks Function()
     >;
-typedef $$MoviesTableCreateCompanionBuilder = MoviesCompanion Function({
-  required int sourceId,
-  required String remoteId,
-  required String name,
-  required String searchName,
-  Value<String?> iconUrl,
-  Value<String?> categoryRemoteId,
-  Value<String?> containerExtension,
-  Value<double?> rating,
-  Value<DateTime?> addedAt,
-  Value<String?> tmdbId,
-  Value<bool> hidden,
-  Value<String?> streamOptions,
-  Value<String?> directUrl,
-  Value<int> rowid,
-});
-typedef $$MoviesTableUpdateCompanionBuilder = MoviesCompanion Function({
-  Value<int> sourceId,
-  Value<String> remoteId,
-  Value<String> name,
-  Value<String> searchName,
-  Value<String?> iconUrl,
-  Value<String?> categoryRemoteId,
-  Value<String?> containerExtension,
-  Value<double?> rating,
-  Value<DateTime?> addedAt,
-  Value<String?> tmdbId,
-  Value<bool> hidden,
-  Value<String?> streamOptions,
-  Value<String?> directUrl,
-  Value<int> rowid,
-});
+typedef $$MoviesTableCreateCompanionBuilder =
+    MoviesCompanion Function({
+      required int sourceId,
+      required String remoteId,
+      required String name,
+      required String searchName,
+      Value<String?> iconUrl,
+      Value<String?> categoryRemoteId,
+      Value<String?> containerExtension,
+      Value<double?> rating,
+      Value<DateTime?> addedAt,
+      Value<String?> tmdbId,
+      Value<bool> hidden,
+      Value<String?> streamOptions,
+      Value<String?> directUrl,
+      Value<int> rowid,
+    });
+typedef $$MoviesTableUpdateCompanionBuilder =
+    MoviesCompanion Function({
+      Value<int> sourceId,
+      Value<String> remoteId,
+      Value<String> name,
+      Value<String> searchName,
+      Value<String?> iconUrl,
+      Value<String?> categoryRemoteId,
+      Value<String?> containerExtension,
+      Value<double?> rating,
+      Value<DateTime?> addedAt,
+      Value<String?> tmdbId,
+      Value<bool> hidden,
+      Value<String?> streamOptions,
+      Value<String?> directUrl,
+      Value<int> rowid,
+    });
 
 class $$MoviesTableFilterComposer
     extends Composer<_$OpenTvDatabase, $MoviesTable> {
@@ -8399,36 +8617,38 @@ typedef $$SeriesEntriesTableProcessedTableManager =
       SeriesEntry,
       PrefetchHooks Function()
     >;
-typedef $$EpisodesTableCreateCompanionBuilder = EpisodesCompanion Function({
-  required int sourceId,
-  required String remoteId,
-  required String seriesRemoteId,
-  required String title,
-  Value<int?> season,
-  Value<int?> episodeNumber,
-  Value<String?> containerExtension,
-  Value<String?> plot,
-  Value<int?> durationSeconds,
-  Value<String?> iconUrl,
-  Value<DateTime?> addedAt,
-  Value<String?> directUrl,
-  Value<int> rowid,
-});
-typedef $$EpisodesTableUpdateCompanionBuilder = EpisodesCompanion Function({
-  Value<int> sourceId,
-  Value<String> remoteId,
-  Value<String> seriesRemoteId,
-  Value<String> title,
-  Value<int?> season,
-  Value<int?> episodeNumber,
-  Value<String?> containerExtension,
-  Value<String?> plot,
-  Value<int?> durationSeconds,
-  Value<String?> iconUrl,
-  Value<DateTime?> addedAt,
-  Value<String?> directUrl,
-  Value<int> rowid,
-});
+typedef $$EpisodesTableCreateCompanionBuilder =
+    EpisodesCompanion Function({
+      required int sourceId,
+      required String remoteId,
+      required String seriesRemoteId,
+      required String title,
+      Value<int?> season,
+      Value<int?> episodeNumber,
+      Value<String?> containerExtension,
+      Value<String?> plot,
+      Value<int?> durationSeconds,
+      Value<String?> iconUrl,
+      Value<DateTime?> addedAt,
+      Value<String?> directUrl,
+      Value<int> rowid,
+    });
+typedef $$EpisodesTableUpdateCompanionBuilder =
+    EpisodesCompanion Function({
+      Value<int> sourceId,
+      Value<String> remoteId,
+      Value<String> seriesRemoteId,
+      Value<String> title,
+      Value<int?> season,
+      Value<int?> episodeNumber,
+      Value<String?> containerExtension,
+      Value<String?> plot,
+      Value<int?> durationSeconds,
+      Value<String?> iconUrl,
+      Value<DateTime?> addedAt,
+      Value<String?> directUrl,
+      Value<int> rowid,
+    });
 
 class $$EpisodesTableFilterComposer
     extends Composer<_$OpenTvDatabase, $EpisodesTable> {
@@ -9235,20 +9455,22 @@ typedef $$EpgProgrammesTableProcessedTableManager =
       EpgProgrammeRow,
       PrefetchHooks Function()
     >;
-typedef $$FavouritesTableCreateCompanionBuilder = FavouritesCompanion Function({
-  required int sourceId,
-  required ItemKind itemKind,
-  required String itemRemoteId,
-  required DateTime addedAt,
-  Value<int> rowid,
-});
-typedef $$FavouritesTableUpdateCompanionBuilder = FavouritesCompanion Function({
-  Value<int> sourceId,
-  Value<ItemKind> itemKind,
-  Value<String> itemRemoteId,
-  Value<DateTime> addedAt,
-  Value<int> rowid,
-});
+typedef $$FavouritesTableCreateCompanionBuilder =
+    FavouritesCompanion Function({
+      required int sourceId,
+      required ItemKind itemKind,
+      required String itemRemoteId,
+      required DateTime addedAt,
+      Value<int> rowid,
+    });
+typedef $$FavouritesTableUpdateCompanionBuilder =
+    FavouritesCompanion Function({
+      Value<int> sourceId,
+      Value<ItemKind> itemKind,
+      Value<String> itemRemoteId,
+      Value<DateTime> addedAt,
+      Value<int> rowid,
+    });
 
 class $$FavouritesTableFilterComposer
     extends Composer<_$OpenTvDatabase, $FavouritesTable> {
@@ -9691,24 +9913,26 @@ typedef $$PlaybackStatesTableProcessedTableManager =
       PlaybackState,
       PrefetchHooks Function()
     >;
-typedef $$SyncStagesTableCreateCompanionBuilder = SyncStagesCompanion Function({
-  required int sourceId,
-  required String stage,
-  required SyncStatus status,
-  required DateTime updatedAt,
-  Value<int> itemsWritten,
-  Value<String?> error,
-  Value<int> rowid,
-});
-typedef $$SyncStagesTableUpdateCompanionBuilder = SyncStagesCompanion Function({
-  Value<int> sourceId,
-  Value<String> stage,
-  Value<SyncStatus> status,
-  Value<DateTime> updatedAt,
-  Value<int> itemsWritten,
-  Value<String?> error,
-  Value<int> rowid,
-});
+typedef $$SyncStagesTableCreateCompanionBuilder =
+    SyncStagesCompanion Function({
+      required int sourceId,
+      required String stage,
+      required SyncStatus status,
+      required DateTime updatedAt,
+      Value<int> itemsWritten,
+      Value<String?> error,
+      Value<int> rowid,
+    });
+typedef $$SyncStagesTableUpdateCompanionBuilder =
+    SyncStagesCompanion Function({
+      Value<int> sourceId,
+      Value<String> stage,
+      Value<SyncStatus> status,
+      Value<DateTime> updatedAt,
+      Value<int> itemsWritten,
+      Value<String?> error,
+      Value<int> rowid,
+    });
 
 class $$SyncStagesTableFilterComposer
     extends Composer<_$OpenTvDatabase, $SyncStagesTable> {
@@ -9911,6 +10135,145 @@ typedef $$SyncStagesTableProcessedTableManager =
       SyncStageRow,
       PrefetchHooks Function()
     >;
+typedef $$PreferencesTableCreateCompanionBuilder =
+    PreferencesCompanion Function({
+      required String key,
+      required String value,
+      Value<int> rowid,
+    });
+typedef $$PreferencesTableUpdateCompanionBuilder =
+    PreferencesCompanion Function({
+      Value<String> key,
+      Value<String> value,
+      Value<int> rowid,
+    });
+
+class $$PreferencesTableFilterComposer
+    extends Composer<_$OpenTvDatabase, $PreferencesTable> {
+  $$PreferencesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PreferencesTableOrderingComposer
+    extends Composer<_$OpenTvDatabase, $PreferencesTable> {
+  $$PreferencesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PreferencesTableAnnotationComposer
+    extends Composer<_$OpenTvDatabase, $PreferencesTable> {
+  $$PreferencesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$PreferencesTableTableManager
+    extends
+        RootTableManager<
+          _$OpenTvDatabase,
+          $PreferencesTable,
+          Preference,
+          $$PreferencesTableFilterComposer,
+          $$PreferencesTableOrderingComposer,
+          $$PreferencesTableAnnotationComposer,
+          $$PreferencesTableCreateCompanionBuilder,
+          $$PreferencesTableUpdateCompanionBuilder,
+          (
+            Preference,
+            BaseReferences<_$OpenTvDatabase, $PreferencesTable, Preference>,
+          ),
+          Preference,
+          PrefetchHooks Function()
+        > {
+  $$PreferencesTableTableManager(_$OpenTvDatabase db, $PreferencesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PreferencesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PreferencesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PreferencesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> key = const Value.absent(),
+                Value<String> value = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PreferencesCompanion(key: key, value: value, rowid: rowid),
+          createCompanionCallback:
+              ({
+                required String key,
+                required String value,
+                Value<int> rowid = const Value.absent(),
+              }) => PreferencesCompanion.insert(
+                key: key,
+                value: value,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PreferencesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$OpenTvDatabase,
+      $PreferencesTable,
+      Preference,
+      $$PreferencesTableFilterComposer,
+      $$PreferencesTableOrderingComposer,
+      $$PreferencesTableAnnotationComposer,
+      $$PreferencesTableCreateCompanionBuilder,
+      $$PreferencesTableUpdateCompanionBuilder,
+      (
+        Preference,
+        BaseReferences<_$OpenTvDatabase, $PreferencesTable, Preference>,
+      ),
+      Preference,
+      PrefetchHooks Function()
+    >;
 
 class $OpenTvDatabaseManager {
   final _$OpenTvDatabase _db;
@@ -9937,4 +10300,6 @@ class $OpenTvDatabaseManager {
       $$PlaybackStatesTableTableManager(_db, _db.playbackStates);
   $$SyncStagesTableTableManager get syncStages =>
       $$SyncStagesTableTableManager(_db, _db.syncStages);
+  $$PreferencesTableTableManager get preferences =>
+      $$PreferencesTableTableManager(_db, _db.preferences);
 }

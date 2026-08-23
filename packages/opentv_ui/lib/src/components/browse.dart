@@ -9,7 +9,8 @@ enum TvSection {
   films('FILMS'),
   series('SERIES'),
   guide('GUIDE'),
-  search('SEARCH');
+  search('SEARCH'),
+  settings('SETTINGS');
 
   const TvSection(this.label);
 
