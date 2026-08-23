@@ -1,4 +1,4 @@
-package co.podeo.opentv.tvos_playback
+package com.anthonyessaye.opentv
 
 import android.content.Context
 import android.content.SharedPreferences

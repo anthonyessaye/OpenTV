@@ -1,4 +1,4 @@
-package co.podeo.opentv.tvos_playback
+package com.anthonyessaye.opentv
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine

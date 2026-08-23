@@ -112,7 +112,7 @@ final class HostChannel {
     private static func query(for reference: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "co.podeo.opentv.credentials",
+            kSecAttrService as String: "com.anthonyessaye.opentv.credentials",
             kSecAttrAccount as String: reference,
         ]
     }

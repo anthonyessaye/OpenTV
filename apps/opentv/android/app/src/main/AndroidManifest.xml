@@ -16,7 +16,7 @@
          the provider, not a choice the app makes. -->
     <application
         android:usesCleartextTraffic="true"
-        android:label="tvos_playback"
+        android:label="OpenTV"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

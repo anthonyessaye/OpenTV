@@ -1,7 +1,8 @@
-# M1 spike
+# Toolchain
 
-Throwaway code whose only job is to answer questions before the real work
-starts. Nothing here is meant to survive into the app.
+How the two televisions are built, and what the spike that preceded the app
+established. The spike's code was not thrown away in the end — its native
+integration turned out to be the real one — and it now lives in `apps/opentv`.
 
 ## Toolchain
 
@@ -67,7 +68,7 @@ on the TV home screen, and `touchscreen` marked not required.
 
 ## What has been answered
 
-**Flutter runs on tvOS.** `tvos_playback` builds and renders on an Apple TV 4K
+**Flutter runs on tvOS.** The app builds and renders on an Apple TV 4K
 simulator at 3840×2160. The engine ships a `tvos-debug-sim-arm64` slice, so
 the simulator is a first-class target rather than a device-only affair.
 
