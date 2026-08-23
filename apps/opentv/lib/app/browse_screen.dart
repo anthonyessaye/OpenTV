@@ -64,6 +64,14 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   List<CategoryEntry> _entries = const [];
   List<_Item> _items = const [];
+
+  /// The shelves shown when no category is chosen.
+  ///
+  /// A flat grid of everything is a filing cabinet, not a television. With no
+  /// category picked there is no reason to lead with the alphabetical start
+  /// of 180,000 films, so the screen offers reasons to watch something
+  /// instead: what is worth watching, what you were watching, what you kept.
+  List<({String label, List<_Item> items})> _shelves = const [];
   bool _loading = true;
   String? _problem;
 
@@ -216,14 +224,96 @@ class _BrowseScreenState extends State<BrowseScreen> {
       ],
     };
 
+    // Shelves replace the grid when nothing is filtered, and only where they
+    // mean something: a live channel list has no "top rated".
+    final shelves = <({String label, List<_Item> items})>[];
+    if (_category == null && _section != TvSection.live) {
+      shelves.addAll(await _buildShelves(sourceId, hidden));
+    }
+
     if (!mounted || generation != _generation) return;
     setState(() {
       _items = items;
+      _shelves = shelves;
       _loading = false;
     });
   }
 
-  Future<void> _open(_Item item) async {
+  /// Highlight, then what the viewer already has a relationship with, then
+  /// the rest. That order is deliberate: a shelf of your own half-watched
+  /// films is more useful than any editorial one, but it is empty on a first
+  /// run, so it cannot be the thing that greets a new viewer.
+  Future<List<({String label, List<_Item> items})>> _buildShelves(
+    int sourceId,
+    Set<String> hidden,
+  ) async {
+    final films = _section == TvSection.films;
+    final kind = films ? ItemKind.movie : ItemKind.series;
+
+    List<_Item> visible(Iterable<_Item> rows) => [
+      for (final row in rows)
+        if (!hidden.contains(row.categoryId)) row,
+    ];
+
+    final out = <({String label, List<_Item> items})>[];
+
+    if (films) {
+      // A fortnight rather than a week: a provider that adds nothing for ten
+      // days would otherwise show an empty highlight.
+      final since = DateTime.now().subtract(const Duration(days: 14));
+      var top = await widget.db.topRatedMovies(sourceId, since: since);
+      if (top.length < 5) {
+        // Falls back to all time rather than showing three films under a
+        // heading that promises twenty.
+        top = await widget.db.topRatedMovies(sourceId);
+      }
+      final items = visible(top.map(_Item.film));
+      if (items.isNotEmpty) {
+        out.add((label: 'Top rated', items: items));
+      }
+
+      final recent = visible(
+        (await widget.db.recentMovies(sourceId)).map(_Item.film),
+      );
+      if (recent.isNotEmpty) out.add((label: 'Recently added', items: recent));
+    }
+
+    final resumable = [
+      for (final state in await widget.db.continueWatching(
+        sourceId: sourceId,
+        limit: 20,
+      ))
+        if (state.itemKind == kind) state.itemRemoteId,
+    ];
+    if (resumable.isNotEmpty) {
+      final rows = films
+          ? (await widget.db.moviesByRemoteIds(sourceId, resumable))
+                .map(_Item.film)
+          : (await widget.db.seriesByRemoteIds(sourceId, resumable))
+                .map(_Item.series);
+      final items = visible(rows);
+      if (items.isNotEmpty) out.add((label: 'Continue watching', items: items));
+    }
+
+    final favourites = [
+      for (final row in await widget.db.favouritesOf(sourceId, kind))
+        row.itemRemoteId,
+    ];
+    if (favourites.isNotEmpty) {
+      final rows = films
+          ? (await widget.db.moviesByRemoteIds(sourceId, favourites))
+                .map(_Item.film)
+          : (await widget.db.seriesByRemoteIds(sourceId, favourites))
+                .map(_Item.series);
+      final items = visible(rows);
+      if (items.isNotEmpty) out.add((label: 'Your favourites', items: items));
+    }
+
+    return out;
+  }
+
+  Future<void> _open(_Item? item) async {
+    if (item == null) return;
     // A series is not a stream; it is a list of them. It gets its own screen,
     // which fetches the episodes the bulk sync deliberately skipped.
     if (item.series case final SeriesEntry entry) {
@@ -480,7 +570,15 @@ class _BrowseScreenState extends State<BrowseScreen> {
         return SearchScreen(
           db: widget.db,
           sourceId: widget.source.id,
-          onOpenChannel: (channel) => _open(_Item.channel(channel)),
+          // Every kind opens the same way it would from the grid, so a
+          // result behaves like the thing it represents rather than like a
+          // search result.
+          onOpen: (hit) => _open(switch (hit) {
+            SearchHit(channel: final Channel row) => _Item.channel(row),
+            SearchHit(movie: final Movie row) => _Item.film(row),
+            SearchHit(series: final SeriesEntry row) => _Item.series(row),
+            _ => null,
+          }),
         );
       case TvSection.live:
       case TvSection.films:
@@ -504,6 +602,73 @@ class _BrowseScreenState extends State<BrowseScreen> {
     }
   }
 
+  /// Shelves, and beneath them everything else.
+  ///
+  /// The last shelf is the full list, so the flat grid is still reachable —
+  /// this replaces the front page, not the ability to browse.
+  Widget _shelfView() {
+    // The first item of the first shelf is promoted out of it. A uniform grid
+    // treats every one of 180,000 films as equally worth the evening, and
+    // nothing in it argues for itself; the banner picks one and gives it the
+    // room to.
+    final lead = _shelves.isEmpty ? null : _shelves.first.items.first;
+    final rest = _shelves.isEmpty
+        ? _shelves
+        : [
+            (
+              label: _shelves.first.label,
+              items: _shelves.first.items.skip(1).toList(),
+            ),
+            ..._shelves.skip(1),
+          ];
+
+    return FocusColumn(
+      itemCount: rest.length + (lead == null ? 1 : 2),
+      itemBuilder: (context, index) {
+        if (lead != null && index == 0) {
+          final cleaned = TitleCleaner.clean(lead.name);
+          return Padding(
+            padding: const EdgeInsets.only(
+              left: OpenTvSpace.md,
+              right: OpenTvSpace.safeHorizontal,
+              bottom: OpenTvSpace.lg,
+            ),
+            child: HeroBanner(
+              title: cleaned.title,
+              eyebrow: _shelves.first.label,
+              imageUrl: lead.imageUrl,
+              autofocus: true,
+              facts: [
+                if (cleaned.year != null)
+                  (label: 'year', value: '${cleaned.year}'),
+                if (lead.movie?.rating case final double score when score > 0)
+                  (label: 'rating', value: score.toStringAsFixed(1)),
+                if (cleaned.quality != null)
+                  (label: 'quality', value: cleaned.quality!),
+              ],
+              onSelect: () => _open(lead),
+            ),
+          );
+        }
+
+        final at = index - (lead == null ? 0 : 1);
+        if (at == rest.length) {
+          return _Shelf(
+            label: 'Everything',
+            items: _items,
+            autofocus: lead == null,
+            onSelect: _open,
+          );
+        }
+        return _Shelf(
+          label: rest[at].label,
+          items: rest[at].items,
+          onSelect: _open,
+        );
+      },
+    );
+  }
+
   Widget _grid() {
     if (_loading) {
       return const Align(
@@ -524,6 +689,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
         ),
       );
     }
+
+    if (_shelves.isNotEmpty) return _shelfView();
 
     // Films and series are portraits; channels are landscape logos. Same grid,
     // different cell.
@@ -566,6 +733,7 @@ class _Item {
     : name = row.name,
       imageUrl = row.iconUrl,
       number = row.number,
+      categoryId = row.categoryRemoteId,
       playable = Playable.channel(row),
       channel = row,
       movie = null,
@@ -575,6 +743,7 @@ class _Item {
     : name = row.name,
       imageUrl = row.iconUrl,
       number = null,
+      categoryId = row.categoryRemoteId,
       playable = Playable.movie(row),
       channel = null,
       movie = row,
@@ -585,6 +754,7 @@ class _Item {
     : name = row.name,
       imageUrl = row.coverUrl,
       number = null,
+      categoryId = row.categoryRemoteId,
       playable = null,
       channel = null,
       movie = null,
@@ -593,6 +763,10 @@ class _Item {
   final String name;
   final String? imageUrl;
   final int? number;
+
+  /// Kept so a shelf can drop what the parental lock hides — a shelf built
+  /// from favourites or history would otherwise walk straight past it.
+  final String? categoryId;
 
   final Playable? playable;
 
@@ -689,6 +863,57 @@ class _PlayerRouteState extends State<_PlayerRoute> {
       // offering one would be a button that lies.
       onPreviousChannel: live ? () => widget.onZap(-1) : null,
       onNextChannel: live ? () => widget.onZap(1) : null,
+    );
+  }
+}
+
+
+/// One horizontal shelf of tiles.
+class _Shelf extends StatelessWidget {
+  const _Shelf({
+    required this.label,
+    required this.items,
+    required this.onSelect,
+    this.autofocus = false,
+  });
+
+  final String label;
+  final List<_Item> items;
+  final ValueChanged<_Item> onSelect;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: OpenTvSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(title: label, count: items.length),
+          SizedBox(
+            height: PosterTile.preferredHeight + 44,
+            child: FocusRow(
+              height: PosterTile.preferredHeight,
+              itemExtent: PosterTile.preferredWidth,
+              padding: const EdgeInsets.only(left: OpenTvSpace.md),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final cleaned = TitleCleaner.clean(item.name);
+                return PosterTile(
+                  title: cleaned.title,
+                  year: cleaned.year,
+                  imageUrl: item.imageUrl,
+                  autofocus: autofocus && index == 0,
+                  onSelect: () => onSelect(item),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

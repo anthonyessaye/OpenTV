@@ -18,15 +18,16 @@ class SearchScreen extends StatefulWidget {
     super.key,
     required this.db,
     required this.sourceId,
-    required this.onOpenChannel,
+    required this.onOpen,
   });
 
   final OpenTvDatabase db;
   final int sourceId;
 
-  /// Live channels can be played straight from a result; the other kinds
-  /// need a detail screen that is not built yet.
-  final ValueChanged<Channel> onOpenChannel;
+  /// Opens whatever was chosen. All three kinds, because a result that does
+  /// nothing when pressed is worse than not listing it — the viewer assumes
+  /// the app is broken rather than that the feature is missing.
+  final void Function(SearchHit) onOpen;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -159,6 +160,27 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  /// Results grouped by what they are.
+  ///
+  /// A single mixed grid made the viewer read every tile to work out whether
+  /// a title was the film, the series, or a channel showing it — and on a real
+  /// provider the same name is frequently two of the three. Sections answer
+  /// that by position instead of by inspection, and a section that found
+  /// nothing is absent rather than shown empty.
+  List<({String label, List<SearchHit> hits})> get _sections {
+    final channels = [for (final h in _hits) if (h.channel != null) h];
+    final films = [for (final h in _hits) if (h.movie != null) h];
+    final series = [for (final h in _hits) if (h.series != null) h];
+
+    return [
+      // Films lead: on a catalogue of 180,000 films against 47,000 series and
+      // 57,000 channels, a typed title is most often one.
+      if (films.isNotEmpty) (label: 'Films', hits: films),
+      if (series.isNotEmpty) (label: 'Series', hits: series),
+      if (channels.isNotEmpty) (label: 'Live channels', hits: channels),
+    ];
+  }
+
   Widget _results() {
     if (_term.trim().length < 2) {
       return const Padding(
@@ -187,6 +209,8 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
+    final sections = _sections;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -201,27 +225,41 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         Expanded(
-          child: FocusGrid(
-            columns: 3,
-            itemWidth: 200,
-            itemHeight: 340,
-            padding: const EdgeInsets.only(
-              left: OpenTvSpace.md,
-              right: OpenTvSpace.safeHorizontal,
-              bottom: OpenTvSpace.xl,
-            ),
-            itemCount: _hits.length,
+          child: FocusColumn(
+            itemCount: sections.length,
             itemBuilder: (context, index) {
-              final hit = _hits[index];
-              final cleaned = TitleCleaner.clean(hit.name);
-              return PosterTile(
-                title: cleaned.title,
-                year: cleaned.year,
-                imageUrl: hit.imageUrl,
-                onSelect: () {
-                  final channel = hit.channel;
-                  if (channel != null) widget.onOpenChannel(channel);
-                },
+              final section = sections[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: OpenTvSpace.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SectionHeader(
+                      title: section.label,
+                      count: section.hits.length,
+                    ),
+                    SizedBox(
+                      height: PosterTile.preferredHeight + 44,
+                      child: FocusRow(
+                        height: PosterTile.preferredHeight,
+                        itemExtent: PosterTile.preferredWidth,
+                        padding: const EdgeInsets.only(left: OpenTvSpace.md),
+                        itemCount: section.hits.length,
+                        itemBuilder: (context, position) {
+                          final hit = section.hits[position];
+                          final cleaned = TitleCleaner.clean(hit.name);
+                          return PosterTile(
+                            title: cleaned.title,
+                            year: cleaned.year,
+                            imageUrl: hit.imageUrl,
+                            autofocus: index == 0 && position == 0,
+                            onSelect: () => widget.onOpen(hit),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -236,21 +274,30 @@ class SearchHit {
   SearchHit.channel(Channel row)
     : name = row.name,
       imageUrl = row.iconUrl,
-      channel = row;
+      channel = row,
+      movie = null,
+      series = null;
 
   SearchHit.film(Movie row)
     : name = row.name,
       imageUrl = row.iconUrl,
-      channel = null;
+      channel = null,
+      movie = row,
+      series = null;
 
   SearchHit.series(SeriesEntry row)
     : name = row.name,
       imageUrl = row.coverUrl,
-      channel = null;
+      channel = null,
+      movie = null,
+      series = row;
 
   final String name;
   final String? imageUrl;
 
-  /// Present only for live channels, the only kind playable from here.
+  /// Exactly one of these is set. The row is carried rather than an id,
+  /// because whatever opens it needs the whole thing.
   final Channel? channel;
+  final Movie? movie;
+  final SeriesEntry? series;
 }

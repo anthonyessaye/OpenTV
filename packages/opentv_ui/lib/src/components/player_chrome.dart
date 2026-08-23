@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../focus/focusable_tile.dart';
 import '../tokens/tokens.dart';
+import 'glyphs.dart';
 
 /// What the transport is doing, as the interface understands it.
 enum PlaybackPhase { opening, buffering, playing, paused, ended, failed }
@@ -392,54 +393,75 @@ class _Controls extends StatelessWidget {
   Widget build(BuildContext context) {
     final paused = status.phase == PlaybackPhase.paused;
 
-    return Row(
-      children: [
-        PlayerButton(
-          label: 'CH −',
-          onSelect: onPreviousChannel,
-          autofocus: true,
-        ),
-        const SizedBox(width: OpenTvSpace.sm),
-        PlayerButton(
-          label: paused ? 'PLAY' : 'PAUSE',
-          onSelect: onPlayPause,
-          emphasis: true,
-        ),
-        const SizedBox(width: OpenTvSpace.sm),
-        PlayerButton(label: 'CH +', onSelect: onNextChannel),
-        if (status.audioTrackCount > 1) ...[
-          const SizedBox(width: OpenTvSpace.lg),
-          PlayerButton(label: 'AUDIO', onSelect: onAudioTracks),
-        ],
-        if (status.subtitleTrackCount > 0) ...[
-          const SizedBox(width: OpenTvSpace.sm),
-          PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
-        ],
-        if (onAspect != null) ...[
-          const SizedBox(width: OpenTvSpace.sm),
-          PlayerButton(label: 'PICTURE', onSelect: onAspect),
-        ],
-        if (onToggleFavourite != null) ...[
-          const SizedBox(width: OpenTvSpace.lg),
+    // Scrollable, and not for the usual reason. With every control present —
+    // transport, tracks, subtitles, picture, favourite — the row was wider
+    // than the title-safe area, so focus could move to a button drawn past
+    // the edge of the screen. The highlight simply vanished and the viewer
+    // had no way to tell whether the press had done anything. A row that
+    // scrolls its focused child into view cannot strand focus however many
+    // controls it grows.
+    return SizedBox(
+      height: 96,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        // Room for the focus ring and glow, which a tight viewport clips into
+        // two stray vertical lines.
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        children: [
+          if (onPreviousChannel != null) ...[
+            PlayerButton(
+              glyph: Glyph.previous,
+              label: 'Previous channel',
+              onSelect: onPreviousChannel,
+              autofocus: true,
+            ),
+            const SizedBox(width: OpenTvSpace.sm),
+          ],
           PlayerButton(
-            // Stated rather than a heart glyph: the words say which way the
-            // press goes, where an icon leaves the viewer guessing whether
-            // it shows the state or the action.
-            label: isFavourite ? 'UNFAVOURITE' : 'FAVOURITE',
-            onSelect: onToggleFavourite,
-            emphasis: isFavourite,
+            glyph: paused ? Glyph.play : Glyph.pause,
+            label: paused ? 'Play' : 'Pause',
+            onSelect: onPlayPause,
+            emphasis: true,
+            autofocus: onPreviousChannel == null,
           ),
+          if (onNextChannel != null) ...[
+            const SizedBox(width: OpenTvSpace.sm),
+            PlayerButton(
+              glyph: Glyph.next,
+              label: 'Next channel',
+              onSelect: onNextChannel,
+            ),
+          ],
+          // Words from here on, deliberately. A glyph for "subtitles" or
+          // "aspect ratio" is a puzzle at ten feet; play and pause are not.
+          if (status.audioTrackCount > 1) ...[
+            const SizedBox(width: OpenTvSpace.lg),
+            PlayerButton(label: 'AUDIO', onSelect: onAudioTracks),
+          ],
+          if (status.subtitleTrackCount > 0) ...[
+            const SizedBox(width: OpenTvSpace.sm),
+            PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
+          ],
+          if (onAspect != null) ...[
+            const SizedBox(width: OpenTvSpace.sm),
+            PlayerButton(label: 'PICTURE', onSelect: onAspect),
+          ],
+          if (onToggleFavourite != null) ...[
+            const SizedBox(width: OpenTvSpace.lg),
+            PlayerButton(
+              glyph: Glyph.heart,
+              glyphFilled: isFavourite,
+              label: isFavourite ? 'Remove from favourites' : 'Add to favourites',
+              onSelect: onToggleFavourite,
+              emphasis: isFavourite,
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
 
-/// A transport control.
-///
-/// Text rather than glyphs: a viewer at three metres reads "SUBTITLES" faster
-/// than they decode a speech-bubble icon, and icon sets are where interfaces
-/// quietly inherit someone else's design language.
 class PlayerButton extends StatelessWidget {
   const PlayerButton({
     super.key,
@@ -447,12 +469,24 @@ class PlayerButton extends StatelessWidget {
     this.onSelect,
     this.emphasis = false,
     this.autofocus = false,
+    this.glyph,
+    this.glyphFilled = false,
   });
 
+  /// Shown when there is no [glyph], and used as the spoken label either way
+  /// — a drawn symbol still has to say what it is to anything not looking at
+  /// it.
   final String label;
+
   final VoidCallback? onSelect;
   final bool emphasis;
   final bool autofocus;
+
+  /// Draws a symbol instead of the words. Only for shapes a viewer already
+  /// knows: see [Glyph].
+  final Glyph? glyph;
+
+  final bool glyphFilled;
 
   @override
   Widget build(BuildContext context) {
@@ -465,17 +499,26 @@ class PlayerButton extends StatelessWidget {
       // neighbours around.
       scaleOnFocus: 1.04,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: OpenTvSpace.lg,
+        alignment: Alignment.center,
+        constraints: const BoxConstraints(minWidth: 88),
+        padding: EdgeInsets.symmetric(
+          // A glyph is squarer than a word, so it needs less shoulder.
+          horizontal: glyph == null ? OpenTvSpace.lg : OpenTvSpace.md,
           vertical: OpenTvSpace.sm,
         ),
         color: emphasis ? OpenTvColors.surfaceLifted : OpenTvColors.surface,
-        child: Text(
-          label,
-          style: OpenTvType.label.copyWith(
-            color: emphasis ? OpenTvColors.ink : OpenTvColors.inkMuted,
-          ),
-        ),
+        child: glyph == null
+            ? Text(
+                label,
+                style: OpenTvType.label.copyWith(
+                  color: emphasis ? OpenTvColors.ink : OpenTvColors.inkMuted,
+                ),
+              )
+            : GlyphIcon(
+                glyph!,
+                filled: glyphFilled,
+                color: emphasis ? OpenTvColors.tally : OpenTvColors.ink,
+              ),
       ),
     );
   }

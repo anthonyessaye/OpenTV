@@ -210,7 +210,27 @@ void main() {
           ),
         ),
       );
-      expect(find.text('PAUSE'), findsOneWidget);
+      // A glyph now, not the word — play and pause are shapes every viewer
+      // already knows, and spelling them out is what pushed the last two
+      // controls off the edge of the screen. The spoken label still says
+      // which it is, so that is what the assertion reads.
+      Glyph transportGlyph() => tester
+          .widgetList<GlyphIcon>(find.byType(GlyphIcon))
+          .map((icon) => icon.glyph)
+          .firstWhere((g) => g == Glyph.play || g == Glyph.pause);
+
+      expect(transportGlyph(), Glyph.pause);
+      expect(
+        tester.widget<FocusableTile>(
+          find
+              .ancestor(
+                of: find.byType(GlyphIcon),
+                matching: find.byType(FocusableTile),
+              )
+              .first,
+        ).semanticLabel,
+        'Pause',
+      );
 
       await tester.pumpWidget(
         _wrap(
@@ -220,7 +240,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('PLAY'), findsOneWidget);
+      expect(transportGlyph(), Glyph.play);
       expect(find.text('PAUSED'), findsOneWidget);
     });
 

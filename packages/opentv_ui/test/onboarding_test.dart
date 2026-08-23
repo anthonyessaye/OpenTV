@@ -193,8 +193,12 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
 
-      expect(find.text('STEP 1 OF 3'), findsOneWidget);
+      expect(find.text('STEP 1 OF 4'), findsOneWidget);
+      await _type(tester, 'home');
+      await _pressKey(tester, 'NEXT');
+      await tester.pumpAndSettle();
 
+      expect(find.text('STEP 2 OF 4'), findsOneWidget);
       await _type(tester, 'http');
       await _pressKey(tester, ':');
       await _pressKey(tester, '/');
@@ -203,18 +207,19 @@ void main() {
       await _pressKey(tester, 'NEXT');
       await tester.pumpAndSettle();
 
-      expect(find.text('STEP 2 OF 3'), findsOneWidget);
+      expect(find.text('STEP 3 OF 4'), findsOneWidget);
       await _type(tester, 'viewer');
       await _pressKey(tester, 'NEXT');
       await tester.pumpAndSettle();
 
-      expect(find.text('STEP 3 OF 3'), findsOneWidget);
+      expect(find.text('STEP 4 OF 4'), findsOneWidget);
       await _type(tester, 'secret');
       await _pressKey(tester, 'CONNECT');
       await tester.pumpAndSettle();
 
       expect(submitted, isNotNull);
       expect(submitted!.kind, OnboardingSourceKind.xtream);
+      expect(submitted!.name, 'home');
       expect(submitted!.url, 'http://tv.example.com');
       expect(submitted!.username, 'viewer');
       expect(submitted!.password, 'secret');
@@ -255,9 +260,11 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
 
+      // The first field is the name, so its commit key advances rather than
+      // connecting. The claim under test is about emptiness, not the word.
       final connect = find.descendant(
         of: find.byType(TvKeyboard),
-        matching: find.text('CONNECT'),
+        matching: find.text('NEXT'),
       );
       expect(tester.widget<Text>(connect).style?.color, OpenTvColors.inkFaint);
 
@@ -289,6 +296,11 @@ void main() {
       Focus.of(tester.element(playlist)).requestFocus();
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+
+      // Past the name, which is asked for first.
+      await _type(tester, 'sports');
+      await _pressKey(tester, 'NEXT');
       await tester.pumpAndSettle();
 
       // A bare host, which is what a viewer types when they read the address
@@ -325,6 +337,9 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
 
+      await _type(tester, 'kids');
+      await _pressKey(tester, 'NEXT');
+      await tester.pumpAndSettle();
       await _type(tester, 'http');
       await _pressKey(tester, ':');
       await _pressKey(tester, '/');
@@ -363,6 +378,9 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
 
+      await _type(tester, 'kids');
+      await _pressKey(tester, 'NEXT');
+      await tester.pumpAndSettle();
       await _type(tester, 'http');
       await _pressKey(tester, ':');
       await _pressKey(tester, '/');

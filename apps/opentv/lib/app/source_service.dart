@@ -87,7 +87,12 @@ class SourceService {
 
       final sourceId = await db.addSource(
         SourcesCompanion.insert(
-          name: Uri.parse(credentials.host).host,
+          // The viewer's own name, never the hostname. A portal address
+          // across the top of the home screen is both ugly and the one part
+          // worth not reading aloud to a room.
+          name: draft.name.isEmpty
+              ? Uri.parse(credentials.host).host
+              : draft.name,
           kind: SourceKind.xtream,
           url: credentials.host,
           username: Value(credentials.username),
@@ -140,7 +145,7 @@ class SourceService {
 
       final sourceId = await db.addSource(
         SourcesCompanion.insert(
-          name: Uri.parse(draft.url).host,
+          name: draft.name.isEmpty ? Uri.parse(draft.url).host : draft.name,
           kind: SourceKind.m3u,
           url: draft.url,
           epgUrl: Value(guideUrl),

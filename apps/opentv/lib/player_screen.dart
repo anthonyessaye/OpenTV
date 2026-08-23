@@ -40,6 +40,7 @@ class PlayerScreen extends StatefulWidget {
 
   final String? channelName;
   final int? channelNumber;
+
   /// Null hides the control entirely, for anything that cannot be
   /// favourited.
   final VoidCallback? onToggleFavourite;
@@ -70,6 +71,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
   /// Which chooser is open, if any. Only one at a time: they occupy the same
   /// place and a remote has no way to address two.
   _Sheet? _sheet;
+
+  /// Whether the transport and readouts are on screen.
+  ///
+  /// They hide themselves after a pause. A viewer watching a film does not
+  /// want a bar of controls across the picture for the whole two hours, and
+  /// the chrome had no way to leave — pressing back closed the player rather
+  /// than dismissing it, which is the opposite of what the press meant.
+  bool _chromeVisible = true;
+  Timer? _idle;
+
+  /// Long enough to read the programme title and reach for a button, short
+  /// enough not to sit over the picture.
+  static const _idleBeforeHiding = Duration(seconds: 6);
   List<MediaTrack> _tracks = const [];
   AspectMode _aspect = AspectMode.fit;
 
@@ -80,9 +94,70 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _videoCodec;
 
   @override
+  void initState() {
+    super.initState();
+    _restartIdleTimer();
+  }
+
+  @override
   void dispose() {
     _poll?.cancel();
+    _idle?.cancel();
     super.dispose();
+  }
+
+  void _restartIdleTimer() {
+    _idle?.cancel();
+    // A chooser holds the chrome open: it is a decision in progress, and
+    // having it vanish mid-thought would be its own bug.
+    if (_sheet != null) return;
+    _idle = Timer(_idleBeforeHiding, () {
+      if (mounted) setState(() => _chromeVisible = false);
+    });
+  }
+
+  /// Any press wakes the chrome; only presses after that reach a control.
+  ///
+  /// Without this the first press of a direction moves a highlight the viewer
+  /// cannot see, which is how a hidden transport becomes worse than a
+  /// permanent one.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    // Back is not a wake press, and letting it act as one made it useless.
+    // Android delivers back twice — once as a key event and once through the
+    // platform's back channel — so waking the chrome here and dismissing it
+    // in PopScope left the two cancelling each other out: back toggled the
+    // controls forever and never left the player.
+    if (BackKeys.handles(event)) return KeyEventResult.ignored;
+
+    if (!_chromeVisible) {
+      setState(() => _chromeVisible = true);
+      _restartIdleTimer();
+      return KeyEventResult.handled;
+    }
+
+    _restartIdleTimer();
+    return KeyEventResult.ignored;
+  }
+
+  /// Back, in the order a viewer means it.
+  ///
+  /// A chooser first, then the chrome, then the player itself. Before this,
+  /// back from anywhere in the player closed the player — so dismissing a
+  /// track menu threw away the channel with it.
+  bool _handleBack() {
+    if (_sheet != null) {
+      setState(() => _sheet = null);
+      _restartIdleTimer();
+      return true;
+    }
+    if (_chromeVisible) {
+      setState(() => _chromeVisible = false);
+      _idle?.cancel();
+      return true;
+    }
+    return false;
   }
 
   void _onViewCreated(int id) {
@@ -112,7 +187,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           if (entry is Map) MediaTrack.fromMap(entry.cast<Object?, Object?>()),
       ];
       _sheet = sheet;
+      _chromeVisible = true;
     });
+    _restartIdleTimer();
   }
 
   Widget _chooser() {
@@ -218,55 +295,75 @@ class _PlayerScreenState extends State<PlayerScreen> {
       // track reports two. Subtract it or the chrome offers a choice that
       // does not exist.
       audioTrackCount: ((raw['audioTracks'] as int?) ?? 0) - 1,
-      subtitleTrackCount: (((raw['subtitleTracks'] as int?) ?? 0) - 1)
-          .clamp(0, 99),
+      subtitleTrackCount: (((raw['subtitleTracks'] as int?) ?? 0) - 1).clamp(
+        0,
+        99,
+      ),
       error: raw['state'] == 'error' ? 'The stream could not be opened.' : null,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: OpenTvColors.ground,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Black under the video surface, and not decoration.
-          //
-          // A platform view paints nothing until its first frame arrives, and
-          // in hybrid composition that hole is genuinely transparent — the
-          // screen behind shows through it. Between pressing a channel and
-          // the stream opening, a viewer would watch the catalogue sitting
-          // behind the transport controls.
-          const ColoredBox(color: OpenTvColors.sunken),
-          PlayerSurface(
-            url: widget.streamUrl,
-            streamOptions: widget.streamOptions,
-            startAt: widget.startAt,
-            onCreated: _onViewCreated,
+    // PopScope catches the platform's own back — on Android that is the only
+    // path, since the system back never arrives as a key event. Focus catches
+    // remote presses, which is how the chrome wakes.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_handleBack()) return;
+        Navigator.of(context).pop();
+      },
+      child: Focus(
+        autofocus: true,
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: _onKey,
+        child: Container(
+          color: OpenTvColors.ground,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Black under the video surface, and not decoration.
+              //
+              // A platform view paints nothing until its first frame arrives, and
+              // in hybrid composition that hole is genuinely transparent — the
+              // screen behind shows through it. Between pressing a channel and
+              // the stream opening, a viewer would watch the catalogue sitting
+              // behind the transport controls.
+              const ColoredBox(color: OpenTvColors.sunken),
+              PlayerSurface(
+                url: widget.streamUrl,
+                streamOptions: widget.streamOptions,
+                startAt: widget.startAt,
+                onCreated: _onViewCreated,
+              ),
+              PlayerChrome(
+                status: _status,
+                now: DateTime.now(),
+                // 'pause', not 'stop'. Stopping tears the stream down, so the
+                // pause button was ending playback and the play button then had
+                // nothing to resume — on a live channel that means reconnecting,
+                // which on a provider allowing one connection can fail outright.
+                onPlayPause: () => _channel?.invokeMethod<void>(
+                  _status.phase == PlaybackPhase.paused ? 'play' : 'pause',
+                ),
+                onToggleFavourite: widget.onToggleFavourite,
+                isFavourite: widget.isFavourite,
+                onPreviousChannel: _zap(widget.onPreviousChannel),
+                onNextChannel: _zap(widget.onNextChannel),
+                onAudioTracks: () => _openSheet(_Sheet.audio),
+                onSubtitles: () => _openSheet(_Sheet.subtitles),
+                visible: _chromeVisible,
+                onAspect: () => setState(() => _sheet = _Sheet.aspect),
+                dynamicRange: _dynamicRange,
+                videoCodec: _videoCodec,
+              ),
+              if (_sheet != null) _chooser(),
+            ],
           ),
-          PlayerChrome(
-            status: _status,
-            now: DateTime.now(),
-            // 'pause', not 'stop'. Stopping tears the stream down, so the
-            // pause button was ending playback and the play button then had
-            // nothing to resume — on a live channel that means reconnecting,
-            // which on a provider allowing one connection can fail outright.
-            onPlayPause: () => _channel?.invokeMethod<void>(
-              _status.phase == PlaybackPhase.paused ? 'play' : 'pause',
-            ),
-            onToggleFavourite: widget.onToggleFavourite,
-            isFavourite: widget.isFavourite,
-            onPreviousChannel: _zap(widget.onPreviousChannel),
-            onNextChannel: _zap(widget.onNextChannel),
-            onAudioTracks: () => _openSheet(_Sheet.audio),
-            onSubtitles: () => _openSheet(_Sheet.subtitles),
-            onAspect: () => setState(() => _sheet = _Sheet.aspect),
-            dynamicRange: _dynamicRange,
-            videoCodec: _videoCodec,
-          ),
-          if (_sheet != null) _chooser(),
-        ],
+        ),
       ),
     );
   }

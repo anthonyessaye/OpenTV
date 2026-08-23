@@ -459,6 +459,54 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         .get();
   }
 
+  /// The best-rated films a provider carries, for a highlight shelf.
+  ///
+  /// Ordered by the provider's own rating, which is uneven — many rows carry
+  /// none — so rows without one are excluded rather than sorted to the
+  /// bottom. A shelf called "top rated" that is mostly unrated titles is
+  /// worse than a shorter shelf.
+  ///
+  /// [since] narrows to recently added, which is what makes it "this week"
+  /// rather than a static list of the same twenty films forever.
+  Future<List<Movie>> topRatedMovies(
+    int sourceId, {
+    DateTime? since,
+    int limit = 20,
+  }) {
+    final query = select(movies)
+      ..where(
+        (m) =>
+            m.sourceId.equals(sourceId) &
+            m.hidden.equals(false) &
+            m.rating.isNotNull() &
+            m.rating.isBiggerThanValue(0),
+      );
+    if (since != null) {
+      query.where((m) => m.addedAt.isBiggerOrEqualValue(since));
+    }
+    query
+      ..orderBy([
+        (m) => OrderingTerm(expression: m.rating, mode: OrderingMode.desc),
+      ])
+      ..limit(limit);
+    return query.get();
+  }
+
+  /// The most recently added films.
+  Future<List<Movie>> recentMovies(int sourceId, {int limit = 20}) =>
+      (select(movies)
+            ..where(
+              (m) =>
+                  m.sourceId.equals(sourceId) &
+                  m.hidden.equals(false) &
+                  m.addedAt.isNotNull(),
+            )
+            ..orderBy([
+              (m) => OrderingTerm(expression: m.addedAt, mode: OrderingMode.desc),
+            ])
+            ..limit(limit))
+          .get();
+
   /// Catalogue rows for a set of provider ids, in the order asked for.
   ///
   /// Favourites and watch history store a kind and a remote id, not a copy of

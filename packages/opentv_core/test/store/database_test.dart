@@ -62,6 +62,7 @@ void main() {
   _episodeSync();
   _resolvingIds();
   _preferences();
+  _shelves();
 
   group('sources', () {
     test('adds and reads back in sort order', () async {
@@ -1181,6 +1182,79 @@ void _preferences() {
       final sourceId = await _addSource();
       await db.setPreference('locked-categories:$sourceId', 'not json at all');
       expect(await db.lockedCategories(sourceId), isEmpty);
+    });
+  });
+}
+
+/// The shelves a film screen is built from.
+void _shelves() {
+  group('highlight shelves', () {
+    late int sourceId;
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.upsertMovies([
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'a',
+          name: 'Acclaimed',
+          searchName: 'acclaimed',
+          rating: const Value(9.1),
+          addedAt: Value(DateTime.utc(2026, 8, 20)),
+        ),
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'b',
+          name: 'Middling',
+          searchName: 'middling',
+          rating: const Value(5.0),
+          addedAt: Value(DateTime.utc(2026, 8, 22)),
+        ),
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'c',
+          name: 'Unrated',
+          searchName: 'unrated',
+          addedAt: Value(DateTime.utc(2026, 8, 23)),
+        ),
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'd',
+          name: 'Zero Rated',
+          searchName: 'zero rated',
+          rating: const Value(0),
+          addedAt: Value(DateTime.utc(2026, 8, 23)),
+        ),
+      ]);
+    });
+
+    test('top rated excludes what the provider never rated', () async {
+      // A shelf called "top rated" that is mostly unrated titles is worse
+      // than a shorter shelf, so absent and zero ratings are left out rather
+      // than sorted to the bottom.
+      final top = await db.topRatedMovies(sourceId);
+      expect(top.map((m) => m.name), ['Acclaimed', 'Middling']);
+    });
+
+    test('top rated can be narrowed to recent additions', () async {
+      // Without this the shelf is the same twenty films forever.
+      final top = await db.topRatedMovies(
+        sourceId,
+        since: DateTime.utc(2026, 8, 21),
+      );
+      expect(top.map((m) => m.name), ['Middling']);
+    });
+
+    test('recent is newest first and needs a date', () async {
+      final recent = await db.recentMovies(sourceId);
+      expect(recent.first.name, anyOf('Unrated', 'Zero Rated'));
+      expect(recent, hasLength(4));
+    });
+
+    test('shelves are scoped to their source', () async {
+      final other = await _addSource(name: 'Other');
+      expect(await db.topRatedMovies(other), isEmpty);
+      expect(await db.recentMovies(other), isEmpty);
     });
   });
 }

@@ -38,6 +38,7 @@ class OnboardingDraft {
     required this.url,
     this.username = '',
     this.password = '',
+    this.name = '',
   });
 
   final OnboardingSourceKind kind;
@@ -47,6 +48,13 @@ class OnboardingDraft {
 
   final String username;
   final String password;
+
+  /// What the viewer calls this provider.
+  ///
+  /// Asked for rather than derived, because deriving it put a portal hostname
+  /// across the top of the home screen — which is both ugly and the one part
+  /// of an address worth not reading aloud to a room.
+  final String name;
 }
 
 /// One field the viewer fills in, in the order they are asked for it.
@@ -117,6 +125,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   List<_Field> get _fields => switch (_kind) {
     OnboardingSourceKind.xtream => const [
       _Field(
+        label: 'Name this provider',
+        hint: 'Living room, Dad’s, anything',
+        validate: _validateNotEmpty,
+      ),
+      _Field(
         label: 'Portal address',
         hint: 'http://example.com:8080',
         validate: _validateUrl,
@@ -130,6 +143,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
     ],
     OnboardingSourceKind.m3u => const [
+      _Field(
+        label: 'Name this playlist',
+        hint: 'Sports, Kids, anything',
+        validate: _validateNotEmpty,
+      ),
       _Field(
         label: 'Playlist address',
         hint: 'http://example.com/playlist.m3u',
@@ -211,11 +229,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final draft = switch (_kind) {
       OnboardingSourceKind.xtream => OnboardingDraft(
         kind: _kind,
-        url: _values[0].trim(),
-        username: _values[1].trim(),
-        password: _values[2],
+        name: _values[0].trim(),
+        url: _values[1].trim(),
+        username: _values[2].trim(),
+        password: _values[3],
       ),
-      OnboardingSourceKind.m3u => OnboardingDraft(kind: _kind, url: _values[0].trim()),
+      OnboardingSourceKind.m3u => OnboardingDraft(
+        kind: _kind,
+        name: _values[0].trim(),
+        url: _values[1].trim(),
+      ),
     };
 
     final failure = await widget.onSubmit(draft);
