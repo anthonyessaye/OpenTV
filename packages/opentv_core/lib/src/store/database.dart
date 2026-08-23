@@ -168,6 +168,69 @@ class OpenTvDatabase extends _$OpenTvDatabase {
             ]))
           .get();
 
+  /// Finds which of a set of candidate titles the viewer actually has.
+  ///
+  /// This is what makes a recommendations row worth showing. TMDB will happily
+  /// suggest twenty films; a viewer with an IPTV subscription can watch the
+  /// three of them their provider carries, and a row of twenty dead links is
+  /// worse than no row.
+  ///
+  /// Matched two ways because provider data is uneven. A tmdb id is exact and
+  /// some portals supply one; where they do not, the normalised name is
+  /// compared as a substring, since a catalogue row reads "UK| The Weight of
+  /// Water 1080p" and the metadata provider says "The Weight of Water".
+  Future<List<Movie>> findMoviesMatching(
+    int sourceId,
+    List<({int? tmdbId, String name})> candidates, {
+    int limit = 20,
+  }) async {
+    if (candidates.isEmpty) return const [];
+
+    final byId = <String>[
+      for (final candidate in candidates)
+        if (candidate.tmdbId != null) '${candidate.tmdbId}',
+    ];
+
+    final found = <String, Movie>{};
+
+    if (byId.isNotEmpty) {
+      final rows =
+          await (select(movies)
+                ..where(
+                  (m) => m.sourceId.equals(sourceId) & m.tmdbId.isIn(byId),
+                )
+                ..limit(limit))
+              .get();
+      for (final row in rows) {
+        found[row.remoteId] = row;
+      }
+    }
+
+    for (final candidate in candidates) {
+      if (found.length >= limit) break;
+      final needle = normaliseForSearch(candidate.name);
+      // Very short names match half the catalogue; skip rather than flood the
+      // row with coincidences.
+      if (needle.length < 4) continue;
+
+      final rows =
+          await (select(movies)
+                ..where(
+                  (m) =>
+                      m.sourceId.equals(sourceId) &
+                      m.hidden.equals(false) &
+                      m.searchName.like('%$needle%'),
+                )
+                ..limit(2))
+              .get();
+      for (final row in rows) {
+        found.putIfAbsent(row.remoteId, () => row);
+      }
+    }
+
+    return found.values.take(limit).toList(growable: false);
+  }
+
   // --- search -----------------------------------------------------------
 
   /// Substring search over one kind, using the normalised indexed column.

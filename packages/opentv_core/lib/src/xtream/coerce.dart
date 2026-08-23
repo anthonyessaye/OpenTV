@@ -116,11 +116,21 @@ class Coerce {
     }
 
     if (value is Map) {
-      // A map whose values are all lists is a keyed collection, so flatten
-      // it. Otherwise the map is itself the single element.
-      final values = value.values.toList();
-      if (values.isNotEmpty && values.every((v) => v is List)) {
-        return values
+      // A map keyed by *numbers* whose values are lists is a keyed
+      // collection — get_series_info returns episodes as {"1": [...]} — so
+      // flatten it.
+      //
+      // The key test matters. Testing only that the values are lists also
+      // matches an ordinary response envelope like {"results": [...]} or
+      // {"cast": [...]}, and flattening one of those silently discards the
+      // envelope and returns its contents as though they were the object.
+      final entries = value.entries.toList();
+      final looksKeyed =
+          entries.isNotEmpty &&
+          entries.every((e) => e.value is List && _isNumericKey(e.key));
+      if (looksKeyed) {
+        return entries
+            .map((e) => e.value)
             .cast<List<Object?>>()
             .expand((list) => list.whereType<Map<Object?, Object?>>())
             .map(_castMap)
@@ -148,6 +158,16 @@ class Coerce {
         .where((e) => e.isNotEmpty)
         .toList(growable: false);
   }
+
+  /// Reads a single JSON object, for unwrapping a response envelope.
+  ///
+  /// Use this rather than [asMapList] when exactly one object is expected:
+  /// asMapList is for collections and has to guess at shapes.
+  static Map<String, Object?>? asMap(Object? value) =>
+      value is Map ? _castMap(value) : null;
+
+  static bool _isNumericKey(Object? key) =>
+      key is num || (key is String && int.tryParse(key.trim()) != null);
 
   static Map<String, Object?> _castMap(Map<Object?, Object?> raw) {
     return raw.map((key, value) => MapEntry('$key', value));

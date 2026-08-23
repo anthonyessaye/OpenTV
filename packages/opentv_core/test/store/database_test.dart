@@ -744,4 +744,82 @@ void main() {
       expect(await db.stagesFor(id), isEmpty);
     });
   });
+  group('matching recommendations against the library', () {
+    late int sourceId;
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.upsertMovies([
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: '1',
+          name: 'UK| The Weight of Water 1080p',
+          searchName: 'uk the weight of water 1080p',
+          tmdbId: const Value('603'),
+        ),
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: '2',
+          name: 'Another Film',
+          searchName: 'another film',
+        ),
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: '3',
+          name: 'Deep Water (2022) FHD',
+          searchName: 'deep water 2022 fhd',
+        ),
+      ]);
+    });
+
+    test('matches on tmdb id when the provider supplied one', () async {
+      final found = await db.findMoviesMatching(sourceId, [
+        (tmdbId: 603, name: 'Something Else Entirely'),
+      ]);
+      expect(found.single.remoteId, '1');
+    });
+
+    test('falls back to the name inside the provider decoration', () async {
+      final found = await db.findMoviesMatching(sourceId, [
+        (tmdbId: null, name: 'The Weight of Water'),
+      ]);
+      expect(found.single.remoteId, '1');
+    });
+
+    test('returns nothing for a title the viewer does not have', () async {
+      final found = await db.findMoviesMatching(sourceId, [
+        (tmdbId: 999, name: 'A Film Nobody Carries'),
+      ]);
+      expect(found, isEmpty);
+    });
+
+    test('does not return the same row twice', () async {
+      final found = await db.findMoviesMatching(sourceId, [
+        (tmdbId: 603, name: 'The Weight of Water'),
+        (tmdbId: null, name: 'The Weight of Water'),
+      ]);
+      expect(found, hasLength(1));
+    });
+
+    test('ignores names too short to mean anything', () async {
+      // "It" would match half a catalogue on a substring search.
+      final found = await db.findMoviesMatching(sourceId, [
+        (tmdbId: null, name: 'It'),
+      ]);
+      expect(found, isEmpty);
+    });
+
+    test('an empty candidate list costs no queries', () async {
+      expect(await db.findMoviesMatching(sourceId, []), isEmpty);
+    });
+
+    test('honours the limit', () async {
+      final found = await db.findMoviesMatching(sourceId, [
+        (tmdbId: null, name: 'The Weight of Water'),
+        (tmdbId: null, name: 'Another Film'),
+        (tmdbId: null, name: 'Deep Water'),
+      ], limit: 2);
+      expect(found, hasLength(2));
+    });
+  });
 }

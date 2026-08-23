@@ -130,6 +130,29 @@ void main() {
       expect(result.single['name'], 'Only');
     });
 
+    test('does not flatten a response envelope', () {
+      // Regression. The old rule was "every value is a list", which matches
+      // {"results": [...]} just as well as a season map — so a TMDB search
+      // response was unwrapped and the first film returned as though it were
+      // the response object, losing results, cast and recommendations.
+      final envelope = Coerce.asMapList({
+        'results': [
+          {'id': 1, 'title': 'A Film'},
+        ],
+      });
+      expect(envelope, hasLength(1));
+      expect(envelope.single.containsKey('results'), isTrue);
+    });
+
+    test('does not flatten a single-key envelope either', () {
+      final credits = Coerce.asMapList({
+        'cast': [
+          {'id': 1, 'name': 'Someone'},
+        ],
+      });
+      expect(credits.single.containsKey('cast'), isTrue);
+    });
+
     test('flattens a season-keyed episode object', () {
       // get_series_info returns episodes keyed by season number.
       final result = Coerce.asMapList({
@@ -200,6 +223,23 @@ void main() {
 
     test('stringifies numeric list elements', () {
       expect(Coerce.asStringList([1, 2, 3]), ['1', '2', '3']);
+    });
+  });
+  group('asMap', () {
+    test('unwraps a response envelope', () {
+      final map = Coerce.asMap({'results': <Object?>[], 'page': 1});
+      expect(map?['page'], 1);
+    });
+
+    test('normalises non-string keys', () {
+      final map = Coerce.asMap(<Object?, Object?>{1: 'one'});
+      expect(map?['1'], 'one');
+    });
+
+    test('returns null for anything that is not an object', () {
+      expect(Coerce.asMap(null), isNull);
+      expect(Coerce.asMap('a string'), isNull);
+      expect(Coerce.asMap(<Object?>[]), isNull);
     });
   });
 }
