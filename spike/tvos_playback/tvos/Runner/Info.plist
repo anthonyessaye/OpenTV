@@ -22,6 +22,27 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>FLTAssetsPath</key>
 	<string>flutter_assets</string>
+	<!-- IPTV portals overwhelmingly have no usable TLS: the one probed for
+	     this project rejects a modern handshake outright, and Xtream stream
+	     URLs are plain http by construction. Without this, every channel
+	     fails to load on tvOS exactly as they did on Android before its
+	     cleartext flag was set.
+
+	     This cannot be narrowed to named domains, which is the form Apple
+	     prefers: the portal address is typed by the viewer at runtime and is
+	     not known when this file is written. App Review will ask for a
+	     justification for the broad form, and that justification is this
+	     paragraph.
+
+	     The exposure is real and worth stating plainly: Xtream puts the
+	     username and password in the path of every stream URL, so they travel
+	     in the clear on each channel change. That is a property of the
+	     protocol and the provider, not a choice this app makes. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

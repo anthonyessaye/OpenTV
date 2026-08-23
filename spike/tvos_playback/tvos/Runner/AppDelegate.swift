@@ -106,12 +106,26 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
     private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "play":
-            guard let args = call.arguments as? [String: Any],
-                  let url = args["url"] as? String else {
-                result(FlutterError(code: "bad-args", message: "url required", details: nil))
-                return
+            // A play with no url means resume, which is what the transport
+            // controls send after a pause. Demanding a url here made the
+            // shared chrome's resume impossible on this platform while it
+            // worked on the other — the two sides answer one contract, so
+            // they have to answer all of it.
+            if let args = call.arguments as? [String: Any],
+               let url = args["url"] as? String {
+                play(urlString: url, options: args["options"] as? [String: String])
+            } else {
+                player.play()
             }
-            play(urlString: url, options: args["options"] as? [String: String])
+            result(nil)
+
+        case "pause":
+            // VLC's pause is a toggle, which would make two presses of a
+            // dedicated pause button cancel each other out. The chrome asks
+            // for a state, not a flip, so only pause when actually playing.
+            if player.isPlaying {
+                player.pause()
+            }
             result(nil)
 
         case "stop":
