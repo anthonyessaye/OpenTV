@@ -102,7 +102,9 @@ class PlayerPlatformView(
 
         channel.setMethodCallHandler(::handle)
 
-        (params["url"] as? String)?.let { play(it) }
+        (params["url"] as? String)?.let {
+            play(it, (params["startAtMs"] as? Number)?.toLong() ?: 0L)
+        }
     }
 
     override fun getView(): View = container
@@ -154,10 +156,17 @@ class PlayerPlatformView(
         }
     }
 
-    private fun play(url: String) {
+    /**
+     * [startAtMs] resumes a half-watched film.
+     *
+     * Given to setMediaItem rather than seeked after preparing: seeking once
+     * playback has begun plays the opening seconds first, which reads as the
+     * app having forgotten where the viewer was.
+     */
+    private fun play(url: String, startAtMs: Long = 0L) {
         framesSeen = false
         lastError = null
-        player.setMediaItem(MediaItem.fromUri(url))
+        player.setMediaItem(MediaItem.fromUri(url), startAtMs)
         player.prepare()
         player.playWhenReady = true
     }

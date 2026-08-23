@@ -16,6 +16,9 @@ class PlayerScreen extends StatefulWidget {
     required this.streamUrl,
     this.onToggleFavourite,
     this.isFavourite = false,
+    this.onPreviousChannel,
+    this.onNextChannel,
+    this.startAt,
     this.streamOptions = const {},
     this.isLive = true,
     this.channelName,
@@ -42,6 +45,14 @@ class PlayerScreen extends StatefulWidget {
   final VoidCallback? onToggleFavourite;
 
   final bool isFavourite;
+
+  /// Zapping. Null on anything that is not part of a channel list — a film
+  /// has no next channel, and offering one would be a button that lies.
+  final VoidCallback? onPreviousChannel;
+  final VoidCallback? onNextChannel;
+
+  /// Where to begin, for something half-watched.
+  final Duration? startAt;
 
   final String? nowTitle;
   final DateTime? nowStart;
@@ -158,6 +169,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Tears the current stream down before the next one opens.
+  ///
+  /// Not politeness. The provider probed for this project allows a single
+  /// connection at a time, and on that account opening the next channel while
+  /// this one is still held returns a 407 rather than a picture — so zapping
+  /// would fail on every press but the first. Stopping first costs a moment
+  /// of black and works everywhere; the alternative works only on accounts
+  /// generous enough to hide the bug.
+  VoidCallback? _zap(VoidCallback? move) {
+    if (move == null) return null;
+    return () async {
+      await _channel?.invokeMethod<void>('stop');
+      move();
+    };
+  }
+
   PlaybackStatus _toStatus(Map<String, Object?> raw) {
     final lengthMs = (raw['lengthMs'] as int?) ?? 0;
     final playing = raw['isPlaying'] == true;
@@ -215,6 +242,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           PlayerSurface(
             url: widget.streamUrl,
             streamOptions: widget.streamOptions,
+            startAt: widget.startAt,
             onCreated: _onViewCreated,
           ),
           PlayerChrome(
@@ -229,8 +257,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
             onToggleFavourite: widget.onToggleFavourite,
             isFavourite: widget.isFavourite,
-            onPreviousChannel: () {},
-            onNextChannel: () {},
+            onPreviousChannel: _zap(widget.onPreviousChannel),
+            onNextChannel: _zap(widget.onNextChannel),
             onAudioTracks: () => _openSheet(_Sheet.audio),
             onSubtitles: () => _openSheet(_Sheet.subtitles),
             onAspect: () => setState(() => _sheet = _Sheet.aspect),

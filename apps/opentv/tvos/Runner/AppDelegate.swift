@@ -101,7 +101,11 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
 
         if let args = arguments as? [String: Any],
            let urlString = args["url"] as? String {
-            play(urlString: urlString, options: args["options"] as? [String: String])
+            play(
+                urlString: urlString,
+                options: args["options"] as? [String: String],
+                startAtMs: args["startAtMs"] as? Int
+            )
         }
     }
 
@@ -117,7 +121,11 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             // they have to answer all of it.
             if let args = call.arguments as? [String: Any],
                let url = args["url"] as? String {
-                play(urlString: url, options: args["options"] as? [String: String])
+                    play(
+                    urlString: url,
+                    options: args["options"] as? [String: String],
+                    startAtMs: args["startAtMs"] as? Int
+                )
             } else {
                 player.play()
             }
@@ -163,7 +171,7 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
         }
     }
 
-    private func play(urlString: String, options: [String: String]?) {
+    private func play(urlString: String, options: [String: String]?, startAtMs: Int? = nil) {
         guard let url = URL(string: urlString) else { return }
 
         let media = VLCMedia(url: url)
@@ -187,6 +195,14 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
         framesSeen = false
         player.media = media
         player.play()
+
+        // Resuming a half-watched film. Set after play rather than before,
+        // because VLC has no media to seek within until playback has begun —
+        // and the position is applied as soon as it does, so the opening
+        // seconds are not shown first.
+        if let startAtMs, startAtMs > 0 {
+            player.time = VLCTime(int: Int32(startAtMs))
+        }
     }
 
     /// How the picture is currently fitted to the panel.

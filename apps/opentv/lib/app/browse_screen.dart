@@ -3,6 +3,7 @@ import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
 import '../player_screen.dart';
+import 'film_screen.dart';
 import 'guide_screen.dart';
 import 'search_screen.dart';
 import 'series_screen.dart';
@@ -240,20 +241,58 @@ class _BrowseScreenState extends State<BrowseScreen> {
       return;
     }
 
+    // A film is decided on before it is watched: what it is, whether it was
+    // already started, what else the provider carries like it.
+    if (item.movie case final Movie film) {
+      await Navigator.of(context).push(
+        _fade(
+          (context) => FilmScreen(
+            db: widget.db,
+            source: widget.source,
+            movie: film,
+            onPlay: (playable, from) => _play(playable, startAt: from),
+          ),
+        ),
+      );
+      if (mounted) await _loadSection();
+      return;
+    }
+
     final playable = item.playable;
     if (playable == null) return;
     await _play(playable);
   }
 
-  Future<void> _play(Playable playable) async {
+  /// Zapping, bounded by what is currently listed.
+  ///
+  /// The list is the one on screen — the category being browsed — rather than
+  /// the whole catalogue, because that is what a viewer means by "next"
+  /// having just chosen a category. It wraps, so holding CH+ never dead-ends.
+  Channel? _neighbour(Playable current, int step) {
+    final channels = [
+      for (final item in _items)
+        if (item.playable?.kind == XtreamStreamKind.live) item,
+    ];
+    if (channels.length < 2) return null;
+
+    final at = channels.indexWhere(
+      (item) => item.playable?.remoteId == current.remoteId,
+    );
+    if (at < 0) return null;
+
+    final next = (at + step) % channels.length;
+    return channels[next < 0 ? next + channels.length : next].channel;
+  }
+
+  /// Opens a channel, film or episode in the player.
+  ///
+  /// Everything goes through here — first press, zap, resume — so the player
+  /// cannot end up with a different set of controls depending on how it was
+  /// reached. Zapping used to build its own and quietly lost the favourite
+  /// button.
+  Future<void> _play(Playable playable, {Duration? startAt}) async {
     final url = await widget.resolver.urlFor(widget.source, playable);
     if (!mounted) return;
-
-    final kind = switch (playable.kind) {
-      XtreamStreamKind.live => ItemKind.live,
-      XtreamStreamKind.movie => ItemKind.movie,
-      XtreamStreamKind.series => ItemKind.episode,
-    };
 
     if (url == null) {
       setState(() {
@@ -263,71 +302,72 @@ class _BrowseScreenState extends State<BrowseScreen> {
       return;
     }
 
-    // Recorded on open rather than on close: a viewer who watches ten
-    // minutes and pulls the plug still expects it in Continue, and there is
-    // no close event to rely on when the television is switched off at the
-    // wall.
+    await _openPlayer(playable, url, startAt: startAt, replace: false);
+    if (mounted) await _loadSection();
+  }
+
+  Future<void> _openPlayer(
+    Playable playable,
+    String url, {
+    Duration? startAt,
+    required bool replace,
+  }) async {
+    final navigator = Navigator.of(context);
+
+    // Recorded on open rather than on close: a viewer who watches ten minutes
+    // and pulls the plug still expects it in Continue, and there is no close
+    // event to rely on when the television is switched off at the wall.
     await widget.db.recordPlayback(
       sourceId: widget.source.id,
-      kind: kind,
+      kind: playable.itemKind,
       remoteId: playable.remoteId,
       at: DateTime.now(),
     );
-
-    var favourite = await widget.db.isFavourite(
-      sourceId: widget.source.id,
-      kind: kind,
-      remoteId: playable.remoteId,
-    );
     if (!mounted) return;
 
-    await Navigator.of(context).push(
-      _fade(
-        (context) => StatefulBuilder(
-          builder: (context, setChrome) => PlayerScreen(
-            streamUrl: url,
-            streamOptions: widget.resolver.optionsFor(playable),
-            isLive: playable.isLive,
-            channelName: playable.title,
-            channelNumber: playable.number,
-            isFavourite: favourite,
-            onToggleFavourite: () async {
-              if (favourite) {
-                await widget.db.removeFavourite(
-                  sourceId: widget.source.id,
-                  kind: kind,
-                  remoteId: playable.remoteId,
-                );
-              } else {
-                await widget.db.addFavourite(
-                  sourceId: widget.source.id,
-                  kind: kind,
-                  remoteId: playable.remoteId,
-                  at: DateTime.now(),
-                );
-              }
-              setChrome(() => favourite = !favourite);
-            },
-          ),
-        ),
+    final route = _fade(
+      (context) => _PlayerRoute(
+        db: widget.db,
+        sourceId: widget.source.id,
+        playable: playable,
+        url: url,
+        startAt: startAt,
+        options: widget.resolver.optionsFor(playable),
+        onZap: (step) => _zapTo(playable, step),
       ),
     );
 
-    // The rail's own lists change as a result of watching and favouriting,
-    // so they are rebuilt on the way back rather than going stale.
-    if (mounted) await _loadSection();
+    if (replace) {
+      navigator.pushReplacement(route);
+    } else {
+      await navigator.push(route);
+    }
+  }
+
+  /// Moves to a neighbouring channel, or does nothing when there is no list.
+  Future<void> _zapTo(Playable current, int step) async {
+    final next = _neighbour(current, step);
+    if (next == null) return;
+
+    final playable = Playable.channel(next);
+    final url = await widget.resolver.urlFor(widget.source, playable);
+    if (!mounted || url == null) return;
+
+    // Replaces rather than pushes: zapping ten channels should not leave ten
+    // screens to unwind on the way out.
+    await _openPlayer(playable, url, replace: true);
   }
 
   /// Plays a recording of something already broadcast.
   ///
   /// The window asked for is the programme's own, which is what a viewer
-  /// means by catching up — not an arbitrary span around it. A programme with
-  /// no stop time is given an hour, since XMLTV makes stop optional and a
-  /// zero-length request returns nothing.
+  /// means by catching up. A programme with no stop time is given an hour,
+  /// since XMLTV makes stop optional and a zero-length request returns
+  /// nothing.
   Future<void> _playCatchUp(Channel channel, EpgProgrammeRow programme) async {
     final start = programme.startUtc.toLocal();
-    final stop = programme.stopUtc?.toLocal() ??
-        start.add(const Duration(hours: 1));
+    final stop =
+        programme.stopUtc?.toLocal() ?? start.add(const Duration(hours: 1));
 
     final url = await widget.resolver.catchUpUrlFor(
       widget.source,
@@ -527,6 +567,8 @@ class _Item {
       imageUrl = row.iconUrl,
       number = row.number,
       playable = Playable.channel(row),
+      channel = row,
+      movie = null,
       series = null;
 
   _Item.film(Movie row)
@@ -534,6 +576,8 @@ class _Item {
       imageUrl = row.iconUrl,
       number = null,
       playable = Playable.movie(row),
+      channel = null,
+      movie = row,
       series = null;
 
   /// A series has no stream of its own — opening it opens its episode list.
@@ -542,6 +586,8 @@ class _Item {
       imageUrl = row.coverUrl,
       number = null,
       playable = null,
+      channel = null,
+      movie = null,
       series = row;
 
   final String name;
@@ -549,5 +595,100 @@ class _Item {
   final int? number;
 
   final Playable? playable;
+
+  /// The rows behind the tile, kept so zapping can find a neighbour and a
+  /// film can open its own screen.
+  final Channel? channel;
+  final Movie? movie;
   final SeriesEntry? series;
+}
+
+
+/// The player, with the controls that belong to whatever is playing.
+///
+/// A small widget of its own because the favourite state changes while the
+/// viewer is watching, and because zapping and opening must produce the same
+/// controls — they did not when each built its own player.
+class _PlayerRoute extends StatefulWidget {
+  const _PlayerRoute({
+    required this.db,
+    required this.sourceId,
+    required this.playable,
+    required this.url,
+    required this.options,
+    required this.onZap,
+    this.startAt,
+  });
+
+  final OpenTvDatabase db;
+  final int sourceId;
+  final Playable playable;
+  final String url;
+  final Map<String, String> options;
+
+  /// −1 and 1. Null is never passed; the player decides whether to show the
+  /// buttons based on what is playing.
+  final Future<void> Function(int) onZap;
+
+  final Duration? startAt;
+
+  @override
+  State<_PlayerRoute> createState() => _PlayerRouteState();
+}
+
+class _PlayerRouteState extends State<_PlayerRoute> {
+  bool _favourite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _readFavourite();
+  }
+
+  Future<void> _readFavourite() async {
+    final favourite = await widget.db.isFavourite(
+      sourceId: widget.sourceId,
+      kind: widget.playable.itemKind,
+      remoteId: widget.playable.remoteId,
+    );
+    if (mounted) setState(() => _favourite = favourite);
+  }
+
+  Future<void> _toggle() async {
+    if (_favourite) {
+      await widget.db.removeFavourite(
+        sourceId: widget.sourceId,
+        kind: widget.playable.itemKind,
+        remoteId: widget.playable.remoteId,
+      );
+    } else {
+      await widget.db.addFavourite(
+        sourceId: widget.sourceId,
+        kind: widget.playable.itemKind,
+        remoteId: widget.playable.remoteId,
+        at: DateTime.now(),
+      );
+    }
+    if (mounted) setState(() => _favourite = !_favourite);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final live = widget.playable.kind == XtreamStreamKind.live;
+
+    return PlayerScreen(
+      streamUrl: widget.url,
+      streamOptions: widget.options,
+      isLive: widget.playable.isLive,
+      channelName: widget.playable.title,
+      channelNumber: widget.playable.number,
+      startAt: widget.startAt,
+      isFavourite: _favourite,
+      onToggleFavourite: _toggle,
+      // Only live channels have neighbours. A film has no next channel, and
+      // offering one would be a button that lies.
+      onPreviousChannel: live ? () => widget.onZap(-1) : null,
+      onNextChannel: live ? () => widget.onZap(1) : null,
+    );
+  }
 }

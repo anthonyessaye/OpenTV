@@ -27,6 +27,7 @@ class PlayerSurface extends StatelessWidget {
     required this.url,
     required this.onCreated,
     this.streamOptions = const {},
+    this.startAt,
   });
 
   final String url;
@@ -39,11 +40,20 @@ class PlayerSurface extends StatelessWidget {
   /// which some providers require in order to serve at all.
   final Map<String, String> streamOptions;
 
+  /// Where to begin, for something half-watched. Passed at creation rather
+  /// than seeked afterwards: seeking once playback has started shows the
+  /// opening seconds first, which reads as the app having forgotten.
+  final Duration? startAt;
+
   static const viewType = 'opentv/player';
 
   @override
   Widget build(BuildContext context) {
-    final params = <String, Object?>{'url': url, 'options': streamOptions};
+    final params = <String, Object?>{
+      'url': url,
+      'options': streamOptions,
+      if (startAt != null) 'startAtMs': startAt!.inMilliseconds,
+    };
 
     return switch (defaultTargetPlatform) {
       TargetPlatform.android => _HybridAndroidSurface(

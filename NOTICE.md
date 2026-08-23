@@ -42,16 +42,35 @@ BSD-family. None of them is copyleft.
 which is not yet displayed anywhere and needs to be before release. The API
 key is supplied at build time and is not in this repository.
 
-## A licence decision, now unforced
+## The licence, and a better-drafted way to say the same thing
 
-CC BY-NC was never chosen on its merits; it was simply what the repository
-carried while GPL-3.0 code sat beside it, unresolved. Nothing forces a choice
-any more, and two things are worth weighing before leaving it as it is:
+The owner's intent is settled: **the source stays readable, and nobody may use
+it commercially.** CC BY-NC does express that, so nothing is broken. But it
+expresses it badly, because it was not written for software:
 
-- CC BY-NC is written for creative works. It says nothing useful about
-  linking, binaries or distribution, and Creative Commons themselves recommend
-  against using it for software.
-- Its non-commercial clause is ill-defined enough to deter contributors and
-  packagers who would otherwise have no objection.
+- It says nothing about linking, binaries, or distributing a compiled app —
+  the three things that actually happen here.
+- Creative Commons themselves recommend against using it for software.
+- Its "NonCommercial" definition is vague enough to deter people who had no
+  intention of selling anything.
 
-This is the owner's decision, not one that can be made in code.
+**[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)**
+says the same thing and was drafted by lawyers for exactly this case:
+source available, any noncommercial use permitted, commercial use prohibited
+outright. It is short, plainly written, and unambiguous about binaries.
+
+Swapping is a one-file change and has not been made, because a licence is the
+owner's signature rather than a refactor.
+
+### One consequence worth knowing either way
+
+Neither CC BY-NC nor PolyForm Noncommercial is **open source** in the OSI
+sense — that definition forbids restricting commercial use. The correct term
+is *source available*. In practice:
+
+- GitHub will not show a recognised open-source licence badge.
+- F-Droid and most Linux distributions will not package it.
+- Some contributors decline to send patches to non-OSI projects.
+
+None of that conflicts with the stated intent. It is simply the price of the
+restriction, and it is better known now than discovered later.

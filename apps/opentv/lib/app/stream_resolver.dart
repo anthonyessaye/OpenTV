@@ -203,4 +203,14 @@ class Playable {
   final bool isLive;
 
   final int? number;
+
+  /// The catalogue's own vocabulary for this, for favourites and history.
+  ///
+  /// An episode is stored as [ItemKind.episode] rather than series, because
+  /// what a viewer resumed is one episode and not the whole run.
+  ItemKind get itemKind => switch (kind) {
+    XtreamStreamKind.live => ItemKind.live,
+    XtreamStreamKind.movie => ItemKind.movie,
+    XtreamStreamKind.series => ItemKind.episode,
+  };
 }
