@@ -1,42 +1,57 @@
 # Third-party notices
 
-## NextPlayer
+## The GPL-3.0 conflict, closed
 
-The following Gradle modules are vendored, largely unmodified, from
-[NextPlayer](https://github.com/anilbeesetti/nextplayer) by anilbeesetti:
+This file previously recorded a licence conflict that could not be resolved in
+code. [NextPlayer](https://github.com/anilbeesetti/nextplayer) by anilbeesetti
+was vendored into `core/*` and `feature/*` under GPL-3.0, while this
+repository's own `LICENSE` is Creative Commons Attribution-NonCommercial 4.0.
+The two do not compose: the GPL does not permit adding restrictions beyond its
+own terms, and a non-commercial clause is exactly such a restriction.
 
-```
-core/common      core/model      feature/player
-core/data        core/media      feature/settings
-core/database    core/ui         feature/videopicker
-core/datastore   core/domain
-```
+That notice named two ways out, and said the first was scheduled — remove the
+vendored modules once the custom player landed. It has, and they are gone.
+**The GPL-3.0 obligation arrived with NextPlayer and left with it.**
 
-They retain the upstream package namespace `dev.anilbeesetti.nextplayer`.
+Attribution is kept here rather than deleted: NextPlayer's local-file player
+carried this project's playback for its whole first life, and the record of
+that belongs in the repository even though none of its code does.
 
-NextPlayer is licensed under the **GNU General Public License v3.0**. The full
-text is included at [`licenses/GPL-3.0.txt`](licenses/GPL-3.0.txt) and applies
-to every file in the modules listed above.
+`docs/android-app-retirement.md` says what was removed and where each part
+went.
 
-The upstream revision these modules were copied from was not recorded at the
-time of vendoring and is not currently known. This should be established before
-any attempt to sync upstream fixes.
+## What the app depends on now
 
-### Unresolved license conflict
+**TVVLCKit 3.7.3** (Apple TV only), LGPL-2.1-or-later. VideoLAN moved libVLC
+to the LGPL precisely so it could be distributed through the App Store, and
+VLC ships there today. Workable — but static linking under the LGPL carries
+conditions worth reading before a submission rather than after one.
 
-The repository's own `LICENSE` is Creative Commons Attribution-NonCommercial
-4.0. GPL-3.0 and a non-commercial restriction do not compose: the GPL does not
-permit adding restrictions beyond its own terms, and CC BY-NC is not a
-GPL-compatible license.
+**Media3 / ExoPlayer** (Android only), Apache-2.0. Part of the platform's own
+library set, not a bundled engine.
 
-This notice records the upstream license and attribution, which were previously
-absent. It does **not** resolve the conflict. Distributing a combined work under
-the current terms is not something this file makes lawful.
+**Flutter and Dart**, BSD-3-Clause, via the community
+[`flutter-tvos`](https://github.com/fluttertv/flutter-tvos) fork pinned at
+`v3.47.1-tvos.1.7.0`.
 
-Two paths close it:
+**drift**, **sqlite3**, **xml** and the other pub packages: MIT or
+BSD-family. None of them is copyleft.
 
-1. Remove the vendored modules. They are scheduled for deletion when the custom
-   player lands, which retires the conflict permanently.
-2. Relicense this repository under GPL-3.0-compatible terms.
+**TMDB** supplies metadata. Their terms require attribution in the interface —
+"this product uses the TMDB API but is not endorsed or certified by TMDB" —
+which is not yet displayed anywhere and needs to be before release. The API
+key is supplied at build time and is not in this repository.
 
-This is a decision for the project owner, not one that can be made in code.
+## A licence decision, now unforced
+
+CC BY-NC was never chosen on its merits; it was simply what the repository
+carried while GPL-3.0 code sat beside it, unresolved. Nothing forces a choice
+any more, and two things are worth weighing before leaving it as it is:
+
+- CC BY-NC is written for creative works. It says nothing useful about
+  linking, binaries or distribution, and Creative Commons themselves recommend
+  against using it for software.
+- Its non-commercial clause is ill-defined enough to deter contributors and
+  packagers who would otherwise have no objection.
+
+This is the owner's decision, not one that can be made in code.

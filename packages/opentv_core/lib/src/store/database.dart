@@ -450,6 +450,87 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         .get();
   }
 
+  /// Catalogue rows for a set of provider ids, in the order asked for.
+  ///
+  /// Favourites and watch history store a kind and a remote id, not a copy of
+  /// the row — so showing either means turning those ids back into
+  /// catalogue entries. Order is preserved because both lists are already
+  /// meaningfully ordered: history by recency, favourites by when they were
+  /// added, and re-sorting them alphabetically would destroy that.
+  ///
+  /// Ids with no surviving row are dropped rather than reported. A provider
+  /// removing a film is ordinary, and a favourites list is better one item
+  /// shorter than showing an entry that cannot be opened.
+  Future<List<Channel>> channelsByRemoteIds(
+    int sourceId,
+    List<String> remoteIds,
+  ) async {
+    if (remoteIds.isEmpty) return const [];
+    final rows = await (select(channels)..where(
+      (c) =>
+          c.sourceId.equals(sourceId) &
+          c.remoteId.isIn(remoteIds) &
+          c.hidden.equals(false),
+    )).get();
+    return _inGivenOrder(rows, remoteIds, (row) => row.remoteId);
+  }
+
+  Future<List<Movie>> moviesByRemoteIds(
+    int sourceId,
+    List<String> remoteIds,
+  ) async {
+    if (remoteIds.isEmpty) return const [];
+    final rows = await (select(movies)..where(
+      (m) =>
+          m.sourceId.equals(sourceId) &
+          m.remoteId.isIn(remoteIds) &
+          m.hidden.equals(false),
+    )).get();
+    return _inGivenOrder(rows, remoteIds, (row) => row.remoteId);
+  }
+
+  Future<List<SeriesEntry>> seriesByRemoteIds(
+    int sourceId,
+    List<String> remoteIds,
+  ) async {
+    if (remoteIds.isEmpty) return const [];
+    final rows = await (select(seriesEntries)..where(
+      (e) =>
+          e.sourceId.equals(sourceId) &
+          e.remoteId.isIn(remoteIds) &
+          e.hidden.equals(false),
+    )).get();
+    return _inGivenOrder(rows, remoteIds, (row) => row.remoteId);
+  }
+
+  /// SQL has no ordering by a list, so the caller's order is restored here.
+  static List<T> _inGivenOrder<T>(
+    List<T> rows,
+    List<String> order,
+    String Function(T) idOf,
+  ) {
+    final byId = {for (final row in rows) idOf(row): row};
+    return [
+      for (final id in order)
+        if (byId[id] case final T row) row,
+    ];
+  }
+
+  /// Records that a series' episodes have been fetched.
+  ///
+  /// Kept here rather than in the app so the `&` that joins the two key
+  /// columns stays where drift's operators are already in scope, and so the
+  /// meaning of "synced" has one definition. Writing the timestamp even when
+  /// the portal returned nothing is deliberate: a series with genuinely no
+  /// episodes must not be re-fetched on every open.
+  Future<void> markEpisodesSynced(
+    int sourceId,
+    String seriesRemoteId,
+    DateTime at,
+  ) => (update(seriesEntries)..where(
+    (s) => s.sourceId.equals(sourceId) & s.remoteId.equals(seriesRemoteId),
+  )).write(SeriesEntriesCompanion(episodesSyncedAt: Value(at)));
+
   /// Programmes for many channels across one window, grouped by channel.
   ///
   /// A guide grid shows a screenful of channels at once. Asking

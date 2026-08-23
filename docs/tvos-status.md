@@ -78,21 +78,24 @@ differs between a simulator and a device. It also interacts with item 1: the
 credential reference has to survive a catalogue purge, and whether it does is
 the same open question.
 
-### 3. The licence conflict lands hardest here
+### 3. The licence conflict — closed
 
-*documented — the owner's decision, already open in `NOTICE.md`.*
+*resolved by deletion, not by argument.*
 
-This project carries GPL-3.0. GPL-3.0 and the App Store's terms are widely
-held to be incompatible, which is why VLC itself was pulled from the App Store
-and why VideoLAN relicensed its libraries. libVLC's own licence is not the
-problem; OpenTV's is.
+This was the third blocking item: GPL-3.0 and the App Store's terms are widely
+held to be incompatible, which is why VLC was pulled from the store and why
+VideoLAN relicensed its libraries. The obligation came from NextPlayer, which
+this repository vendored for its player and which has now been removed along
+with the rest of the Kotlin app.
 
-Android has no equivalent constraint — sideloading and third-party stores mean
-a GPL-3.0 Android TV build is distributable today. On tvOS there is no
-sideloading for ordinary users. So this is not a packaging detail to sort out
-at the end: **if the licence does not change, there is no route to an Apple TV
-that is not a developer build on the owner's own account, expiring every
-seven days.**
+Android could always be sideloaded regardless. Apple TV could not, so this was
+the item that decided whether an Apple TV build had any route to a viewer at
+all. It now does.
+
+What remains is not a conflict but a reading task: TVVLCKit is LGPL-2.1+ — the
+licence VideoLAN moved to precisely so their code could ship on the App Store
+— and static linking under the LGPL has conditions worth checking before a
+submission. See `NOTICE.md`.
 
 ---
 

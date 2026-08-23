@@ -14,6 +14,8 @@ class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
     required this.streamUrl,
+    this.onToggleFavourite,
+    this.isFavourite = false,
     this.streamOptions = const {},
     this.isLive = true,
     this.channelName,
@@ -35,6 +37,12 @@ class PlayerScreen extends StatefulWidget {
 
   final String? channelName;
   final int? channelNumber;
+  /// Null hides the control entirely, for anything that cannot be
+  /// favourited.
+  final VoidCallback? onToggleFavourite;
+
+  final bool isFavourite;
+
   final String? nowTitle;
   final DateTime? nowStart;
   final DateTime? nowEnd;
@@ -117,9 +125,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
           PlayerChrome(
             status: _status,
             now: DateTime.now(),
+            // 'pause', not 'stop'. Stopping tears the stream down, so the
+            // pause button was ending playback and the play button then had
+            // nothing to resume — on a live channel that means reconnecting,
+            // which on a provider allowing one connection can fail outright.
             onPlayPause: () => _channel?.invokeMethod<void>(
-              _status.phase == PlaybackPhase.paused ? 'play' : 'stop',
+              _status.phase == PlaybackPhase.paused ? 'play' : 'pause',
             ),
+            onToggleFavourite: widget.onToggleFavourite,
+            isFavourite: widget.isFavourite,
             onPreviousChannel: () {},
             onNextChannel: () {},
             onAudioTracks: () {},

@@ -59,6 +59,8 @@ void main() {
 
   _browsing();
   _guide();
+  _episodeSync();
+  _resolvingIds();
 
   group('sources', () {
     test('adds and reads back in sort order', () async {
@@ -1010,6 +1012,117 @@ void _guide() {
         ),
         isEmpty,
       );
+    });
+  });
+}
+
+/// Episodes are fetched per series, on demand.
+void _episodeSync() {
+  group('episode sync marker', () {
+    test('records when a series was fetched, even if it had none', () async {
+      // Xtream answers get_series_info one series at a time, so a provider
+      // with 4,000 series cannot be fetched up front. Without a marker, a
+      // series that genuinely has no episodes would be re-fetched every time
+      // a viewer opened it.
+      final sourceId = await _addSource();
+      await db.upsertSeries([
+        SeriesEntriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 's1',
+          name: 'The Expanse',
+          searchName: 'the expanse',
+        ),
+      ]);
+
+      final before = await db.seriesIn(sourceId);
+      expect(before.single.episodesSyncedAt, isNull);
+
+      final at = DateTime.utc(2026, 8, 23, 12);
+      await db.markEpisodesSynced(sourceId, 's1', at);
+
+      final after = await db.seriesIn(sourceId);
+      expect(after.single.episodesSyncedAt, at);
+    });
+
+    test('marks only the series named', () async {
+      final sourceId = await _addSource();
+      await db.upsertSeries([
+        SeriesEntriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 's1',
+          name: 'One',
+          searchName: 'one',
+        ),
+        SeriesEntriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 's2',
+          name: 'Two',
+          searchName: 'two',
+        ),
+      ]);
+
+      await db.markEpisodesSynced(sourceId, 's1', DateTime.utc(2026, 8, 23));
+
+      final rows = await db.seriesIn(sourceId);
+      final marked = {for (final row in rows) row.remoteId: row.episodesSyncedAt};
+      expect(marked['s1'], isNotNull);
+      expect(marked['s2'], isNull);
+    });
+  });
+}
+
+/// Favourites and history store ids; the screens need rows.
+void _resolvingIds() {
+  group('resolving stored ids back to rows', () {
+    late int sourceId;
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.upsertChannels([
+        _channel(sourceId, 'c1', 'One'),
+        _channel(sourceId, 'c2', 'Two'),
+        _channel(sourceId, 'c3', 'Three'),
+      ]);
+    });
+
+    test('rows come back in the order asked for, not alphabetically', () async {
+      // History is ordered by recency and favourites by when they were added.
+      // Sorting either alphabetically would throw that away.
+      final rows = await db.channelsByRemoteIds(sourceId, ['c3', 'c1', 'c2']);
+      expect(rows.map((c) => c.name), ['Three', 'One', 'Two']);
+    });
+
+    test('an id whose row is gone is dropped, not reported', () async {
+      // A provider dropping a film is ordinary. A favourites list one item
+      // shorter beats one showing an entry that cannot be opened.
+      final rows = await db.channelsByRemoteIds(sourceId, ['c1', 'missing']);
+      expect(rows.map((c) => c.name), ['One']);
+    });
+
+    test('hidden rows are not resolved', () async {
+      await db.upsertChannels([
+        ChannelsCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'c1',
+          name: 'One',
+          searchName: 'one',
+          hidden: const Value(true),
+        ),
+      ]);
+      expect(await db.channelsByRemoteIds(sourceId, ['c1']), isEmpty);
+    });
+
+    test('an empty list costs no query', () async {
+      expect(await db.channelsByRemoteIds(sourceId, const []), isEmpty);
+      expect(await db.moviesByRemoteIds(sourceId, const []), isEmpty);
+      expect(await db.seriesByRemoteIds(sourceId, const []), isEmpty);
+    });
+
+    test('resolution is scoped to its source', () async {
+      final other = await _addSource(name: 'Other');
+      await db.upsertChannels([_channel(other, 'c1', 'Elsewhere')]);
+      final rows = await db.channelsByRemoteIds(other, ['c1']);
+      expect(rows.single.name, 'Elsewhere');
     });
   });
 }

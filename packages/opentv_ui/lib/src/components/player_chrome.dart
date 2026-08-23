@@ -104,6 +104,8 @@ class PlayerChrome extends StatelessWidget {
     this.onNextChannel,
     this.onAudioTracks,
     this.onSubtitles,
+    this.onToggleFavourite,
+    this.isFavourite = false,
   });
 
   final PlaybackStatus status;
@@ -117,6 +119,14 @@ class PlayerChrome extends StatelessWidget {
   final VoidCallback? onNextChannel;
   final VoidCallback? onAudioTracks;
   final VoidCallback? onSubtitles;
+
+  /// Favouriting what you are watching is the one moment a viewer reliably
+  /// knows they want to come back to it. The old Android app put this on a
+  /// detail screen only, which meant a channel you were already watching
+  /// could not be marked without leaving it.
+  final VoidCallback? onToggleFavourite;
+
+  final bool isFavourite;
 
   @override
   Widget build(BuildContext context) {
@@ -164,6 +174,8 @@ class PlayerChrome extends StatelessWidget {
                     onNextChannel: onNextChannel,
                     onAudioTracks: onAudioTracks,
                     onSubtitles: onSubtitles,
+                    onToggleFavourite: onToggleFavourite,
+                    isFavourite: isFavourite,
                   ),
                 ],
               ),
@@ -315,6 +327,8 @@ class _Controls extends StatelessWidget {
     this.onNextChannel,
     this.onAudioTracks,
     this.onSubtitles,
+    this.onToggleFavourite,
+    this.isFavourite = false,
   });
 
   final PlaybackStatus status;
@@ -323,6 +337,14 @@ class _Controls extends StatelessWidget {
   final VoidCallback? onNextChannel;
   final VoidCallback? onAudioTracks;
   final VoidCallback? onSubtitles;
+
+  /// Favouriting what you are watching is the one moment a viewer reliably
+  /// knows they want to come back to it. The old Android app put this on a
+  /// detail screen only, which meant a channel you were already watching
+  /// could not be marked without leaving it.
+  final VoidCallback? onToggleFavourite;
+
+  final bool isFavourite;
 
   @override
   Widget build(BuildContext context) {
@@ -350,6 +372,17 @@ class _Controls extends StatelessWidget {
         if (status.subtitleTrackCount > 0) ...[
           const SizedBox(width: OpenTvSpace.sm),
           PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
+        ],
+        if (onToggleFavourite != null) ...[
+          const SizedBox(width: OpenTvSpace.lg),
+          PlayerButton(
+            // Stated rather than a heart glyph: the words say which way the
+            // press goes, where an icon leaves the viewer guessing whether
+            // it shows the state or the action.
+            label: isFavourite ? 'UNFAVOURITE' : 'FAVOURITE',
+            onSelect: onToggleFavourite,
+            emphasis: isFavourite,
+          ),
         ],
       ],
     );

@@ -5,6 +5,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 import '../player_screen.dart';
 import 'guide_screen.dart';
 import 'search_screen.dart';
+import 'series_screen.dart';
 import 'stream_resolver.dart';
 
 /// Browsing a real provider's catalogue.
@@ -39,8 +40,14 @@ class BrowseScreen extends StatefulWidget {
 class _BrowseScreenState extends State<BrowseScreen> {
   TvSection _section = TvSection.live;
 
-  /// Null means "everything in this section".
+  /// Null means "everything in this section"; the two sentinels below mean
+  /// the viewer's own lists rather than one of the provider's categories.
   String? _category;
+
+  /// Chosen so no provider category id can collide with them — Xtream and
+  /// M3U both use plain identifiers, never a leading colon.
+  static const _continueId = ':continue';
+  static const _favouritesId = ':favourites';
 
   List<CategoryEntry> _entries = const [];
   List<_Item> _items = const [];
@@ -75,8 +82,27 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (!mounted || generation != _generation) return;
 
     final total = counts.values.fold(0, (sum, value) => sum + value);
+
+    // The viewer's own lists, which the old Android app surfaced and which
+    // would otherwise be data the schema keeps and nothing ever shows.
+    final resumable = await widget.db.continueWatching(
+      sourceId: widget.source.id,
+      limit: 60,
+    );
+    final favourites = await widget.db.favouritesOf(widget.source.id, _kind);
+    final mine = [
+      for (final state in resumable)
+        if (state.itemKind == _kind) state,
+    ];
+
+    if (!mounted || generation != _generation) return;
+
     setState(() {
       _entries = [
+        if (mine.isNotEmpty)
+          (id: _continueId, name: 'Continue', count: mine.length),
+        if (favourites.isNotEmpty)
+          (id: _favouritesId, name: 'Favourites', count: favourites.length),
         (id: null, name: 'All', count: total),
         for (final category in categories)
           if ((counts[category.remoteId] ?? 0) > 0)
@@ -100,6 +126,43 @@ class _BrowseScreenState extends State<BrowseScreen> {
     // is for.
     const window = 180;
     final sourceId = widget.source.id;
+
+    if (_category == _continueId || _category == _favouritesId) {
+      final ids = _category == _continueId
+          ? [
+              for (final state in await widget.db.continueWatching(
+                sourceId: sourceId,
+                limit: window,
+              ))
+                if (state.itemKind == _kind) state.itemRemoteId,
+            ]
+          : [
+              for (final row in await widget.db.favouritesOf(sourceId, _kind))
+                row.itemRemoteId,
+            ];
+
+      final resolved = switch (_section) {
+        TvSection.films => [
+          for (final row in await widget.db.moviesByRemoteIds(sourceId, ids))
+            _Item.film(row),
+        ],
+        TvSection.series => [
+          for (final row in await widget.db.seriesByRemoteIds(sourceId, ids))
+            _Item.series(row),
+        ],
+        _ => [
+          for (final row in await widget.db.channelsByRemoteIds(sourceId, ids))
+            _Item.channel(row),
+        ],
+      };
+
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _items = resolved;
+        _loading = false;
+      });
+      return;
+    }
 
     final items = switch (_section) {
       TvSection.films => [
@@ -136,42 +199,109 @@ class _BrowseScreenState extends State<BrowseScreen> {
   }
 
   Future<void> _open(_Item item) async {
-    final channel = item.channel;
-    if (channel == null) {
-      // Films and series need a detail screen and an on-demand URL, neither
-      // of which is wired yet. Saying so beats a tile that swallows the press.
-      setState(() {
-        _problem = 'Playing films and series is not wired up yet.';
-      });
+    // A series is not a stream; it is a list of them. It gets its own screen,
+    // which fetches the episodes the bulk sync deliberately skipped.
+    if (item.series case final SeriesEntry entry) {
+      await Navigator.of(context).push(
+        _fade(
+          (context) => SeriesScreen(
+            db: widget.db,
+            source: widget.source,
+            series: entry,
+            resolver: widget.resolver,
+            onPlay: (episode) => _play(episode),
+          ),
+        ),
+      );
       return;
     }
 
-    final url = await widget.resolver.urlFor(widget.source, channel);
+    final playable = item.playable;
+    if (playable == null) return;
+    await _play(playable);
+  }
+
+  Future<void> _play(Playable playable) async {
+    final url = await widget.resolver.urlFor(widget.source, playable);
     if (!mounted) return;
+
+    final kind = switch (playable.kind) {
+      XtreamStreamKind.live => ItemKind.live,
+      XtreamStreamKind.movie => ItemKind.movie,
+      XtreamStreamKind.series => ItemKind.episode,
+    };
 
     if (url == null) {
       setState(() {
-        _problem = 'This channel has no address, and the account password '
+        _problem = 'This has no address stored, and the account password '
             'could not be read back.';
       });
       return;
     }
 
+    // Recorded on open rather than on close: a viewer who watches ten
+    // minutes and pulls the plug still expects it in Continue, and there is
+    // no close event to rely on when the television is switched off at the
+    // wall.
+    await widget.db.recordPlayback(
+      sourceId: widget.source.id,
+      kind: kind,
+      remoteId: playable.remoteId,
+      at: DateTime.now(),
+    );
+
+    var favourite = await widget.db.isFavourite(
+      sourceId: widget.source.id,
+      kind: kind,
+      remoteId: playable.remoteId,
+    );
+    if (!mounted) return;
+
     await Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        transitionDuration: OpenTvMotion.fade,
-        pageBuilder: (context, animation, _) => PlayerScreen(
-          streamUrl: url,
-          streamOptions: widget.resolver.optionsFor(channel),
-          isLive: true,
-          channelName: channel.name,
-          channelNumber: channel.number,
+      _fade(
+        (context) => StatefulBuilder(
+          builder: (context, setChrome) => PlayerScreen(
+            streamUrl: url,
+            streamOptions: widget.resolver.optionsFor(playable),
+            isLive: playable.isLive,
+            channelName: playable.title,
+            channelNumber: playable.number,
+            isFavourite: favourite,
+            onToggleFavourite: () async {
+              if (favourite) {
+                await widget.db.removeFavourite(
+                  sourceId: widget.source.id,
+                  kind: kind,
+                  remoteId: playable.remoteId,
+                );
+              } else {
+                await widget.db.addFavourite(
+                  sourceId: widget.source.id,
+                  kind: kind,
+                  remoteId: playable.remoteId,
+                  at: DateTime.now(),
+                );
+              }
+              setChrome(() => favourite = !favourite);
+            },
+          ),
         ),
-        transitionsBuilder: (context, animation, _, child) =>
-            FadeTransition(opacity: animation, child: child),
       ),
     );
+
+    // The rail's own lists change as a result of watching and favouriting,
+    // so they are rebuilt on the way back rather than going stale.
+    if (mounted) await _loadSection();
   }
+
+  /// A plain fade. Sliding pages read as phone gestures on a screen nobody
+  /// touches.
+  PageRouteBuilder<void> _fade(WidgetBuilder builder) => PageRouteBuilder<void>(
+    transitionDuration: OpenTvMotion.fade,
+    pageBuilder: (context, animation, _) => builder(context),
+    transitionsBuilder: (context, animation, _, child) =>
+        FadeTransition(opacity: animation, child: child),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -311,25 +441,28 @@ class _Item {
     : name = row.name,
       imageUrl = row.iconUrl,
       number = row.number,
-      channel = row;
+      playable = Playable.channel(row),
+      series = null;
 
   _Item.film(Movie row)
     : name = row.name,
       imageUrl = row.iconUrl,
       number = null,
-      channel = null;
+      playable = Playable.movie(row),
+      series = null;
 
+  /// A series has no stream of its own — opening it opens its episode list.
   _Item.series(SeriesEntry row)
     : name = row.name,
       imageUrl = row.coverUrl,
       number = null,
-      channel = null;
+      playable = null,
+      series = row;
 
   final String name;
   final String? imageUrl;
   final int? number;
 
-  /// Present only for live channels, which are the only things that can be
-  /// played straight from the grid.
-  final Channel? channel;
+  final Playable? playable;
+  final SeriesEntry? series;
 }
