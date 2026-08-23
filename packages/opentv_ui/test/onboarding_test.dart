@@ -214,7 +214,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(submitted, isNotNull);
-      expect(submitted!.kind, SourceKind.xtream);
+      expect(submitted!.kind, OnboardingSourceKind.xtream);
       expect(submitted!.url, 'http://tv.example.com');
       expect(submitted!.username, 'viewer');
       expect(submitted!.password, 'secret');

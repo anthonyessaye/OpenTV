@@ -30,6 +30,10 @@ class AppDelegate: FlutterAppDelegate {
             withId: "opentv/player"
         )
 
+        // Somewhere to put the catalogue, and the Keychain for the provider
+        // password — which the database deliberately does not hold.
+        HostChannel.attach(messenger: registrar.messenger())
+
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 }

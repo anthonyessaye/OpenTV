@@ -1,0 +1,119 @@
+import Flutter
+import Foundation
+import Security
+
+/// The tvOS half of the host channel: a data directory and the Keychain.
+///
+/// Both answers differ from Android's in ways that matter to the app above.
+final class HostChannel {
+
+    static func attach(messenger: FlutterBinaryMessenger) {
+        let channel = FlutterMethodChannel(name: "opentv/host", binaryMessenger: messenger)
+        channel.setMethodCallHandler { call, result in
+            handle(call, result)
+        }
+    }
+
+    private static func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+        switch call.method {
+
+        // The caches directory, and not by preference.
+        //
+        // tvOS gives an app no directory that survives by right: there is a
+        // small key-value store, and a cache the system may purge whenever it
+        // wants space. A 284,000-row catalogue fits in neither, so on Apple TV
+        // it is a cache by necessity and can vanish between launches. The Dart
+        // side is written to expect that; the sync engine is resumable and
+        // checkpointed per stage precisely so re-filling it is routine rather
+        // than an incident.
+        case "dataDirectory":
+            let paths = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)
+            guard let base = paths.first else {
+                result(FlutterError(code: "no-directory",
+                                    message: "tvOS returned no caches directory",
+                                    details: nil))
+                return
+            }
+            let directory = (base as NSString).appendingPathComponent("opentv")
+            do {
+                try FileManager.default.createDirectory(
+                    atPath: directory, withIntermediateDirectories: true)
+                result(directory)
+            } catch {
+                result(FlutterError(code: "no-directory",
+                                    message: error.localizedDescription,
+                                    details: nil))
+            }
+
+        case "writeSecret":
+            guard let args = call.arguments as? [String: Any],
+                  let reference = args["reference"] as? String,
+                  let secret = args["secret"] as? String,
+                  let data = secret.data(using: .utf8) else {
+                result(FlutterError(code: "bad-args",
+                                    message: "reference and secret required",
+                                    details: nil))
+                return
+            }
+
+            // Delete first rather than trying to update: SecItemAdd fails with
+            // errSecDuplicateItem on a re-entered password, which is the most
+            // ordinary case there is.
+            SecItemDelete(query(for: reference) as CFDictionary)
+
+            var attributes = query(for: reference)
+            attributes[kSecValueData as String] = data
+            // Never synchronised to other devices and never in a backup: this
+            // is one television's copy of one provider's password.
+            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+            let status = SecItemAdd(attributes as CFDictionary, nil)
+            guard status == errSecSuccess else {
+                result(FlutterError(code: "keychain",
+                                    message: "could not store the secret (OSStatus \(status))",
+                                    details: nil))
+                return
+            }
+            result(nil)
+
+        case "readSecret":
+            guard let args = call.arguments as? [String: Any],
+                  let reference = args["reference"] as? String else {
+                result(nil)
+                return
+            }
+            var lookup = query(for: reference)
+            lookup[kSecReturnData as String] = true
+            lookup[kSecMatchLimit as String] = kSecMatchLimitOne
+
+            var item: CFTypeRef?
+            let status = SecItemCopyMatching(lookup as CFDictionary, &item)
+            // A missing secret is an ordinary answer, not a failure: the
+            // catalogue's directory can be purged, or the app's data cleared,
+            // leaving a source whose password is simply gone.
+            guard status == errSecSuccess, let data = item as? Data else {
+                result(nil)
+                return
+            }
+            result(String(data: data, encoding: .utf8))
+
+        case "deleteSecret":
+            if let args = call.arguments as? [String: Any],
+               let reference = args["reference"] as? String {
+                SecItemDelete(query(for: reference) as CFDictionary)
+            }
+            result(nil)
+
+        default:
+            result(FlutterMethodNotImplemented)
+        }
+    }
+
+    private static func query(for reference: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "co.podeo.opentv.credentials",
+            kSecAttrAccount as String: reference,
+        ]
+    }
+}

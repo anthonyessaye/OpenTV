@@ -58,4 +58,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-exoplayer-dash:$media3")
     implementation("androidx.media3:media3-ui:$media3")
+
+    // Encrypted preferences for the provider password, with the key held in
+    // the hardware-backed Android keystore. Xtream embeds credentials in
+    // every stream URL, so the app must keep the password to play anything —
+    // which makes where it is kept a decision worth making properly.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }

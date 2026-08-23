@@ -14,5 +14,10 @@ class MainActivity : FlutterActivity() {
             "opentv/player",
             PlayerPlatformViewFactory(flutterEngine.dartExecutor.binaryMessenger),
         )
+
+        // Somewhere durable for the catalogue, and a hardware-backed keystore
+        // for the provider password — which the database deliberately does
+        // not hold.
+        HostChannel(applicationContext).attach(flutterEngine.dartExecutor.binaryMessenger)
     }
 }

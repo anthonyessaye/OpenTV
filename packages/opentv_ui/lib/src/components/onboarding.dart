@@ -8,7 +8,14 @@ import 'text_entry.dart';
 import 'tv_keyboard.dart';
 
 /// The kinds of source a viewer can add.
-enum SourceKind {
+///
+/// Named apart from the core's own `SourceKind` on purpose. This package has
+/// no dependency on the domain core — it is a design system, and staying free
+/// of the catalogue is what lets it be tested on the VM without a database.
+/// The app maps between the two, which is a line of code and keeps the two
+/// meanings from being assumed identical when one of them later grows a case
+/// the other does not want.
+enum OnboardingSourceKind {
   /// An Xtream Codes portal: one host plus credentials, from which the
   /// catalogue, the categories and the guide are all derived.
   xtream,
@@ -33,7 +40,7 @@ class OnboardingDraft {
     this.password = '',
   });
 
-  final SourceKind kind;
+  final OnboardingSourceKind kind;
 
   /// The portal address for Xtream, or the playlist address for M3U.
   final String url;
@@ -98,7 +105,7 @@ enum _Stage { kind, details, working, failed }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   _Stage _stage = _Stage.kind;
-  SourceKind _kind = SourceKind.xtream;
+  OnboardingSourceKind _kind = OnboardingSourceKind.xtream;
 
   /// Values, one per field of the chosen kind.
   List<String> _values = const [];
@@ -108,7 +115,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _failure;
 
   List<_Field> get _fields => switch (_kind) {
-    SourceKind.xtream => const [
+    OnboardingSourceKind.xtream => const [
       _Field(
         label: 'Portal address',
         hint: 'http://example.com:8080',
@@ -122,7 +129,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         validate: _validateNotEmpty,
       ),
     ],
-    SourceKind.m3u => const [
+    OnboardingSourceKind.m3u => const [
       _Field(
         label: 'Playlist address',
         hint: 'http://example.com/playlist.m3u',
@@ -148,7 +155,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return null;
   }
 
-  void _choose(SourceKind kind) {
+  void _choose(OnboardingSourceKind kind) {
     setState(() {
       _kind = kind;
       _values = List.filled(_fields.length, '');
@@ -202,13 +209,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
 
     final draft = switch (_kind) {
-      SourceKind.xtream => OnboardingDraft(
+      OnboardingSourceKind.xtream => OnboardingDraft(
         kind: _kind,
         url: _values[0].trim(),
         username: _values[1].trim(),
         password: _values[2],
       ),
-      SourceKind.m3u => OnboardingDraft(kind: _kind, url: _values[0].trim()),
+      OnboardingSourceKind.m3u => OnboardingDraft(kind: _kind, url: _values[0].trim()),
     };
 
     final failure = await widget.onSubmit(draft);
@@ -282,7 +289,7 @@ class _Masthead extends StatelessWidget {
 class _KindStep extends StatelessWidget {
   const _KindStep({required this.onChoose, this.onCancel});
 
-  final ValueChanged<SourceKind> onChoose;
+  final ValueChanged<OnboardingSourceKind> onChoose;
   final VoidCallback? onCancel;
 
   @override
@@ -306,14 +313,14 @@ class _KindStep extends StatelessWidget {
                     'and password. Brings channels, films, series and the '
                     'guide.',
                 autofocus: true,
-                onSelect: () => onChoose(SourceKind.xtream),
+                onSelect: () => onChoose(OnboardingSourceKind.xtream),
               ),
               const SizedBox(width: OpenTvSpace.md),
               _KindCard(
                 title: 'A playlist address',
                 detail: 'An M3U or M3U8 link. Brings whatever the playlist '
                     'lists; a guide can be added afterwards.',
-                onSelect: () => onChoose(SourceKind.m3u),
+                onSelect: () => onChoose(OnboardingSourceKind.m3u),
               ),
             ],
           ),
