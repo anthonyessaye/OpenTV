@@ -58,6 +58,7 @@ void main() {
   tearDown(() => db.close());
 
   _browsing();
+  _guide();
 
   group('sources', () {
     test('adds and reads back in sort order', () async {
@@ -937,6 +938,78 @@ void _browsing() {
         'scifi': 2,
         'classics': 1,
       });
+    });
+  });
+}
+
+/// The guide grid: many channels, one window, one query.
+void _guide() {
+  group('guide across channels', () {
+    late int sourceId;
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.insertProgrammes([
+        _programme(sourceId, 'bbc', DateTime.utc(2026, 8, 22, 18),
+            DateTime.utc(2026, 8, 22, 19), 'News'),
+        _programme(sourceId, 'bbc', DateTime.utc(2026, 8, 22, 19),
+            DateTime.utc(2026, 8, 22, 20), 'Drama'),
+        _programme(sourceId, 'itv', DateTime.utc(2026, 8, 22, 18, 30),
+            DateTime.utc(2026, 8, 22, 19, 30), 'Quiz'),
+        // Outside the window entirely.
+        _programme(sourceId, 'bbc', DateTime.utc(2026, 8, 23, 2),
+            DateTime.utc(2026, 8, 23, 3), 'Overnight'),
+      ]);
+    });
+
+    test('rows come back grouped by channel, in time order', () async {
+      final guide = await db.programmesForChannels(
+        sourceId,
+        ['bbc', 'itv'],
+        DateTime.utc(2026, 8, 22, 18),
+        DateTime.utc(2026, 8, 22, 20),
+      );
+
+      expect(guide.keys, unorderedEquals(['bbc', 'itv']));
+      expect(guide['bbc']!.map((p) => p.title), ['News', 'Drama']);
+      expect(guide['itv']!.map((p) => p.title), ['Quiz']);
+    });
+
+    test('a programme straddling the window edge is included', () async {
+      // A guide that opened at 19:15 and dropped the programme already
+      // running would show a gap where the current show is.
+      final guide = await db.programmesForChannels(
+        sourceId,
+        ['itv'],
+        DateTime.utc(2026, 8, 22, 19, 15),
+        DateTime.utc(2026, 8, 22, 21),
+      );
+      expect(guide['itv']!.map((p) => p.title), ['Quiz']);
+    });
+
+    test('channels with nothing scheduled are simply absent', () async {
+      // Only about 15% of a real provider's channels carry a guide id, so
+      // this is the common case rather than an edge.
+      final guide = await db.programmesForChannels(
+        sourceId,
+        ['bbc', 'unknown'],
+        DateTime.utc(2026, 8, 22, 18),
+        DateTime.utc(2026, 8, 22, 19),
+      );
+      expect(guide.containsKey('unknown'), isFalse);
+      expect(guide['bbc'], hasLength(1));
+    });
+
+    test('an empty channel list costs no query', () async {
+      expect(
+        await db.programmesForChannels(
+          sourceId,
+          const [],
+          DateTime.utc(2026, 8, 22, 18),
+          DateTime.utc(2026, 8, 22, 19),
+        ),
+        isEmpty,
+      );
     });
   });
 }

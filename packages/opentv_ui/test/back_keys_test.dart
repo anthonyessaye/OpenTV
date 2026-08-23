@@ -74,6 +74,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         BackKeys(
+          platform: TargetPlatform.iOS,
           onBack: () {
             presses++;
             return true;
@@ -98,6 +99,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         BackKeys(
+          platform: TargetPlatform.iOS,
           onBack: () => false,
           child: const Focus(autofocus: true, child: SizedBox()),
         ),
@@ -121,6 +123,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         BackKeys(
+          platform: TargetPlatform.iOS,
           onBack: () {
             presses++;
             return true;
@@ -152,6 +155,34 @@ void main() {
     expect(arrived, 4);
   });
 
+  testWidgets('Android is left to the framework', (tester) async {
+    // Handling back here as well as in the platform's own back channel pops
+    // twice for one press: out of the player, then out of the app. Observed
+    // exactly that way on an Android TV emulator, where the log showed the
+    // pop succeeding and the activity finishing anyway.
+    var presses = 0;
+    await tester.pumpWidget(
+      _wrap(
+        BackKeys(
+          platform: TargetPlatform.android,
+          onBack: () {
+            presses++;
+            return true;
+          },
+          child: const Focus(autofocus: true, child: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    expect(presses, 0);
+    expect(BackKeys.neededOn(TargetPlatform.android), isFalse);
+    expect(BackKeys.neededOn(TargetPlatform.iOS), isTrue);
+  });
+
   testWidgets('it never becomes a focus stop', (tester) async {
     // It sits above everything; if it could hold focus, the first press of a
     // direction would go to it rather than into the interface.
@@ -161,6 +192,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         BackKeys(
+          platform: TargetPlatform.iOS,
           onBack: () => true,
           child: Focus(focusNode: tile, autofocus: true, child: const SizedBox()),
         ),

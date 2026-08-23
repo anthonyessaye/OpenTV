@@ -14,11 +14,13 @@ import 'package:opentv_core/opentv_core.dart';
 /// so what is being tested afterwards is the real read path.
 ///
 /// ```
-/// dart run tool/seed_catalogue.dart <playlist.m3u> <catalogue.sqlite>
+/// dart run tool/seed_catalogue.dart <playlist.m3u> <catalogue.sqlite> [guide.xml]
 /// ```
 Future<void> main(List<String> arguments) async {
-  if (arguments.length != 2) {
-    stderr.writeln('usage: seed_catalogue.dart <playlist.m3u> <database>');
+  if (arguments.length < 2 || arguments.length > 3) {
+    stderr.writeln(
+      'usage: seed_catalogue.dart <playlist.m3u> <database> [guide.xml]',
+    );
     exitCode = 64;
     return;
   }
@@ -54,16 +56,31 @@ Future<void> main(List<String> arguments) async {
     ),
   );
 
-  Stream<String> lines() => playlist
+  Stream<String> linesOf(File file) => file
       .openRead()
       .transform(const Utf8Decoder(allowMalformed: true))
       .transform(const LineSplitter());
+
+  Stream<String> lines() => linesOf(playlist);
+
+  // The guide runs through the real XMLTV parser and the real guide stage, so
+  // what gets tested afterwards is the path the app uses rather than rows
+  // written by hand.
+  final guide = arguments.length == 3 ? File(arguments[2]) : null;
+  if (guide != null && !guide.existsSync()) {
+    stderr.writeln('no guide at ${guide.path}');
+    exitCode = 66;
+    return;
+  }
 
   final engine = SyncEngine(db);
   var written = 0;
   await for (final step in engine.sync(
     sourceId,
-    M3uCatalogueFetcher(openPlaylist: lines),
+    M3uCatalogueFetcher(
+      openPlaylist: lines,
+      openGuide: guide == null ? null : () => linesOf(guide),
+    ),
   )) {
     written += step.itemsWritten;
     stdout.writeln('  ${step.stage.name}: ${step.status.name} '

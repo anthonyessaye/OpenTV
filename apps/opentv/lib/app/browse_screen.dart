@@ -3,6 +3,8 @@ import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
 import '../player_screen.dart';
+import 'guide_screen.dart';
+import 'search_screen.dart';
 import 'stream_resolver.dart';
 
 /// Browsing a real provider's catalogue.
@@ -181,20 +183,17 @@ class _BrowseScreenState extends State<BrowseScreen> {
           SectionBar(
             title: widget.source.name,
             current: _section,
-            // Only what is built. A bar naming a screen that does not exist
-            // is worse than one that does not name it.
-            sections: const [
-              TvSection.live,
-              TvSection.films,
-              TvSection.series,
-            ],
             onSelect: (section) {
               if (section == _section) return;
               setState(() {
                 _section = section;
                 _problem = null;
               });
-              _loadSection();
+              // Guide and search browse nothing: they have their own shape
+              // and their own queries.
+              if (section != TvSection.guide && section != TvSection.search) {
+                _loadSection();
+              }
             },
           ),
           if (_problem != null)
@@ -208,8 +207,30 @@ class _BrowseScreenState extends State<BrowseScreen> {
                 style: OpenTvType.bodyMuted.copyWith(color: OpenTvColors.alert),
               ),
             ),
-          Expanded(
-            child: Row(
+          Expanded(child: _body()),
+        ],
+      ),
+    );
+  }
+
+  Widget _body() {
+    switch (_section) {
+      case TvSection.guide:
+        return GuideScreen(
+          db: widget.db,
+          sourceId: widget.source.id,
+          onOpenChannel: (channel) => _open(_Item.channel(channel)),
+        );
+      case TvSection.search:
+        return SearchScreen(
+          db: widget.db,
+          sourceId: widget.source.id,
+          onOpenChannel: (channel) => _open(_Item.channel(channel)),
+        );
+      case TvSection.live:
+      case TvSection.films:
+      case TvSection.series:
+        return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CategoryRail(
@@ -224,11 +245,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
                 ),
                 Expanded(child: _grid()),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
+            );
+    }
   }
 
   Widget _grid() {

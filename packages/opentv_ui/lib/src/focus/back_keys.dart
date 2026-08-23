@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -10,22 +11,41 @@ import 'package:flutter/widgets.dart';
 ///   the system home screen at the top level. An app that swallows Menu
 ///   without going anywhere is rejected, and a viewer who reaches the player
 ///   has no other way out.
-/// * **Android TV** has Back. Flutter's own back dispatcher already routes it
-///   to the navigator, so this is belt and braces there rather than the only
-///   path — but binding it here keeps one description of the behaviour
-///   instead of two.
+/// * **Android TV** has Back, and the framework already routes it to the
+///   navigator through the platform's own back channel. Handling it here as
+///   well pops twice for one press: the first pop leaves the player, the
+///   second finds only the root route, and the activity finishes — so the
+///   viewer presses back once and the app closes. Observed exactly that way
+///   on an Android TV emulator. This widget therefore stands aside on
+///   Android and lets the framework do its job.
 ///
 /// [onBack] returns whether it consumed the press. Returning false lets the
 /// platform do its default thing, which at the root of the app is exactly
 /// what should happen: tvOS leaves for the home screen, Android leaves the
 /// app. Consuming the press there instead would trap the viewer inside.
 class BackKeys extends StatelessWidget {
-  const BackKeys({super.key, required this.onBack, required this.child});
+  const BackKeys({
+    super.key,
+    required this.onBack,
+    required this.child,
+    this.platform,
+  });
 
   /// Handles the press. True when it was consumed.
   final bool Function() onBack;
 
   final Widget child;
+
+  /// Overridden by tests, which cannot change the real platform.
+  final TargetPlatform? platform;
+
+  /// Whether this widget should handle back on a given platform.
+  ///
+  /// False on Android, where the framework's back dispatcher already pops and
+  /// a second handler closes the app instead of returning to the previous
+  /// screen.
+  static bool neededOn(TargetPlatform platform) =>
+      platform != TargetPlatform.android;
 
   /// Which physical buttons mean "back".
   ///
@@ -64,6 +84,9 @@ class BackKeys extends StatelessWidget {
       canRequestFocus: false,
       skipTraversal: true,
       onKeyEvent: (node, event) {
+        if (!neededOn(platform ?? defaultTargetPlatform)) {
+          return KeyEventResult.ignored;
+        }
         if (!handles(event)) return KeyEventResult.ignored;
         return onBack() ? KeyEventResult.handled : KeyEventResult.ignored;
       },

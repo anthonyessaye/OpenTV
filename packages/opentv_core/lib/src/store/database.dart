@@ -450,6 +450,47 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         .get();
   }
 
+  /// Programmes for many channels across one window, grouped by channel.
+  ///
+  /// A guide grid shows a screenful of channels at once. Asking
+  /// [programmesBetween] for each of them is one query per row, and a guide
+  /// that redraws as the viewer scrolls would issue them continuously. One
+  /// query answers the whole visible page.
+  ///
+  /// Channels with nothing scheduled are absent from the result rather than
+  /// present and empty — on a real provider only about 15% of channels carry
+  /// an id the guide can be joined on, so absence is the common case and the
+  /// caller has to handle it either way.
+  Future<Map<String, List<EpgProgrammeRow>>> programmesForChannels(
+    int sourceId,
+    List<String> epgChannelIds,
+    DateTime from,
+    DateTime to,
+  ) async {
+    if (epgChannelIds.isEmpty) return const {};
+
+    final start = from.toUtc();
+    final end = to.toUtc();
+
+    final rows =
+        await (select(epgProgrammes)
+              ..where(
+                (p) =>
+                    p.sourceId.equals(sourceId) &
+                    p.channelId.isIn(epgChannelIds) &
+                    p.startUtc.isSmallerThanValue(end) &
+                    (p.stopUtc.isNull() | p.stopUtc.isBiggerThanValue(start)),
+              )
+              ..orderBy([(p) => OrderingTerm(expression: p.startUtc)]))
+            .get();
+
+    final grouped = <String, List<EpgProgrammeRow>>{};
+    for (final row in rows) {
+      (grouped[row.channelId] ??= []).add(row);
+    }
+    return grouped;
+  }
+
   // --- favourites -------------------------------------------------------
 
   Future<void> addFavourite({
