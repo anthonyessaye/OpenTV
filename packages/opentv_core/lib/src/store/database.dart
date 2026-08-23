@@ -155,6 +155,87 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     return query.get();
   }
 
+  /// Films in one category, or across the source when none is named.
+  ///
+  /// Paged rather than fetched whole: the catalogue probed for this project
+  /// holds 179,712 films, and a category of nine thousand is ordinary.
+  Future<List<Movie>> moviesIn(
+    int sourceId, {
+    String? categoryRemoteId,
+    int limit = 200,
+    int offset = 0,
+  }) {
+    final query = select(movies)
+      ..where((m) => m.sourceId.equals(sourceId) & m.hidden.equals(false));
+    if (categoryRemoteId != null) {
+      query.where((m) => m.categoryRemoteId.equals(categoryRemoteId));
+    }
+    query
+      ..orderBy([(m) => OrderingTerm(expression: m.name)])
+      ..limit(limit, offset: offset);
+    return query.get();
+  }
+
+  /// Series in one category, or across the source when none is named.
+  Future<List<SeriesEntry>> seriesIn(
+    int sourceId, {
+    String? categoryRemoteId,
+    int limit = 200,
+    int offset = 0,
+  }) {
+    final query = select(seriesEntries)
+      ..where((e) => e.sourceId.equals(sourceId) & e.hidden.equals(false));
+    if (categoryRemoteId != null) {
+      query.where((e) => e.categoryRemoteId.equals(categoryRemoteId));
+    }
+    query
+      ..orderBy([(e) => OrderingTerm(expression: e.name)])
+      ..limit(limit, offset: offset);
+    return query.get();
+  }
+
+  /// How many items each category holds, keyed by the provider's category id.
+  ///
+  /// One grouped query rather than one per category. A provider with 400
+  /// categories would otherwise mean 400 round trips before the list could be
+  /// drawn, and the count is what tells a viewer which categories are worth
+  /// entering at all.
+  Future<Map<String, int>> countsByCategory(
+    int sourceId,
+    ItemKind kind,
+  ) async {
+    // The three kinds live in three tables with the same shape, and drift's
+    // typed builders cannot express "group this column of whichever table"
+    // without a generic dance that reads far worse than the SQL. The table
+    // name comes from a closed enum and never from input, so there is nothing
+    // here to inject into.
+    final table = switch (kind) {
+      ItemKind.live => 'channels',
+      ItemKind.movie => 'movies',
+      ItemKind.series || ItemKind.episode => 'series_entries',
+    };
+
+    // Typed explicitly: inferring across the branches lands on their common
+    // supertype, which is not what readsFrom accepts.
+    final Set<ResultSetImplementation<dynamic, dynamic>> reads = switch (kind) {
+      ItemKind.live => {channels},
+      ItemKind.movie => {movies},
+      ItemKind.series || ItemKind.episode => {seriesEntries},
+    };
+
+    final rows = await customSelect(
+      'SELECT category_remote_id AS id, COUNT(*) AS n FROM $table '
+      'WHERE source_id = ? AND hidden = 0 AND category_remote_id IS NOT NULL '
+      'GROUP BY category_remote_id',
+      variables: [Variable.withInt(sourceId)],
+      readsFrom: reads,
+    ).get();
+
+    return {
+      for (final row in rows) row.read<String>('id'): row.read<int>('n'),
+    };
+  }
+
   Future<List<Episode>> episodesOf(int sourceId, String seriesRemoteId) =>
       (select(episodes)
             ..where(

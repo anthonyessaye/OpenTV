@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
-import 'home_screen.dart';
+import 'browse_screen.dart';
 import 'host.dart';
 import 'source_service.dart';
 import 'stream_resolver.dart';
@@ -16,11 +16,28 @@ import 'stream_resolver.dart';
 /// inherits Google's design language, on either television. WidgetsApp gives
 /// routing and text direction and stops there.
 class OpenTvApp extends StatelessWidget {
-  const OpenTvApp({super.key});
+  OpenTvApp({super.key});
+
+  /// Needed because the back handler is installed above the navigator, in
+  /// [WidgetsApp.builder], where the context cannot see it.
+  final _navigator = GlobalKey<NavigatorState>();
+
+  /// Pops one screen, or reports that there was nothing to pop.
+  ///
+  /// Returning false at the root is deliberate: tvOS requires Menu to leave
+  /// for the system home screen, and consuming it here would trap the viewer
+  /// inside the app — which is also grounds for rejection.
+  bool _back() {
+    final navigator = _navigator.currentState;
+    if (navigator == null || !navigator.canPop()) return false;
+    navigator.pop();
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
     return WidgetsApp(
+      navigatorKey: _navigator,
       color: OpenTvColors.ground,
       debugShowCheckedModeBanner: false,
       // WidgetsApp has no default text style; without this a Text with no
@@ -29,7 +46,10 @@ class OpenTvApp extends StatelessWidget {
       // Every screen is authored on a 1920x1080 canvas and scaled, because
       // Apple TV and Android TV disagree about how many logical pixels
       // describe the same panel — 1920x1080 against 960x540.
-      builder: (context, child) => TvCanvas(child: child ?? const SizedBox()),
+      builder: (context, child) => BackKeys(
+        onBack: _back,
+        child: TvCanvas(child: child ?? const SizedBox()),
+      ),
       pageRouteBuilder: <T>(RouteSettings settings, WidgetBuilder builder) {
         // Without Material there is no default transition. A fade suits a
         // ten-foot interface; sliding pages read as phone gestures on a
@@ -162,6 +182,6 @@ class _RootState extends State<_Root> {
       );
     }
 
-    return HomeScreen(db: db, source: source, resolver: _resolver!);
+    return BrowseScreen(db: db, source: source, resolver: _resolver!);
   }
 }

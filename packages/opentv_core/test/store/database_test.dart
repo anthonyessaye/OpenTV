@@ -57,6 +57,8 @@ void main() {
   setUp(() => db = OpenTvDatabase(NativeDatabase.memory()));
   tearDown(() => db.close());
 
+  _browsing();
+
   group('sources', () {
     test('adds and reads back in sort order', () async {
       await _addSource(name: 'Second', sortOrder: 2);
@@ -820,6 +822,121 @@ void main() {
         (tmdbId: null, name: 'Deep Water'),
       ], limit: 2);
       expect(found, hasLength(2));
+    });
+  });
+}
+
+/// Browsing a real provider: 400 categories and six figures of items, where
+/// picking what to load is the whole problem.
+void _browsing() {
+  group('browsing by category', () {
+    late int sourceId;
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.upsertChannels([
+        _channel(sourceId, 'c1', 'News One', category: 'news'),
+        _channel(sourceId, 'c2', 'News Two', category: 'news'),
+        _channel(sourceId, 'c3', 'Sport One', category: 'sport'),
+      ]);
+      await db.upsertMovies([
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'm1',
+          name: 'Arrival',
+          searchName: 'arrival',
+          categoryRemoteId: const Value('scifi'),
+        ),
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'm2',
+          name: 'Blade Runner',
+          searchName: 'blade runner',
+          categoryRemoteId: const Value('scifi'),
+        ),
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'm3',
+          name: 'Casablanca',
+          searchName: 'casablanca',
+          categoryRemoteId: const Value('classics'),
+        ),
+        // Hidden rows must not be listed or counted, or a category promises
+        // more than it can show.
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'm4',
+          name: 'Buried',
+          searchName: 'buried',
+          categoryRemoteId: const Value('scifi'),
+          hidden: const Value(true),
+        ),
+      ]);
+      await db.upsertSeries([
+        SeriesEntriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 's1',
+          name: 'The Expanse',
+          searchName: 'the expanse',
+          categoryRemoteId: const Value('scifi'),
+        ),
+      ]);
+    });
+
+    test('films come back for one category, in name order', () async {
+      final films = await db.moviesIn(sourceId, categoryRemoteId: 'scifi');
+      expect(films.map((m) => m.name), ['Arrival', 'Blade Runner']);
+    });
+
+    test('films can be paged', () async {
+      // A category of nine thousand is ordinary; the screen shows a window.
+      final first = await db.moviesIn(sourceId, limit: 2);
+      final second = await db.moviesIn(sourceId, limit: 2, offset: 2);
+      expect(first.map((m) => m.name), ['Arrival', 'Blade Runner']);
+      expect(second.map((m) => m.name), ['Casablanca']);
+    });
+
+    test('omitting a category lists the whole source', () async {
+      final films = await db.moviesIn(sourceId);
+      expect(films, hasLength(3));
+    });
+
+    test('series come back for one category', () async {
+      final series = await db.seriesIn(sourceId, categoryRemoteId: 'scifi');
+      expect(series.map((e) => e.name), ['The Expanse']);
+    });
+
+    test('counts arrive for every kind in one query', () async {
+      // The count is what tells a viewer which of 400 categories is worth
+      // entering, so it has to be cheap enough to fetch for all of them.
+      expect(await db.countsByCategory(sourceId, ItemKind.live), {
+        'news': 2,
+        'sport': 1,
+      });
+      expect(await db.countsByCategory(sourceId, ItemKind.movie), {
+        'scifi': 2, // the hidden film is not counted
+        'classics': 1,
+      });
+      expect(await db.countsByCategory(sourceId, ItemKind.series), {
+        'scifi': 1,
+      });
+    });
+
+    test('counts are scoped to their source', () async {
+      final other = await _addSource(name: 'Other');
+      await db.upsertMovies([
+        MoviesCompanion.insert(
+          sourceId: other,
+          remoteId: 'x1',
+          name: 'Elsewhere',
+          searchName: 'elsewhere',
+          categoryRemoteId: const Value('scifi'),
+        ),
+      ]);
+      expect(await db.countsByCategory(sourceId, ItemKind.movie), {
+        'scifi': 2,
+        'classics': 1,
+      });
     });
   });
 }

@@ -12,5 +12,5 @@ void main() {
   // first database is opened.
   configureSqlite();
 
-  runApp(const OpenTvApp());
+  runApp(OpenTvApp());
 }
