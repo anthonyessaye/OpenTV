@@ -134,6 +134,18 @@ class _SearchScreenState extends State<SearchScreen> {
                   active: true,
                 ),
               ),
+              const SizedBox(height: OpenTvSpace.xs),
+              SizedBox(
+                width: 920,
+                child: SystemTextInput(
+                  value: _term,
+                  onChanged: (text) {
+                    if (text == _term) return;
+                    setState(() => _term = text);
+                    _schedule();
+                  },
+                ),
+              ),
               const SizedBox(height: OpenTvSpace.md),
               TvKeyboard(
                 autofocus: true,

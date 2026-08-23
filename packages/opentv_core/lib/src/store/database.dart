@@ -619,6 +619,79 @@ class OpenTvDatabase extends _$OpenTvDatabase {
 
   static String _lockedKey(int sourceId) => 'locked-categories:$sourceId';
 
+  /// Hides or restores one catalogue row.
+  ///
+  /// Distinct from the parental lock, which hides a whole category behind a
+  /// PIN. This is the viewer removing clutter from their own screen — a
+  /// shopping channel, a duplicate feed, a category of films in a language
+  /// they do not speak — and it needs no PIN because it protects nothing.
+  ///
+  /// The row stays in the catalogue. A sync would only bring it back, and
+  /// deleting it would take the favourite and the watch history with it.
+  Future<void> setChannelHidden(
+    int sourceId,
+    String remoteId,
+    bool hidden,
+  ) => (update(channels)..where(
+    (c) => c.sourceId.equals(sourceId) & c.remoteId.equals(remoteId),
+  )).write(ChannelsCompanion(hidden: Value(hidden)));
+
+  Future<void> setMovieHidden(int sourceId, String remoteId, bool hidden) =>
+      (update(movies)..where(
+        (m) => m.sourceId.equals(sourceId) & m.remoteId.equals(remoteId),
+      )).write(MoviesCompanion(hidden: Value(hidden)));
+
+  Future<void> setSeriesHidden(int sourceId, String remoteId, bool hidden) =>
+      (update(seriesEntries)..where(
+        (e) => e.sourceId.equals(sourceId) & e.remoteId.equals(remoteId),
+      )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
+
+  /// Hides or restores a whole category's worth of rows.
+  Future<int> setCategoryHidden(
+    int sourceId,
+    ItemKind kind,
+    String categoryRemoteId,
+    bool hidden,
+  ) async {
+    // The category row itself, so it stops appearing in the rail.
+    await (update(categories)..where(
+      (c) =>
+          c.sourceId.equals(sourceId) &
+          c.kind.equalsValue(kind) &
+          c.remoteId.equals(categoryRemoteId),
+    )).write(CategoriesCompanion(hidden: Value(hidden)));
+
+    // And its contents, so "All" does not quietly list them anyway.
+    return switch (kind) {
+      ItemKind.live => (update(channels)..where(
+        (c) =>
+            c.sourceId.equals(sourceId) &
+            c.categoryRemoteId.equals(categoryRemoteId),
+      )).write(ChannelsCompanion(hidden: Value(hidden))),
+      ItemKind.movie => (update(movies)..where(
+        (m) =>
+            m.sourceId.equals(sourceId) &
+            m.categoryRemoteId.equals(categoryRemoteId),
+      )).write(MoviesCompanion(hidden: Value(hidden))),
+      ItemKind.series || ItemKind.episode => (update(seriesEntries)..where(
+        (e) =>
+            e.sourceId.equals(sourceId) &
+            e.categoryRemoteId.equals(categoryRemoteId),
+      )).write(SeriesEntriesCompanion(hidden: Value(hidden))),
+    };
+  }
+
+  /// Every category, including the hidden ones, for a screen that manages
+  /// them. [categoriesFor] deliberately excludes hidden rows, which is right
+  /// for browsing and useless for un-hiding.
+  Future<List<Category>> allCategoriesFor(int sourceId, ItemKind kind) =>
+      (select(categories)
+            ..where(
+              (c) => c.sourceId.equals(sourceId) & c.kind.equalsValue(kind),
+            )
+            ..orderBy([(c) => OrderingTerm(expression: c.name)]))
+          .get();
+
   /// Records that a series' episodes have been fetched.
   ///
   /// Kept here rather than in the app so the `&` that joins the two key

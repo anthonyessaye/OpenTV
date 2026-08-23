@@ -43,7 +43,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-enum _Panel { sources, parental, about }
+enum _Panel { sources, account, hidden, parental, about }
 
 class _SettingsScreenState extends State<SettingsScreen> {
   _Panel _panel = _Panel.sources;
@@ -51,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _hasPin = false;
   Set<String> _locked = const {};
   List<Category> _categories = const [];
+  List<_CategoryEntry> _allCategories = const [];
 
   /// Non-null while a PIN is being entered.
   String? _entry;
@@ -70,11 +71,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ...await widget.db.categoriesFor(widget.active.id, kind),
     ];
 
+    // Hidden ones too: categoriesFor excludes them, which is right for
+    // browsing and useless for the screen whose job is un-hiding them.
+    final everything = <_CategoryEntry>[
+      for (final kind in [ItemKind.live, ItemKind.movie, ItemKind.series])
+        for (final category in await widget.db.allCategoriesFor(
+          widget.active.id,
+          kind,
+        ))
+          _CategoryEntry(category: category, kind: kind),
+    ];
+
     if (!mounted) return;
     setState(() {
       _hasPin = pin != null && pin.isNotEmpty;
       _locked = locked;
       _categories = categories;
+      _allCategories = everything;
     });
   }
 
@@ -131,6 +144,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: _PanelButton(
                     label: switch (panel) {
                       _Panel.sources => 'Providers',
+                      _Panel.account => 'Account',
+                      _Panel.hidden => 'Hidden categories',
                       _Panel.parental => 'Parental lock',
                       _Panel.about => 'About',
                     },
@@ -154,6 +169,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: switch (_panel) {
               _Panel.sources => _sources(),
+              _Panel.account => _account(),
+              _Panel.hidden => _hidden(),
               _Panel.parental => _parental(),
               _Panel.about => _about(),
             },
@@ -311,6 +328,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// What the provider says about the account.
+  ///
+  /// Read live rather than stored, because the two facts worth knowing —
+  /// whether it is active and when it expires — are exactly the ones that
+  /// change without the app being told.
+  Widget _account() {
+    if (widget.active.kind != SourceKind.xtream) {
+      return const Text(
+        'A playlist has no account behind it. There is nothing to expire and '
+        'nothing to check.',
+        style: OpenTvType.bodyMuted,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Fact(label: 'Provider', value: widget.active.name),
+        _Fact(label: 'Portal', value: widget.active.url),
+        _Fact(label: 'Username', value: widget.active.username ?? '—'),
+        _Fact(
+          label: 'Password',
+          // Never shown. It lives in the keystore and there is no version of
+          // "check my account" that requires putting it on a television
+          // screen in a room with other people in it.
+          value: widget.active.credentialRef == null ? 'Not stored' : 'Stored',
+        ),
+        _Fact(
+          label: 'Last synced',
+          value: widget.active.lastSyncedAt == null
+              ? 'Never'
+              : _when(widget.active.lastSyncedAt!),
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Text(
+          'Expiry and connection limits come from the provider and are read '
+          'during a sync. Nothing here is sent anywhere.',
+          style: OpenTvType.bodyMuted,
+        ),
+      ],
+    );
+  }
+
+  static String _when(DateTime at) {
+    final local = at.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
+  /// Categories the viewer has taken off their own screen.
+  ///
+  /// Separate from the parental lock and needing no PIN, because this
+  /// protects nothing — it is a shopping channel, a duplicate feed, or films
+  /// in a language nobody in the house speaks.
+  Widget _hidden() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Anything hidden here is removed from browsing and search. It stays '
+          'in the catalogue, so favourites and history survive, and it can be '
+          'brought back at any time.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Expanded(
+          child: _allCategories.isEmpty
+              ? const Text('Nothing to hide yet.', style: OpenTvType.bodyMuted)
+              : ListView.builder(
+                  itemCount: _allCategories.length,
+                  itemBuilder: (context, index) {
+                    final entry = _allCategories[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: _LockRow(
+                        name: '${entry.category.name}  ·  ${entry.kindLabel}',
+                        locked: entry.category.hidden,
+                        lockedLabel: 'HIDDEN',
+                        onToggle: () => _toggleHidden(entry),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _toggleHidden(_CategoryEntry entry) async {
+    await widget.db.setCategoryHidden(
+      widget.active.id,
+      entry.kind,
+      entry.category.remoteId,
+      !entry.category.hidden,
+    );
+    await _load();
+  }
+
   Widget _about() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -465,17 +581,21 @@ class _LockRow extends StatelessWidget {
     required this.name,
     required this.locked,
     required this.onToggle,
+    this.lockedLabel = 'LOCKED',
   });
 
   final String name;
   final bool locked;
   final VoidCallback onToggle;
 
+  /// "Locked" and "hidden" are different promises, and the row says which.
+  final String lockedLabel;
+
   @override
   Widget build(BuildContext context) {
     return FocusableTile(
       onSelect: onToggle,
-      semanticLabel: '$name, ${locked ? 'locked' : 'not locked'}',
+      semanticLabel: '$name, ${locked ? lockedLabel.toLowerCase() : 'visible'}',
       borderRadius: OpenTvRadius.tile,
       scaleOnFocus: 1.01,
       child: Container(
@@ -503,13 +623,64 @@ class _LockRow extends StatelessWidget {
               ),
             ),
             Text(
-              locked ? 'LOCKED' : '—',
+              locked ? lockedLabel : '—',
               style: OpenTvType.data.copyWith(
                 color: locked ? OpenTvColors.alert : OpenTvColors.inkFaint,
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+/// A category together with the kind it belongs to, which the row itself
+/// does not carry in a form the update needs.
+class _CategoryEntry {
+  const _CategoryEntry({required this.category, required this.kind});
+
+  final Category category;
+  final ItemKind kind;
+
+  String get kindLabel => switch (kind) {
+    ItemKind.live => 'Live',
+    ItemKind.movie => 'Films',
+    ItemKind.series || ItemKind.episode => 'Series',
+  };
+}
+
+/// One labelled fact, set as a readout.
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: OpenTvSpace.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 220,
+            child: Text(
+              label.toUpperCase(),
+              style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: OpenTvType.body,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import '../focus/focusable_tile.dart';
 import '../tokens/tokens.dart';
 import 'player_chrome.dart' show PlayerButton;
+import 'system_text_input.dart';
 import 'text_entry.dart';
 import 'tv_keyboard.dart';
 
@@ -190,6 +191,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
   }
 
+  /// Takes a whole value at once, from the platform's own input.
+  void _replace(String text) {
+    if (_values[_index] == text) return;
+    setState(() {
+      _values[_index] = text;
+      _problem = null;
+    });
+  }
+
   void _delete() {
     final current = _values[_index];
     if (current.isEmpty) {
@@ -267,6 +277,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           onKey: _type,
           onDelete: _delete,
           onAdvance: _advance,
+          onReplace: _replace,
         ),
         _Stage.working => _WorkingStep(progress: widget.progress),
         _Stage.failed => _FailedStep(
@@ -450,6 +461,7 @@ class _DetailsStep extends StatelessWidget {
     required this.onKey,
     required this.onDelete,
     required this.onAdvance,
+    required this.onReplace,
   });
 
   final _Field field;
@@ -461,6 +473,10 @@ class _DetailsStep extends StatelessWidget {
   final ValueChanged<String> onKey;
   final VoidCallback onDelete;
   final VoidCallback onAdvance;
+
+  /// Replaces the whole value, which is what arrives from a phone rather
+  /// than one character at a time.
+  final ValueChanged<String> onReplace;
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +503,18 @@ class _DetailsStep extends StatelessWidget {
             obscure: field.obscure,
             problem: problem,
             active: true,
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.xs),
+        // The second way in. A remote is a poor typewriter and an address is
+        // long; this lets a phone or a paired keyboard finish it.
+        SizedBox(
+          width: 900,
+          child: SystemTextInput(
+            value: value,
+            obscure: field.obscure,
+            onChanged: onReplace,
+            onDone: onAdvance,
           ),
         ),
         const SizedBox(height: OpenTvSpace.md),

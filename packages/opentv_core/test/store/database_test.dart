@@ -63,6 +63,7 @@ void main() {
   _resolvingIds();
   _preferences();
   _shelves();
+  _hiding();
 
   group('sources', () {
     test('adds and reads back in sort order', () async {
@@ -1255,6 +1256,102 @@ void _shelves() {
       final other = await _addSource(name: 'Other');
       expect(await db.topRatedMovies(other), isEmpty);
       expect(await db.recentMovies(other), isEmpty);
+    });
+  });
+}
+
+/// Hiding clutter, which is not the same as locking it away.
+void _hiding() {
+  group('hiding what a viewer does not want', () {
+    late int sourceId;
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.upsertCategories([
+        CategoriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'shop',
+          name: 'Shopping',
+          kind: ItemKind.live,
+        ),
+        CategoriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'news',
+          name: 'News',
+          kind: ItemKind.live,
+        ),
+      ]);
+      await db.upsertChannels([
+        _channel(sourceId, 'c1', 'Bargains', category: 'shop'),
+        _channel(sourceId, 'c2', 'More Bargains', category: 'shop'),
+        _channel(sourceId, 'c3', 'Headlines', category: 'news'),
+      ]);
+    });
+
+    test('one row can be hidden and restored', () async {
+      await db.setChannelHidden(sourceId, 'c1', true);
+      expect(
+        (await db.channelsIn(sourceId)).map((c) => c.name),
+        ['Headlines', 'More Bargains'],
+      );
+
+      await db.setChannelHidden(sourceId, 'c1', false);
+      expect(await db.channelsIn(sourceId), hasLength(3));
+    });
+
+    test('hiding a category hides what is in it', () async {
+      // Hiding only the category row would leave All listing its contents,
+      // which is the same bug the parental lock had to fix separately.
+      await db.setCategoryHidden(sourceId, ItemKind.live, 'shop', true);
+
+      expect(
+        (await db.channelsIn(sourceId)).map((c) => c.name),
+        ['Headlines'],
+      );
+      expect(
+        (await db.categoriesFor(sourceId, ItemKind.live)).map((c) => c.name),
+        ['News'],
+      );
+    });
+
+    test('a hidden category can be found again to restore it', () async {
+      // categoriesFor excludes hidden rows, which is right for browsing and
+      // useless for a screen whose whole job is un-hiding them.
+      await db.setCategoryHidden(sourceId, ItemKind.live, 'shop', true);
+
+      expect(await db.categoriesFor(sourceId, ItemKind.live), hasLength(1));
+      expect(await db.allCategoriesFor(sourceId, ItemKind.live), hasLength(2));
+
+      await db.setCategoryHidden(sourceId, ItemKind.live, 'shop', false);
+      expect(await db.categoriesFor(sourceId, ItemKind.live), hasLength(2));
+      expect(await db.channelsIn(sourceId), hasLength(3));
+    });
+
+    test('hidden rows survive rather than being deleted', () async {
+      // A sync would bring a deleted row back anyway, and deleting it would
+      // take the favourite and the watch history with it.
+      await db.setChannelHidden(sourceId, 'c1', true);
+      await db.addFavourite(
+        sourceId: sourceId,
+        kind: ItemKind.live,
+        remoteId: 'c1',
+        at: DateTime.utc(2026, 8, 23),
+      );
+      expect(
+        await db.isFavourite(
+          sourceId: sourceId,
+          kind: ItemKind.live,
+          remoteId: 'c1',
+        ),
+        isTrue,
+      );
+    });
+
+    test('hiding is scoped to its source', () async {
+      final other = await _addSource(name: 'Other');
+      await db.upsertChannels([_channel(other, 'c1', 'Elsewhere')]);
+      await db.setChannelHidden(sourceId, 'c1', true);
+      expect(await db.channelsIn(other), hasLength(1));
     });
   });
 }
