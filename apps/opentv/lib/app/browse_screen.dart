@@ -294,6 +294,51 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (mounted) await _loadSection();
   }
 
+  /// Plays a recording of something already broadcast.
+  ///
+  /// The window asked for is the programme's own, which is what a viewer
+  /// means by catching up — not an arbitrary span around it. A programme with
+  /// no stop time is given an hour, since XMLTV makes stop optional and a
+  /// zero-length request returns nothing.
+  Future<void> _playCatchUp(Channel channel, EpgProgrammeRow programme) async {
+    final start = programme.startUtc.toLocal();
+    final stop = programme.stopUtc?.toLocal() ??
+        start.add(const Duration(hours: 1));
+
+    final url = await widget.resolver.catchUpUrlFor(
+      widget.source,
+      channel,
+      start,
+      stop.difference(start),
+    );
+    if (!mounted) return;
+
+    if (url == null) {
+      setState(() {
+        _problem = 'This provider does not keep a recording of that, or the '
+            'account password could not be read back.';
+      });
+      return;
+    }
+
+    await Navigator.of(context).push(
+      _fade(
+        (context) => PlayerScreen(
+          streamUrl: url,
+          streamOptions: widget.resolver.optionsFor(
+            Playable.channel(channel),
+          ),
+          // A recording is not live, whatever channel it came from: it has a
+          // real beginning and end, and the chrome should offer a position
+          // rather than an ON AIR badge.
+          isLive: false,
+          channelName: programme.title ?? channel.name,
+          channelNumber: channel.number,
+        ),
+      ),
+    );
+  }
+
   /// A plain fade. Sliding pages read as phone gestures on a screen nobody
   /// touches.
   PageRouteBuilder<void> _fade(WidgetBuilder builder) => PageRouteBuilder<void>(
@@ -350,6 +395,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
           db: widget.db,
           sourceId: widget.source.id,
           onOpenChannel: (channel) => _open(_Item.channel(channel)),
+          canCatchUp: (channel, start) => StreamResolver.isWithinArchive(
+            channel,
+            start,
+            DateTime.now(),
+          ),
+          onOpenCatchUp: _playCatchUp,
         );
       case TvSection.search:
         return SearchScreen(

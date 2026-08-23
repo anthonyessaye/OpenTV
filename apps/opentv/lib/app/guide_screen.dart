@@ -19,12 +19,22 @@ class GuideScreen extends StatefulWidget {
     required this.db,
     required this.sourceId,
     required this.onOpenChannel,
+    this.onOpenCatchUp,
+    this.canCatchUp,
     this.now,
   });
 
   final OpenTvDatabase db;
   final int sourceId;
   final ValueChanged<Channel> onOpenChannel;
+
+  /// Plays a recording of something already broadcast. Offered only where the
+  /// provider says it has one.
+  final void Function(Channel, EpgProgrammeRow)? onOpenCatchUp;
+
+  /// Decides whether a past programme can be caught up. Injected so the
+  /// screen does not need the resolver, and so tests can drive it.
+  final bool Function(Channel, DateTime)? canCatchUp;
 
   /// Injected by tests so the layout does not race the clock.
   final DateTime Function()? now;
@@ -46,7 +56,33 @@ class _GuideScreenState extends State<GuideScreen> {
 
   late DateTime _origin;
 
+  /// Where the window started when the screen opened, so "NOW" can return
+  /// there without recomputing against a clock that has since moved.
+  late DateTime _liveOrigin;
+
   DateTime get _clock => (widget.now ?? DateTime.now)();
+
+  /// Moves the window through time.
+  ///
+  /// Catch-up is unreachable without this. A viewer who missed something
+  /// looks for it where it was — earlier on the same channel — and a guide
+  /// that only ever shows the next three hours can display a recording but
+  /// never navigate to one.
+  void _shift(Duration by) {
+    setState(() {
+      _origin = _origin.add(by);
+      _loading = true;
+    });
+    _load();
+  }
+
+  void _returnToNow() {
+    setState(() {
+      _origin = _liveOrigin;
+      _loading = true;
+    });
+    _load();
+  }
 
   @override
   void initState() {
@@ -61,6 +97,7 @@ class _GuideScreenState extends State<GuideScreen> {
       now.hour,
       now.minute < 30 ? 0 : 30,
     );
+    _liveOrigin = _origin;
     _load();
   }
 
@@ -123,6 +160,7 @@ class _GuideScreenState extends State<GuideScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _timeControls(),
         _ruler(),
         Expanded(
           child: SingleChildScrollView(
@@ -140,6 +178,54 @@ class _GuideScreenState extends State<GuideScreen> {
         ),
       ],
     );
+  }
+
+  Widget _timeControls() {
+    final offset = _origin.difference(_liveOrigin);
+    final label = offset.inMinutes == 0
+        ? 'NOW'
+        : offset.isNegative
+        ? '${_plain(offset.abs())} EARLIER'
+        : '${_plain(offset)} LATER';
+
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: OpenTvSpace.safeHorizontal,
+        bottom: OpenTvSpace.xs,
+      ),
+      child: Row(
+        children: [
+          PlayerButton(
+            label: '− 3 HOURS',
+            onSelect: () => _shift(-_window),
+          ),
+          const SizedBox(width: OpenTvSpace.xs),
+          PlayerButton(label: 'NOW', onSelect: _returnToNow, emphasis: true),
+          const SizedBox(width: OpenTvSpace.xs),
+          PlayerButton(label: '+ 3 HOURS', onSelect: () => _shift(_window)),
+          const SizedBox(width: OpenTvSpace.md),
+          Text(
+            label,
+            style: OpenTvType.data.copyWith(
+              color: offset.inMinutes == 0
+                  ? OpenTvColors.onAir
+                  : OpenTvColors.tally,
+            ),
+          ),
+          const SizedBox(width: OpenTvSpace.md),
+          Text(
+            '${_origin.day}/${_origin.month}',
+            style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _plain(Duration span) {
+    final hours = span.inHours;
+    if (hours >= 24) return '${(hours / 24).floor()}D';
+    return '${hours}H';
   }
 
   Widget _ruler() {
@@ -232,7 +318,11 @@ class _GuideScreenState extends State<GuideScreen> {
 
     if (width <= 0) return const SizedBox();
 
-    final isNow = _clock.isAfter(start) && _clock.isBefore(stop);
+    final now = _clock;
+    final isNow = now.isAfter(start) && now.isBefore(stop);
+    final isPast = stop.isBefore(now);
+    final replayable =
+        isPast && (widget.canCatchUp?.call(channel, start) ?? false);
 
     return Positioned(
       left: left,
@@ -240,9 +330,21 @@ class _GuideScreenState extends State<GuideScreen> {
       bottom: 2,
       width: width - 2,
       child: FocusableTile(
-        onSelect: () => widget.onOpenChannel(channel),
+        // What a press means depends on when the programme is. Already
+        // broadcast and held by the provider: play the recording. On now:
+        // tune the channel. Yet to come: nothing to play, so the press is
+        // refused rather than tuning a channel the viewer did not ask for.
+        onSelect: switch ((replayable, isPast)) {
+          (true, _) => () => widget.onOpenCatchUp?.call(channel, programme),
+          (false, false) => () => widget.onOpenChannel(channel),
+          (false, true) => null,
+        },
         autofocus: autofocus,
-        semanticLabel: '${programme.title ?? 'Unknown'} on ${channel.name}',
+        semanticLabel: [
+          programme.title ?? 'Unknown',
+          'on ${channel.name}',
+          if (replayable) 'available to catch up',
+        ].join(' '),
         scaleOnFocus: 1.02,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: OpenTvSpace.xs),
@@ -252,7 +354,14 @@ class _GuideScreenState extends State<GuideScreen> {
             borderRadius: OpenTvRadius.tile,
             border: Border(
               left: BorderSide(
-                color: isNow ? OpenTvColors.onAir : OpenTvColors.rule,
+                // On now is green; a recording the provider still holds is
+                // tally, because it is the one a press can actually open;
+                // everything else is a plain rule.
+                color: isNow
+                    ? OpenTvColors.onAir
+                    : replayable
+                    ? OpenTvColors.tally
+                    : OpenTvColors.rule,
                 width: 3,
               ),
             ),
@@ -262,7 +371,9 @@ class _GuideScreenState extends State<GuideScreen> {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: OpenTvType.bodyMuted.copyWith(
-              color: isNow ? OpenTvColors.ink : OpenTvColors.inkMuted,
+              color: isNow || replayable
+                  ? OpenTvColors.ink
+                  : OpenTvColors.inkFaint,
             ),
           ),
         ),

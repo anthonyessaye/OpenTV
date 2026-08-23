@@ -118,6 +118,64 @@ class XtreamUrls {
     );
   }
 
+  /// A recording of something already broadcast.
+  ///
+  /// Xtream calls this timeshift. A channel carries it only when the provider
+  /// says so — `Channels.hasArchive`, with `archiveDays` bounding how far
+  /// back — and asking for a window a provider does not hold returns an error
+  /// stream rather than nothing, so the caller has to check before offering
+  /// it.
+  ///
+  /// The start time is sent in the panel's own format, `YYYY-MM-DD:HH-MM`,
+  /// and in **local time**. That is not a choice: the panel interprets it
+  /// against the timezone it was configured with, which is almost always the
+  /// one its channels are broadcast in. Converting to UTC first is the
+  /// obvious thing to do and produces a recording from the wrong hour.
+  Uri timeshift({
+    required String streamId,
+    required DateTime start,
+    required Duration duration,
+  }) {
+    return Uri.parse('${credentials.host}/streaming/timeshift.php').replace(
+      queryParameters: {
+        'username': credentials.username,
+        'password': credentials.password,
+        'stream': streamId,
+        'start': formatTimeshiftStart(start),
+        'duration': '${duration.inMinutes}',
+      },
+    );
+  }
+
+  /// The same recording, in the path form some panels serve instead.
+  ///
+  /// Xtream forks disagree here. The query form above is what the API
+  /// documentation describes and what most panels answer; a number of builds
+  /// only answer this one. Neither can be detected without asking, so both
+  /// exist and the app falls back from one to the other.
+  Uri timeshiftPath({
+    required String streamId,
+    required DateTime start,
+    required Duration duration,
+  }) {
+    return Uri.parse(
+      '${credentials.host}/timeshift'
+      '/${Uri.encodeComponent(credentials.username)}'
+      '/${Uri.encodeComponent(credentials.password)}'
+      '/${duration.inMinutes}'
+      '/${formatTimeshiftStart(start)}'
+      '/$streamId.ts',
+    );
+  }
+
+  /// `YYYY-MM-DD:HH-MM`, which is the panel's format and nobody else's.
+  static String formatTimeshiftStart(DateTime start) {
+    final local = start.isUtc ? start.toLocal() : start;
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)}'
+        ':${two(local.hour)}-${two(local.minute)}';
+  }
+
   static String _extensionFor(XtreamStreamKind kind, String? provided) {
     final trimmed = provided?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {

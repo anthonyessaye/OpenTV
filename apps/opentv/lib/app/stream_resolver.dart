@@ -49,6 +49,57 @@ class StreamResolver {
         .toString();
   }
 
+  /// A recording of something already broadcast, or null when it cannot be
+  /// built.
+  ///
+  /// Catch-up is Xtream-only. An M3U playlist has no notion of it: the
+  /// playlist is a list of addresses and nothing in it describes an archive,
+  /// so the honest answer for those sources is that there is none.
+  ///
+  /// [alternate] asks for the path form instead of the query form. Xtream
+  /// forks disagree about which they serve and neither can be detected
+  /// without asking, so the caller tries one and falls back.
+  Future<String?> catchUpUrlFor(
+    Source source,
+    Channel channel,
+    DateTime start,
+    Duration duration, {
+    bool alternate = false,
+  }) async {
+    if (source.kind != SourceKind.xtream) return null;
+    if (!channel.hasArchive) return null;
+
+    final credentials = await _credentialsFor(source);
+    if (credentials == null) return null;
+
+    final urls = XtreamUrls(credentials);
+    final uri = alternate
+        ? urls.timeshiftPath(
+            streamId: channel.remoteId,
+            start: start,
+            duration: duration,
+          )
+        : urls.timeshift(
+            streamId: channel.remoteId,
+            start: start,
+            duration: duration,
+          );
+    return uri.toString();
+  }
+
+  /// Whether a moment is inside the window a provider actually holds.
+  ///
+  /// `archiveDays` is how far back the provider keeps recordings. Offering a
+  /// programme older than that produces an error stream rather than a
+  /// picture, which reads to a viewer as the app being broken.
+  static bool isWithinArchive(Channel channel, DateTime start, DateTime now) =>
+      ArchiveWindow.holds(
+        hasArchive: channel.hasArchive,
+        archiveDays: channel.archiveDays,
+        start: start,
+        now: now,
+      );
+
   /// Per-stream request directives some providers require in order to serve.
   ///
   /// Stored as JSON on the row because the set is open-ended — playlists
