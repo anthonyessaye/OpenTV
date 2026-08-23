@@ -5,6 +5,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 import '../player_screen.dart';
 import 'film_screen.dart';
 import 'guide_screen.dart';
+import 'host.dart';
 import 'search_screen.dart';
 import 'series_screen.dart';
 import 'settings_screen.dart';
@@ -78,6 +79,9 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// Guards against a slow query for a category the viewer has already left.
   int _generation = 0;
 
+  /// Read once from the keystore rather than per film screen.
+  String _tmdbKey = const String.fromEnvironment('TMDB_KEY');
+
   ItemKind get _kind => switch (_section) {
     TvSection.films => ItemKind.movie,
     TvSection.series => ItemKind.series,
@@ -88,6 +92,14 @@ class _BrowseScreenState extends State<BrowseScreen> {
   void initState() {
     super.initState();
     _loadSection();
+    _readTmdbKey();
+  }
+
+  Future<void> _readTmdbKey() async {
+    final key = await const Host().readSecret(SettingsScreen.tmdbReference);
+    if (mounted && key != null && key.isNotEmpty) {
+      setState(() => _tmdbKey = key);
+    }
   }
 
   Future<void> _loadSection() async {
@@ -224,10 +236,11 @@ class _BrowseScreenState extends State<BrowseScreen> {
       ],
     };
 
-    // Shelves replace the grid when nothing is filtered, and only where they
-    // mean something: a live channel list has no "top rated".
+    // Shelves replace the grid when nothing is filtered. Live gets them too:
+    // a wall of provider logos says nothing about what to watch, where the
+    // last thing you had on and the handful you kept say quite a lot.
     final shelves = <({String label, List<_Item> items})>[];
-    if (_category == null && _section != TvSection.live) {
+    if (_category == null) {
       shelves.addAll(await _buildShelves(sourceId, hidden));
     }
 
@@ -248,7 +261,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
     Set<String> hidden,
   ) async {
     final films = _section == TvSection.films;
-    final kind = films ? ItemKind.movie : ItemKind.series;
+    final series = _section == TvSection.series;
+    final kind = switch (_section) {
+      TvSection.films => ItemKind.movie,
+      TvSection.series => ItemKind.series,
+      _ => ItemKind.live,
+    };
 
     List<_Item> visible(Iterable<_Item> rows) => [
       for (final row in rows)
@@ -257,54 +275,100 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
     final out = <({String label, List<_Item> items})>[];
 
-    if (films) {
-      // A fortnight rather than a week: a provider that adds nothing for ten
-      // days would otherwise show an empty highlight.
-      final since = DateTime.now().subtract(const Duration(days: 14));
-      var top = await widget.db.topRatedMovies(sourceId, since: since);
-      if (top.length < 5) {
-        // Falls back to all time rather than showing three films under a
-        // heading that promises twenty.
-        top = await widget.db.topRatedMovies(sourceId);
-      }
-      final items = visible(top.map(_Item.film));
-      if (items.isNotEmpty) {
-        out.add((label: 'Top rated', items: items));
-      }
+    // Issued together rather than one after another. Six round trips in
+    // series is what made this screen take a visible couple of seconds; they
+    // do not depend on each other, so they need not wait for each other.
+    final (topFilms, recentFilms, topSeries, recentSeries, watching, kept) =
+        await (
+          films
+              ? widget.db.topRatedMovies(
+                  sourceId,
+                  // A fortnight rather than a week: a provider that adds
+                  // nothing for ten days would show an empty highlight.
+                  since: DateTime.now().subtract(const Duration(days: 14)),
+                )
+              : Future.value(const <Movie>[]),
+          films
+              ? widget.db.recentMovies(sourceId)
+              : Future.value(const <Movie>[]),
+          series
+              ? widget.db.topRatedSeries(sourceId)
+              : Future.value(const <SeriesEntry>[]),
+          series
+              ? widget.db.recentSeries(sourceId)
+              : Future.value(const <SeriesEntry>[]),
+          widget.db.continueWatching(sourceId: sourceId, limit: 20),
+          widget.db.favouritesOf(sourceId, kind),
+        ).wait;
 
-      final recent = visible(
-        (await widget.db.recentMovies(sourceId)).map(_Item.film),
-      );
-      if (recent.isNotEmpty) out.add((label: 'Recently added', items: recent));
+    if (films) {
+      // Falls back to all time rather than showing three films under a
+      // heading that promises twenty.
+      final leading = topFilms.length < 5
+          ? await widget.db.topRatedMovies(sourceId)
+          : topFilms;
+      final items = visible(leading.map(_Item.film));
+      if (items.isNotEmpty) out.add((label: 'Top rated', items: items));
+
+      final recently = visible(recentFilms.map(_Item.film));
+      if (recently.isNotEmpty) {
+        out.add((label: 'Recently added', items: recently));
+      }
+    }
+
+    if (series) {
+      final items = visible(topSeries.map(_Item.series));
+      if (items.isNotEmpty) out.add((label: 'Top rated', items: items));
+
+      // "Updated" rather than "added": lastModified moves when a new episode
+      // lands, which is the thing worth surfacing about a series.
+      final updated = visible(recentSeries.map(_Item.series));
+      if (updated.isNotEmpty) out.add((label: 'Recently updated', items: updated));
     }
 
     final resumable = [
-      for (final state in await widget.db.continueWatching(
-        sourceId: sourceId,
-        limit: 20,
-      ))
+      for (final state in watching)
         if (state.itemKind == kind) state.itemRemoteId,
     ];
     if (resumable.isNotEmpty) {
-      final rows = films
-          ? (await widget.db.moviesByRemoteIds(sourceId, resumable))
-                .map(_Item.film)
-          : (await widget.db.seriesByRemoteIds(sourceId, resumable))
-                .map(_Item.series);
+      final rows = switch (kind) {
+        ItemKind.movie => (await widget.db.moviesByRemoteIds(
+          sourceId,
+          resumable,
+        )).map(_Item.film),
+        ItemKind.series => (await widget.db.seriesByRemoteIds(
+          sourceId,
+          resumable,
+        )).map(_Item.series),
+        _ => (await widget.db.channelsByRemoteIds(
+          sourceId,
+          resumable,
+        )).map(_Item.channel),
+      };
       final items = visible(rows);
-      if (items.isNotEmpty) out.add((label: 'Continue watching', items: items));
+      if (items.isNotEmpty) {
+        // Live leads with what was last on, which is the single most likely
+        // thing a viewer wants when they sit down.
+        out.insert(0, (label: 'Continue watching', items: items));
+      }
     }
 
-    final favourites = [
-      for (final row in await widget.db.favouritesOf(sourceId, kind))
-        row.itemRemoteId,
-    ];
+    final favourites = [for (final row in kept) row.itemRemoteId];
     if (favourites.isNotEmpty) {
-      final rows = films
-          ? (await widget.db.moviesByRemoteIds(sourceId, favourites))
-                .map(_Item.film)
-          : (await widget.db.seriesByRemoteIds(sourceId, favourites))
-                .map(_Item.series);
+      final rows = switch (kind) {
+        ItemKind.movie => (await widget.db.moviesByRemoteIds(
+          sourceId,
+          favourites,
+        )).map(_Item.film),
+        ItemKind.series => (await widget.db.seriesByRemoteIds(
+          sourceId,
+          favourites,
+        )).map(_Item.series),
+        _ => (await widget.db.channelsByRemoteIds(
+          sourceId,
+          favourites,
+        )).map(_Item.channel),
+      };
       final items = visible(rows);
       if (items.isNotEmpty) out.add((label: 'Your favourites', items: items));
     }
@@ -340,6 +404,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
             db: widget.db,
             source: widget.source,
             movie: film,
+            tmdbKey: _tmdbKey,
             onPlay: (playable, from) => _play(playable, startAt: from),
           ),
         ),

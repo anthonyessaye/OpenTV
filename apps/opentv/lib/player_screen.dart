@@ -81,9 +81,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _chromeVisible = true;
   Timer? _idle;
 
+  /// Flipped whenever the chrome hides, to rebuild the transport with its
+  /// default control focused again.
+  bool _resetFocus = false;
+
   /// Long enough to read the programme title and reach for a button, short
   /// enough not to sit over the picture.
   static const _idleBeforeHiding = Duration(seconds: 6);
+
+  /// What a remote's centre button sends. tvOS uses `select`, which is
+  /// distinct from enter and is the one a real Siri Remote produces.
+  static final _selectKeys = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.select,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.space,
+    LogicalKeyboardKey.mediaPlayPause,
+    LogicalKeyboardKey.gameButtonA,
+  };
   List<MediaTrack> _tracks = const [];
   AspectMode _aspect = AspectMode.fit;
 
@@ -112,7 +127,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // having it vanish mid-thought would be its own bug.
     if (_sheet != null) return;
     _idle = Timer(_idleBeforeHiding, () {
-      if (mounted) setState(() => _chromeVisible = false);
+      if (!mounted) return;
+      setState(() {
+        _chromeVisible = false;
+        // Whatever was highlighted when the controls left is not where a
+        // viewer expects to resume. The transport comes back on play/pause,
+        // which is what the next press almost always wants.
+        _resetFocus = !_resetFocus;
+      });
     });
   }
 
@@ -132,6 +154,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (BackKeys.handles(event)) return KeyEventResult.ignored;
 
     if (!_chromeVisible) {
+      // With nothing on screen, select means the thing a remote's centre
+      // button means on every other television: pause. Waking a hidden
+      // transport just to move a highlight to a button and press it again is
+      // three presses for the most common action there is.
+      if (_selectKeys.contains(event.logicalKey)) {
+        final paused = _status.phase == PlaybackPhase.paused;
+        _channel?.invokeMethod<void>(paused ? 'play' : 'pause');
+        // Pausing shows the controls; resuming leaves the picture clear.
+        if (!paused) {
+          setState(() => _chromeVisible = true);
+          _restartIdleTimer();
+        }
+        return KeyEventResult.handled;
+      }
+
       setState(() => _chromeVisible = true);
       _restartIdleTimer();
       return KeyEventResult.handled;
@@ -355,7 +392,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 onNextChannel: _zap(widget.onNextChannel),
                 onAudioTracks: () => _openSheet(_Sheet.audio),
                 onSubtitles: () => _openSheet(_Sheet.subtitles),
-                visible: _chromeVisible,
+                // Keyed on the reset flag so the transport is rebuilt when the
+            // chrome returns, putting focus back on play/pause.
+            key: ValueKey(_resetFocus),
+            visible: _chromeVisible,
                 onAspect: () => setState(() => _sheet = _Sheet.aspect),
                 dynamicRange: _dynamicRange,
                 videoCodec: _videoCodec,

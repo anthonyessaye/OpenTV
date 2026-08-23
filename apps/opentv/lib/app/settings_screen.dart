@@ -39,11 +39,15 @@ class SettingsScreen extends StatefulWidget {
   /// because nobody would think to check.
   static const pinReference = 'parental-pin';
 
+  /// The TMDB key, kept beside the provider password for the same reason:
+  /// it is issued to a person and belongs in the keystore, not the database.
+  static const tmdbReference = 'tmdb-key';
+
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-enum _Panel { sources, account, hidden, parental, about }
+enum _Panel { sources, account, hidden, metadata, parental, about }
 
 class _SettingsScreenState extends State<SettingsScreen> {
   _Panel _panel = _Panel.sources;
@@ -56,6 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Non-null while a PIN is being entered.
   String? _entry;
   String? _note;
+  String _tmdbKey = '';
 
   @override
   void initState() {
@@ -65,6 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     final pin = await widget.host.readSecret(SettingsScreen.pinReference);
+    final tmdb = await widget.host.readSecret(SettingsScreen.tmdbReference);
     final locked = await widget.db.lockedCategories(widget.active.id);
     final categories = <Category>[
       for (final kind in [ItemKind.live, ItemKind.movie, ItemKind.series])
@@ -85,6 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() {
       _hasPin = pin != null && pin.isNotEmpty;
+      _tmdbKey = tmdb ?? '';
       _locked = locked;
       _categories = categories;
       _allCategories = everything;
@@ -146,6 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Panel.sources => 'Providers',
                       _Panel.account => 'Account',
                       _Panel.hidden => 'Hidden categories',
+                      _Panel.metadata => 'Metadata',
                       _Panel.parental => 'Parental lock',
                       _Panel.about => 'About',
                     },
@@ -171,6 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _Panel.sources => _sources(),
               _Panel.account => _account(),
               _Panel.hidden => _hidden(),
+              _Panel.metadata => _metadata(),
               _Panel.parental => _parental(),
               _Panel.about => _about(),
             },
@@ -425,6 +434,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
       !entry.category.hidden,
     );
     await _load();
+  }
+
+  /// Where the artwork, synopses and cast come from.
+  ///
+  /// A key rather than a switch, because TMDB is free but not anonymous: it
+  /// issues one per person. Kept in the keystore with the provider password,
+  /// since it is a credential even though it unlocks nothing of the viewer's.
+  Widget _metadata() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Synopses, cast and artwork come from TMDB. Without a key the app '
+          'still works — films show the name the provider gave them and '
+          'nothing more.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        SizedBox(
+          width: 900,
+          child: TextEntryField(
+            label: 'TMDB API key',
+            value: _tmdbKey,
+            hint: 'Paste from themoviedb.org',
+            active: true,
+            obscure: true,
+            onChanged: (text) => setState(() => _tmdbKey = text),
+            onDone: _saveKey,
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Row(
+          children: [
+            PlayerButton(
+              label: 'SAVE KEY',
+              emphasis: true,
+              onSelect: _tmdbKey.isEmpty ? null : _saveKey,
+            ),
+            if (_tmdbKey.isNotEmpty) ...[
+              const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(label: 'REMOVE', onSelect: _clearKey),
+            ],
+          ],
+        ),
+        if (_note != null) ...[
+          const SizedBox(height: OpenTvSpace.sm),
+          Text(
+            _note!,
+            style: OpenTvType.data.copyWith(color: OpenTvColors.tally),
+          ),
+        ],
+        const SizedBox(height: OpenTvSpace.lg),
+        Text(
+          'This product uses the TMDB API but is not endorsed or certified '
+          'by TMDB.',
+          style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveKey() async {
+    await widget.host.writeSecret(SettingsScreen.tmdbReference, _tmdbKey);
+    if (mounted) setState(() => _note = 'Key saved. New films will use it.');
+  }
+
+  Future<void> _clearKey() async {
+    await widget.host.deleteSecret(SettingsScreen.tmdbReference);
+    if (mounted) {
+      setState(() {
+        _tmdbKey = '';
+        _note = 'Key removed.';
+      });
+    }
   }
 
   Widget _about() {

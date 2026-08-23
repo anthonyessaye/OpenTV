@@ -105,47 +105,56 @@ class TrackSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        width: width,
-        margin: const EdgeInsets.symmetric(
-          horizontal: OpenTvSpace.safeHorizontal,
-          vertical: OpenTvSpace.safeVertical,
-        ),
-        padding: const EdgeInsets.all(OpenTvSpace.md),
-        decoration: BoxDecoration(
-          // Nearly opaque rather than a blur: a blur costs a full-screen
-          // shader every frame, over live video, on television silicon that
-          // is already decoding 4K.
-          color: const Color(0xF00A0D12),
-          borderRadius: OpenTvRadius.panel,
-          border: Border.all(color: OpenTvColors.rule),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title.toUpperCase(), style: OpenTvType.label),
-            const SizedBox(height: OpenTvSpace.sm),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: _Row(
-                      option: option,
-                      autofocus: index == 0,
-                      onSelect: () => onSelect(option.id),
-                    ),
-                  );
-                },
+    // A scope of its own, taking focus as it appears.
+    //
+    // Without this the panel drew correctly and could not be used: it opens
+    // inside the player's existing focus subtree, which already held focus,
+    // so the rows' own autofocus never won and no press ever reached them.
+    // A viewer saw a list of choices and had no way to choose.
+    return FocusScope(
+      autofocus: true,
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          width: width,
+          margin: const EdgeInsets.symmetric(
+            horizontal: OpenTvSpace.safeHorizontal,
+            vertical: OpenTvSpace.safeVertical,
+          ),
+          padding: const EdgeInsets.all(OpenTvSpace.md),
+          decoration: BoxDecoration(
+            // Nearly opaque rather than a blur: a blur costs a full-screen
+            // shader every frame, over live video, on television silicon that
+            // is already decoding 4K.
+            color: const Color(0xF00A0D12),
+            borderRadius: OpenTvRadius.panel,
+            border: Border.all(color: OpenTvColors.rule),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title.toUpperCase(), style: OpenTvType.label),
+              const SizedBox(height: OpenTvSpace.sm),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    final option = options[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: _Row(
+                        option: option,
+                        autofocus: index == 0,
+                        onSelect: () => onSelect(option.id),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

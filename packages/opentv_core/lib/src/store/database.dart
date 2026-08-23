@@ -492,6 +492,44 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     return query.get();
   }
 
+  /// The best-rated series, on the same terms as [topRatedMovies].
+  Future<List<SeriesEntry>> topRatedSeries(int sourceId, {int limit = 20}) =>
+      (select(seriesEntries)
+            ..where(
+              (e) =>
+                  e.sourceId.equals(sourceId) &
+                  e.hidden.equals(false) &
+                  e.rating.isNotNull() &
+                  e.rating.isBiggerThanValue(0),
+            )
+            ..orderBy([
+              (e) => OrderingTerm(expression: e.rating, mode: OrderingMode.desc),
+            ])
+            ..limit(limit))
+          .get();
+
+  /// Series the provider changed most recently.
+  ///
+  /// `lastModified` rather than an added date, because that is what Xtream
+  /// reports for a series and it moves when a new episode lands — which is
+  /// the thing a viewer actually wants surfaced.
+  Future<List<SeriesEntry>> recentSeries(int sourceId, {int limit = 20}) =>
+      (select(seriesEntries)
+            ..where(
+              (e) =>
+                  e.sourceId.equals(sourceId) &
+                  e.hidden.equals(false) &
+                  e.lastModified.isNotNull(),
+            )
+            ..orderBy([
+              (e) => OrderingTerm(
+                expression: e.lastModified,
+                mode: OrderingMode.desc,
+              ),
+            ])
+            ..limit(limit))
+          .get();
+
   /// The most recently added films.
   Future<List<Movie>> recentMovies(int sourceId, {int limit = 20}) =>
       (select(movies)

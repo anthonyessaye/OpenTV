@@ -14,7 +14,6 @@ export 'src/components/onboarding.dart';
 export 'src/components/player_chrome.dart';
 export 'src/components/player_contract.dart';
 export 'src/components/player_surface.dart';
-export 'src/components/system_text_input.dart';
 export 'src/components/text_entry.dart';
 export 'src/components/track_sheet.dart';
 export 'src/components/tv_keyboard.dart';

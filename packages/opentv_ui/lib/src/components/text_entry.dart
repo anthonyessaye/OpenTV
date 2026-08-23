@@ -1,5 +1,7 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../focus/focusable_tile.dart';
 import '../tokens/tokens.dart';
 
 /// One line of text being entered, shown as a readout rather than a box.
@@ -12,7 +14,7 @@ import '../tokens/tokens.dart';
 /// on a remote, one key press per character, is error-prone enough that the
 /// viewer needs to see how much they have entered; the count is the only
 /// feedback available when the characters themselves are dots.
-class TextEntryField extends StatelessWidget {
+class TextEntryField extends StatefulWidget {
   const TextEntryField({
     super.key,
     required this.label,
@@ -21,6 +23,8 @@ class TextEntryField extends StatelessWidget {
     this.obscure = false,
     this.hint,
     this.problem,
+    this.onChanged,
+    this.onDone,
   });
 
   final String label;
@@ -35,8 +39,94 @@ class TextEntryField extends StatelessWidget {
   /// A stated reason the value is not acceptable yet.
   final String? problem;
 
+  /// Supplied when the platform's own keyboard may write here too.
+  ///
+  /// The drawn keys remain the default. This exists because nothing else in
+  /// the app focuses a native editable, so the platform's input method is
+  /// never attached — and the companion apps people use to avoid typing on a
+  /// remote type into the attached input method or nowhere at all.
+  ///
+  /// It is the same field either way. An earlier attempt put a second box
+  /// underneath, which asked the viewer to understand the app's internals to
+  /// know which one to use.
+  final ValueChanged<String>? onChanged;
+
+  final VoidCallback? onDone;
+
+  @override
+  State<TextEntryField> createState() => _TextEntryFieldState();
+}
+
+class _TextEntryFieldState extends State<TextEntryField> {
+  TextEditingController? _controller;
+  FocusNode? _editor;
+
+  bool get _acceptsSystemInput => widget.onChanged != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_acceptsSystemInput) {
+      _controller = TextEditingController(text: widget.value)
+        ..addListener(_emit);
+      _editor = FocusNode(debugLabel: 'system text input');
+    }
+  }
+
+  @override
+  void didUpdateWidget(TextEntryField old) {
+    super.didUpdateWidget(old);
+    // The drawn keyboard writes the same value, so the editable follows it —
+    // otherwise the two diverge and whichever was used last silently wins.
+    final controller = _controller;
+    if (controller != null && controller.text != widget.value) {
+      controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_emit);
+    _controller?.dispose();
+    _editor?.dispose();
+    super.dispose();
+  }
+
+  void _emit() {
+    final text = _controller?.text;
+    if (text != null && text != widget.value) widget.onChanged?.call(text);
+  }
+
+  /// Selectable only when the platform can type here, so a plain readout
+  /// stays a readout and never becomes a focus stop on the way past.
+  Widget _wrap(Widget child) {
+    if (!_acceptsSystemInput) return child;
+    return FocusableTile(
+      semanticLabel: 'Type using your phone, voice, or a keyboard',
+      borderRadius: OpenTvRadius.tile,
+      scaleOnFocus: 1.01,
+      // Opened on select rather than on focus: merely passing through a
+      // field on the way somewhere else must not throw a keyboard over the
+      // interface.
+      onSelect: () {
+        _editor?.requestFocus();
+        SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+      },
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final label = widget.label;
+    final value = widget.value;
+    final active = widget.active;
+    final obscure = widget.obscure;
+    final hint = widget.hint;
+    final problem = widget.problem;
     final shown = obscure ? '•' * value.length : value;
     final empty = value.isEmpty;
 
@@ -62,53 +152,77 @@ class TextEntryField extends StatelessWidget {
           ],
         ),
         const SizedBox(height: OpenTvSpace.xs),
-        Container(
-          height: 64,
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: OpenTvSpace.md),
-          decoration: BoxDecoration(
-            color: OpenTvColors.sunken,
-            borderRadius: OpenTvRadius.tile,
-            border: Border(
-              bottom: BorderSide(
-                color: problem != null
-                    ? OpenTvColors.alert
-                    : active
-                    ? OpenTvColors.tally
-                    : OpenTvColors.rule,
-                width: active || problem != null ? 3 : 1,
+        _wrap(
+          Container(
+            height: 64,
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: OpenTvSpace.md),
+            decoration: BoxDecoration(
+              color: OpenTvColors.sunken,
+              borderRadius: OpenTvRadius.tile,
+              border: Border(
+                bottom: BorderSide(
+                  color: problem != null
+                      ? OpenTvColors.alert
+                      : active
+                      ? OpenTvColors.tally
+                      : OpenTvColors.rule,
+                  width: active || problem != null ? 3 : 1,
+                ),
               ),
             ),
-          ),
-          child: Row(
-            children: [
-              Flexible(
-                child: Text(
-                  empty ? (hint ?? '') : shown,
-                  maxLines: 1,
-                  // The tail is what was typed most recently, so that is the
-                  // end worth keeping when the value outruns the field.
-                  overflow: TextOverflow.ellipsis,
-                  textDirection: TextDirection.ltr,
-                  style: OpenTvType.data.copyWith(
-                    color: empty ? OpenTvColors.inkFaint : OpenTvColors.ink,
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    empty ? (hint ?? '') : shown,
+                    maxLines: 1,
+                    // The tail is what was typed most recently, so that is the
+                    // end worth keeping when the value outruns the field.
+                    overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.ltr,
+                    style: OpenTvType.data.copyWith(
+                      color: empty ? OpenTvColors.inkFaint : OpenTvColors.ink,
+                    ),
                   ),
                 ),
-              ),
-              if (active)
-                Container(
-                  width: 2,
-                  height: 30,
-                  margin: const EdgeInsets.only(left: 2),
-                  color: OpenTvColors.tally,
-                ),
-            ],
+                if (active)
+                  Container(
+                    width: 2,
+                    height: 30,
+                    margin: const EdgeInsets.only(left: 2),
+                    color: OpenTvColors.tally,
+                  ),
+                if (_acceptsSystemInput)
+                  // The editable itself: real, focusable, and a single pixel
+                  // wide. It has to be genuinely in the tree and genuinely
+                  // focusable for an input connection to open — an Offstage or
+                  // zero-opacity field gets none.
+                  SizedBox(
+                    width: 1,
+                    child: EditableText(
+                      controller: _controller ?? TextEditingController(),
+                      focusNode: _editor ?? FocusNode(),
+                      obscureText: obscure,
+                      style: OpenTvType.data,
+                      cursorColor: OpenTvColors.tally,
+                      backgroundCursorColor: OpenTvColors.inkFaint,
+                      onSubmitted: (_) => widget.onDone?.call(),
+                      // An address is not a sentence: autocorrect would
+                      // capitalise a hostname and break it.
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      textInputAction: TextInputAction.done,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
         if (problem != null) ...[
           const SizedBox(height: OpenTvSpace.xs),
           Text(
-            problem!,
+            problem,
             style: OpenTvType.bodyMuted.copyWith(color: OpenTvColors.alert),
           ),
         ],

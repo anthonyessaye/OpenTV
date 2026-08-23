@@ -64,6 +64,7 @@ void main() {
   _preferences();
   _shelves();
   _hiding();
+  _seriesShelves();
 
   group('sources', () {
     test('adds and reads back in sort order', () async {
@@ -1352,6 +1353,71 @@ void _hiding() {
       await db.upsertChannels([_channel(other, 'c1', 'Elsewhere')]);
       await db.setChannelHidden(sourceId, 'c1', true);
       expect(await db.channelsIn(other), hasLength(1));
+    });
+  });
+}
+
+/// Series get the same shelves films do.
+void _seriesShelves() {
+  group('series shelves', () {
+    late int sourceId;
+
+    setUp(() async {
+      sourceId = await _addSource();
+      await db.upsertSeries([
+        SeriesEntriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 's1',
+          name: 'Acclaimed',
+          searchName: 'acclaimed',
+          rating: const Value(9.0),
+          lastModified: Value(DateTime.utc(2026, 8, 20)),
+        ),
+        SeriesEntriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 's2',
+          name: 'Newly Updated',
+          searchName: 'newly updated',
+          rating: const Value(6.0),
+          lastModified: Value(DateTime.utc(2026, 8, 23)),
+        ),
+        SeriesEntriesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 's3',
+          name: 'Unrated',
+          searchName: 'unrated',
+        ),
+      ]);
+    });
+
+    test('top rated excludes unrated series', () async {
+      expect(
+        (await db.topRatedSeries(sourceId)).map((e) => e.name),
+        ['Acclaimed', 'Newly Updated'],
+      );
+    });
+
+    test('recent uses lastModified, which moves when an episode lands',
+        () async {
+      // Xtream reports a modification date rather than an added one, and it
+      // changes when a new episode appears — which is the thing worth
+      // surfacing.
+      expect(
+        (await db.recentSeries(sourceId)).map((e) => e.name),
+        ['Newly Updated', 'Acclaimed'],
+      );
+    });
+
+    test('hidden series stay out of both', () async {
+      await db.setSeriesHidden(sourceId, 's1', true);
+      expect(
+        (await db.topRatedSeries(sourceId)).map((e) => e.name),
+        ['Newly Updated'],
+      );
+      expect(
+        (await db.recentSeries(sourceId)).map((e) => e.name),
+        ['Newly Updated'],
+      );
     });
   });
 }

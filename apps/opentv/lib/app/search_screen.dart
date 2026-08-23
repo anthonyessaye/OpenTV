@@ -41,6 +41,14 @@ class _SearchScreenState extends State<SearchScreen> {
   Timer? _debounce;
   int _generation = 0;
 
+  /// Whether the viewer has moved out of the keyboard and into the results.
+  ///
+  /// The keyboard is most of the screen and stops being useful the moment
+  /// someone starts reading results — but removing it entirely would strand
+  /// them, since getting back to it from row forty of a long list means
+  /// scrolling all the way home.
+  bool _browsingResults = false;
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -113,62 +121,89 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(
-            left: OpenTvSpace.safeHorizontal,
-            right: OpenTvSpace.lg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 920,
-                child: TextEntryField(
-                  label: 'Search',
-                  value: _term,
-                  hint: 'Title, channel or series',
-                  active: true,
+    // Back returns to the keyboard before it leaves the screen, so a viewer
+    // deep in a list of results is one press from typing again.
+    return BackKeys(
+      onBack: () {
+        if (!_browsingResults) return false;
+        setState(() => _browsingResults = false);
+        return true;
+      },
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Collapses to a spine rather than disappearing: something has to
+          // remain for focus to travel back into.
+          AnimatedContainer(
+            duration: OpenTvMotion.scroll,
+            curve: OpenTvMotion.scrollCurve,
+            width: _browsingResults ? 96 : 1010,
+            child: ClipRect(
+              child: OverflowBox(
+                alignment: Alignment.centerLeft,
+                maxWidth: 1010,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    left: OpenTvSpace.safeHorizontal,
+                    right: OpenTvSpace.lg,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 920,
+                        child: TextEntryField(
+                          label: 'Search',
+                          value: _term,
+                          hint: 'Title, channel or series',
+                          active: true,
+                          onChanged: (text) {
+                            if (text == _term) return;
+                            setState(() => _term = text);
+                            _schedule();
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: OpenTvSpace.md),
+                      TvKeyboard(
+                        autofocus: true,
+                        onKey: _type,
+                        onDelete: _delete,
+                        // There is nothing to commit: results follow the term as it
+                        // is typed, so a "search" key would only repeat what already
+                        // happened.
+                        doneLabel: 'CLEAR',
+                        onDone: _term.isEmpty
+                            ? null
+                            : () {
+                                setState(() {
+                                  _term = '';
+                                  _hits = const [];
+                                });
+                              },
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: OpenTvSpace.xs),
-              SizedBox(
-                width: 920,
-                child: SystemTextInput(
-                  value: _term,
-                  onChanged: (text) {
-                    if (text == _term) return;
-                    setState(() => _term = text);
-                    _schedule();
-                  },
-                ),
-              ),
-              const SizedBox(height: OpenTvSpace.md),
-              TvKeyboard(
-                autofocus: true,
-                onKey: _type,
-                onDelete: _delete,
-                // There is nothing to commit: results follow the term as it
-                // is typed, so a "search" key would only repeat what already
-                // happened.
-                doneLabel: 'CLEAR',
-                onDone: _term.isEmpty
-                    ? null
-                    : () {
-                        setState(() {
-                          _term = '';
-                          _hits = const [];
-                        });
-                      },
-              ),
-            ],
+            ),
           ),
-        ),
-        Expanded(child: _results()),
-      ],
+          Expanded(
+            child: Focus(
+              canRequestFocus: false,
+              skipTraversal: true,
+              // The keyboard slides aside as soon as focus lands in the
+              // results, and returns when it leaves.
+              onFocusChange: (hasFocus) {
+                if (hasFocus == _browsingResults) return;
+                setState(() => _browsingResults = hasFocus);
+              },
+              child: _results(),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -180,9 +215,18 @@ class _SearchScreenState extends State<SearchScreen> {
   /// that by position instead of by inspection, and a section that found
   /// nothing is absent rather than shown empty.
   List<({String label, List<SearchHit> hits})> get _sections {
-    final channels = [for (final h in _hits) if (h.channel != null) h];
-    final films = [for (final h in _hits) if (h.movie != null) h];
-    final series = [for (final h in _hits) if (h.series != null) h];
+    final channels = [
+      for (final h in _hits)
+        if (h.channel != null) h,
+    ];
+    final films = [
+      for (final h in _hits)
+        if (h.movie != null) h,
+    ];
+    final series = [
+      for (final h in _hits)
+        if (h.series != null) h,
+    ];
 
     return [
       // Films lead: on a catalogue of 180,000 films against 47,000 series and
@@ -197,10 +241,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_term.trim().length < 2) {
       return const Padding(
         padding: EdgeInsets.all(OpenTvSpace.md),
-        child: Text(
-          'Type at least two letters.',
-          style: OpenTvType.bodyMuted,
-        ),
+        child: Text('Type at least two letters.', style: OpenTvType.bodyMuted),
       );
     }
 
@@ -214,10 +255,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_hits.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(OpenTvSpace.md),
-        child: Text(
-          'Nothing matches “$_term”.',
-          style: OpenTvType.bodyMuted,
-        ),
+        child: Text('Nothing matches “$_term”.', style: OpenTvType.bodyMuted),
       );
     }
 

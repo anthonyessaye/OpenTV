@@ -24,7 +24,7 @@ class FilmScreen extends StatefulWidget {
     required this.source,
     required this.movie,
     required this.onPlay,
-    this.tmdbKey = const String.fromEnvironment('TMDB_KEY'),
+    this.tmdbKey = '',
   });
 
   final OpenTvDatabase db;
@@ -34,6 +34,11 @@ class FilmScreen extends StatefulWidget {
   /// Called with where to start from — zero to begin again.
   final void Function(Playable, Duration) onPlay;
 
+  /// Supplied by the app from settings, falling back to a build-time key.
+  ///
+  /// Runtime rather than compile-time only, which is why a release build had
+  /// no metadata at all: nobody passing --dart-define means every film showed
+  /// its provider name and nothing else. A viewer can now paste their own.
   final String tmdbKey;
 
   @override

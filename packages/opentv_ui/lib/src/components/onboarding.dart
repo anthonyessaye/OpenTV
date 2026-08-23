@@ -4,7 +4,6 @@ import 'package:flutter/widgets.dart';
 import '../focus/focusable_tile.dart';
 import '../tokens/tokens.dart';
 import 'player_chrome.dart' show PlayerButton;
-import 'system_text_input.dart';
 import 'text_entry.dart';
 import 'tv_keyboard.dart';
 
@@ -503,16 +502,8 @@ class _DetailsStep extends StatelessWidget {
             obscure: field.obscure,
             problem: problem,
             active: true,
-          ),
-        ),
-        const SizedBox(height: OpenTvSpace.xs),
-        // The second way in. A remote is a poor typewriter and an address is
-        // long; this lets a phone or a paired keyboard finish it.
-        SizedBox(
-          width: 900,
-          child: SystemTextInput(
-            value: value,
-            obscure: field.obscure,
+            // The same field takes the platform's keyboard too, so a phone
+            // can finish a long address without a second box appearing.
             onChanged: onReplace,
             onDone: onAdvance,
           ),
