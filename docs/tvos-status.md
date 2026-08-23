@@ -162,6 +162,13 @@ test on. This is the single largest unknown in the playback work, and it is
 the one that decides whether libVLC is the right engine or merely the only one
 that decodes the formats.
 
+### A VPN tunnel
+
+*documented.* `NEPacketTunnelProvider` needs a physical Apple TV: Network
+Extensions do not exist in the simulator, because the infrastructure sits
+below the kernel and the simulator runs on the host's. The entitlement itself
+is self-serve and not a gate. See `docs/vpn.md`.
+
 ### Bundle size
 
 *unverified.* TVVLCKit is a large static framework and Android carries no

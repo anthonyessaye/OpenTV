@@ -43,10 +43,29 @@ in **tvOS 17**, and Apple opened third-party VPN apps at the same time. It
 needs three things:
 
 1. A separate packet-tunnel extension target alongside the app.
-2. The `com.apple.developer.networking.networkextension` entitlement, which
-   **Apple grants by request, not automatically**. This is the item with a
-   lead time and the one that can be refused.
+2. The `com.apple.developer.networking.networkextension` entitlement. **This
+   is self-serve** — a capability ticked in Xcode, not a request Apple
+   reviews. Packet Tunnel, App Proxy, Content Filter and DNS Proxy have been
+   self-serve since November 2016. An earlier version of this document said
+   Apple granted it by request and advised applying early; that was wrong,
+   and the advice it produced — sequence the work around a lead time — was
+   wrong with it.
 3. The tunnel implementation cross-compiled for tvOS.
+
+### The real Apple TV gate is hardware, not paperwork
+
+**Network Extensions do not exist in the simulator.** The infrastructure sits
+below the kernel, and the simulator runs on the host's macOS kernel, so a
+packet tunnel cannot be loaded there at all. This is not a limitation that can
+be worked around with a flag or a debug build.
+
+Testing the tvOS tunnel therefore needs, and only needs:
+
+- a **physical Apple TV** running tvOS 17 or later, and
+- a **paid** Apple Developer Program membership. Free personal-team
+  provisioning does not carry this entitlement.
+
+Neither is a review queue. Both are things you either have or buy.
 
 ## Honest scope
 
@@ -61,14 +80,32 @@ their end, and nothing about the credentials that travel in the clear because
 IPTV portals do not offer usable TLS. It is worth building. It is not
 anonymity by itself, and the interface should not imply that it is.
 
+## What can be proven without an Apple TV
+
+Most of it, which is the useful part of the answer.
+
+| | Where |
+|---|---|
+| Config parsing and validation | Done. Pure Dart, 16 tests, no device. |
+| The WireGuard implementation itself | Android emulator or any Android device. Same tunnel code both platforms will use. |
+| The interface | Against a stubbed tunnel. Apple's own guidance for this is to keep the provider thin and put the logic in types that can be tested away from the OS — which is what the core parser already is. |
+| Key handling, keystore round trip | Both platforms today. |
+| **The tvOS packet tunnel actually carrying traffic** | **Physical Apple TV only.** Nothing else will do. |
+
+So the honest sequence is Android first — not because Apple has a queue, but
+because Apple needs hardware that is not currently to hand, and because
+everything except the last row is shared work that Android can prove.
+
 ## Recommendation
 
 1. **WireGuard, not OpenVPN**, on licence grounds above all.
-2. **Request the Apple entitlement early**, because it has a lead time and
-   because a refusal changes the plan rather than delaying it.
-3. **Build Android first**, where nothing is gated, and treat it as the proof
-   the plumbing is right before committing to the Apple half.
-4. **Say what it does and does not cover** in the interface, rather than
+2. **Build Android first.** Nothing there is gated, and it proves the tunnel,
+   the config handling and the interface — all of which tvOS reuses.
+3. **Keep the tvOS provider thin**, so that what cannot be tested without
+   hardware is as small as possible.
+4. **Buy the membership and a device before starting the tvOS half**, rather
+   than writing it blind and discovering the gap at the end.
+5. **Say what it does and does not cover** in the interface, rather than
    letting a padlock imply more than it delivers.
 
 ## What is built
