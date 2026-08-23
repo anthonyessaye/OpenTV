@@ -365,9 +365,21 @@ void main() {
       expect(toggles, 1);
     });
 
-    testWidgets('hides without being unmounted, so focus survives', (
+    testWidgets('hiding leaves nothing behind, not a transparent layer', (
       tester,
     ) async {
+      // This reverses an earlier decision, and the reason is worth keeping.
+      //
+      // The chrome used to stay mounted at zero opacity so focus survived.
+      // That put a full-screen opacity layer over the video — which on
+      // Android is a platform view in hybrid composition, and Flutter has to
+      // split its layer tree around one. Animating opacity across that seam
+      // took the picture with it: the video dimmed along with the controls,
+      // which is the one thing the chrome must never do.
+      //
+      // Unmounting costs the fade and costs focus. Both are acceptable: the
+      // transport is rebuilt with play/pause focused when it returns, which
+      // is where a viewer wants it anyway.
       await tester.pumpWidget(
         _wrap(
           PlayerChrome(
@@ -382,13 +394,27 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Still in the tree — hiding it by unmounting would drop focus and
-      // strand the remote.
-      expect(find.text('BBC One'), findsOneWidget);
-      final opacity = tester.widget<AnimatedOpacity>(
+      expect(find.text('BBC One'), findsNothing);
+      expect(
         find.byType(AnimatedOpacity),
+        findsNothing,
+        reason: 'no opacity layer may sit over the video surface',
       );
-      expect(opacity.opacity, 0);
+
+      // And it comes back whole.
+      await tester.pumpWidget(
+        _wrap(
+          PlayerChrome(
+            now: _now,
+            status: const PlaybackStatus(
+              phase: PlaybackPhase.playing,
+              channelName: 'BBC One',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('BBC One'), findsOneWidget);
     });
   });
   group('liveness is stated, not inferred', () {

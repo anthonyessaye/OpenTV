@@ -146,9 +146,19 @@ class PlayerChrome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: visible ? 1 : 0,
-      duration: OpenTvMotion.fade,
+    // Built or not built, rather than faded.
+    //
+    // The fade was an opacity layer covering the whole screen, and the video
+    // beneath it is a platform view in hybrid composition. Flutter has to
+    // split its layer tree around such a view, and animating opacity across
+    // that seam took the video with it — the picture dimmed along with the
+    // controls, which is the one thing the chrome must never do.
+    //
+    // A fade is worth losing for that. The controls appear and leave
+    // instantly, and the picture is untouched either way.
+    if (!visible) return const SizedBox.shrink();
+
+    return RepaintBoundary(
       child: Stack(
         fit: StackFit.expand,
         children: [

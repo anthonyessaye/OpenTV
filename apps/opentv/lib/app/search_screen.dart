@@ -49,6 +49,13 @@ class _SearchScreenState extends State<SearchScreen> {
   /// scrolling all the way home.
   bool _browsingResults = false;
 
+  /// The keyboard's natural width plus its safe margin.
+  ///
+  /// Stated once because two places need to agree: the box that animates and
+  /// the box that pins the child. When they disagreed the keys were squashed
+  /// rather than clipped.
+  static const _panelWidth = 1048.0;
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -134,14 +141,21 @@ class _SearchScreenState extends State<SearchScreen> {
         children: [
           // Collapses to a spine rather than disappearing: something has to
           // remain for focus to travel back into.
+          //
+          // The child is pinned to its natural width by setting both bounds,
+          // and the animated box clips it. Setting only maxWidth let the
+          // shrinking outer width crush the keyboard instead of hiding it —
+          // the keys squeezed into a column of slivers rather than sliding
+          // off the edge.
           AnimatedContainer(
             duration: OpenTvMotion.scroll,
             curve: OpenTvMotion.scrollCurve,
-            width: _browsingResults ? 96 : 1010,
+            width: _browsingResults ? 96 : _panelWidth,
             child: ClipRect(
               child: OverflowBox(
                 alignment: Alignment.centerLeft,
-                maxWidth: 1010,
+                minWidth: _panelWidth,
+                maxWidth: _panelWidth,
                 child: Padding(
                   padding: const EdgeInsets.only(
                     left: OpenTvSpace.safeHorizontal,

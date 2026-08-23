@@ -347,9 +347,17 @@ class _BrowseScreenState extends State<BrowseScreen> {
       };
       final items = visible(rows);
       if (items.isNotEmpty) {
-        // Live leads with what was last on, which is the single most likely
-        // thing a viewer wants when they sit down.
-        out.insert(0, (label: 'Continue watching', items: items));
+        if (kind == ItemKind.live) {
+          // Live leads with what was last on: there is no editorial shelf for
+          // channels, and the last thing you watched is the likeliest thing
+          // you want when you sit down.
+          out.insert(0, (label: 'Continue watching', items: items));
+        } else {
+          // Films and series lead with their highlight instead. Putting
+          // Continue first there demoted the shelf the screen exists to
+          // show, and the hero is drawn from whatever leads.
+          out.add((label: 'Continue watching', items: items));
+        }
       }
     }
 

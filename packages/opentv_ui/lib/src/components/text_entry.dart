@@ -57,6 +57,17 @@ class TextEntryField extends StatefulWidget {
   State<TextEntryField> createState() => _TextEntryFieldState();
 }
 
+/// Keys that mean "give focus back to the interface".
+///
+/// Not `const`: [LogicalKeyboardKey] overrides `==`, so a constant set of
+/// them is rejected — the same reason the select and back key sets are final.
+final _escapes = <LogicalKeyboardKey>{
+  LogicalKeyboardKey.arrowUp,
+  LogicalKeyboardKey.arrowDown,
+  LogicalKeyboardKey.escape,
+  LogicalKeyboardKey.goBack,
+};
+
 class _TextEntryFieldState extends State<TextEntryField> {
   TextEditingController? _controller;
   FocusNode? _editor;
@@ -93,6 +104,12 @@ class _TextEntryFieldState extends State<TextEntryField> {
     _controller?.dispose();
     _editor?.dispose();
     super.dispose();
+  }
+
+  /// Hands focus back to the interface and closes the platform keyboard.
+  void _release() {
+    _editor?.unfocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
   }
 
   void _emit() {
@@ -200,19 +217,40 @@ class _TextEntryFieldState extends State<TextEntryField> {
                   // zero-opacity field gets none.
                   SizedBox(
                     width: 1,
-                    child: EditableText(
-                      controller: _controller ?? TextEditingController(),
-                      focusNode: _editor ?? FocusNode(),
-                      obscureText: obscure,
-                      style: OpenTvType.data,
-                      cursorColor: OpenTvColors.tally,
-                      backgroundCursorColor: OpenTvColors.inkFaint,
-                      onSubmitted: (_) => widget.onDone?.call(),
-                      // An address is not a sentence: autocorrect would
-                      // capitalise a hostname and break it.
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      textInputAction: TextInputAction.done,
+                    child: Focus(
+                      // Lets the viewer leave.
+                      //
+                      // Once an editable holds focus it consumes every key,
+                      // including the directions — so entering the field was
+                      // a one-way trip and the rest of the screen became
+                      // unreachable. Back and the vertical directions hand
+                      // focus back to the interface; the platform's keyboard
+                      // closes with it.
+                      onKeyEvent: (node, event) {
+                        if (event is! KeyDownEvent) {
+                          return KeyEventResult.ignored;
+                        }
+                        if (!_escapes.contains(event.logicalKey)) {
+                          return KeyEventResult.ignored;
+                        }
+                        _release();
+                        return KeyEventResult.handled;
+                      },
+                      child: EditableText(
+                        controller: _controller ?? TextEditingController(),
+                        focusNode: _editor ?? FocusNode(),
+                        obscureText: obscure,
+                        style: OpenTvType.data,
+                        cursorColor: OpenTvColors.tally,
+                        backgroundCursorColor: OpenTvColors.inkFaint,
+                        onSubmitted: (_) => widget.onDone?.call(),
+                        // An address is not a sentence: autocorrect would
+                        // capitalise a hostname and break it.
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        textInputAction: TextInputAction.done,
+                        onTapOutside: (_) => _release(),
+                      ),
                     ),
                   ),
               ],
