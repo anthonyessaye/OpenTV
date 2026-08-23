@@ -193,6 +193,7 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
         media.addOption(":network-caching=1500")
 
         framesSeen = false
+        lastError = nil
         player.media = media
         player.play()
 
@@ -207,6 +208,9 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
 
     /// How the picture is currently fitted to the panel.
     private var aspectMode = "fit"
+
+    /// Why playback stopped, when it did.
+    private var lastError: String?
 
     /// Every selectable track, in the shape the Dart chooser expects.
     ///
@@ -315,6 +319,13 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             "videoTracks": player.numberOfVideoTracks,
             "subtitleTracks": player.numberOfSubtitlesTracks,
             "aspectMode": aspectMode,
+            // Named rather than left absent. Android reports its decoder's
+            // error code here; libVLC exposes no message, only a state, so
+            // this says which state rather than pretending to more detail.
+            // Without it a dead channel on Apple TV showed FAILED and no
+            // reason at all — the contract test that should have caught that
+            // matched the word "error" somewhere else entirely.
+            "error": lastError as Any,
             // dynamicRange and videoCodec are deliberately absent rather than
             // present and empty. libVLC does not report a transfer function,
             // so HDR cannot be named here the way Media3 names it, and the
@@ -340,6 +351,11 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
     // MARK: - VLCMediaPlayerDelegate
 
     func mediaPlayerStateChanged(_ aNotification: Notification) {
+        // On a real provider a dead channel is routine. Recording why lets
+        // the interface say so instead of spinning.
+        if player.state == .error {
+            lastError = "the stream could not be opened"
+        }
         if player.hasVideoOut { framesSeen = true }
         channel.invokeMethod("state", arguments: snapshot())
     }

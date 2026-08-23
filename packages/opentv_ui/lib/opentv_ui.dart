@@ -10,6 +10,7 @@ export 'src/components/browse.dart';
 export 'src/components/detail_screen.dart';
 export 'src/components/onboarding.dart';
 export 'src/components/player_chrome.dart';
+export 'src/components/player_contract.dart';
 export 'src/components/player_surface.dart';
 export 'src/components/text_entry.dart';
 export 'src/components/track_sheet.dart';
