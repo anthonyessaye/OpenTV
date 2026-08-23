@@ -5,3 +5,5 @@ tvos/Flutter/ephemeral/
 tvos/Flutter/Generated.xcconfig
 tvos/Pods/
 tvos/.symlinks/
+android/.gradle/
+android/app/build/

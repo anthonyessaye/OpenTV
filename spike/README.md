@@ -36,6 +36,35 @@ default and which is a separate multi-gigabyte download:
 xcodebuild -downloadPlatform tvOS
 ```
 
+## Two toolchains, one install
+
+The same Flutter source targets both televisions, but **the tvOS fork cannot
+build Android**: its `flutter build` offers only the `tvos` subcommand, with
+apk, appbundle, ios and web stripped out.
+
+It does vendor an unmodified Flutter underneath, and that one builds
+everything else. So one install serves both, through two entry points:
+
+```bash
+# Apple TV
+flutter-tvos build tvos --debug --simulator
+
+# Android TV — the vendored stock Flutter, same version
+~/Development/toolchains/flutter-tvos/flutter/bin/flutter build apk --debug
+```
+
+Both report Flutter 3.47.1, so the framework, Dart version and package
+resolution are identical between them. CI needs to know about both paths;
+nothing else does.
+
+`packages/opentv_core` and `packages/opentv_ui` are platform-agnostic by
+construction and need no changes for Android. The divergence is the player:
+libVLC via TVVLCKit on tvOS, and on Android either libvlc-android or Media3.
+
+Android TV also needs two manifest declarations the default template omits —
+the `LEANBACK_LAUNCHER` intent category, without which the app never appears
+on the TV home screen, and `touchscreen` marked not required.
+
 ## What has been answered
 
 **Flutter runs on tvOS.** `tvos_playback` builds and renders on an Apple TV 4K
