@@ -216,11 +216,26 @@ class _ProbeFetcher implements CatalogueFetcher {
     if (batch.isNotEmpty) yield batch;
   }
 
+  /// Real film names, so the recommendations row has something to match.
+  /// A synthetic catalogue of "Film Number 12" matches nothing and makes the
+  /// feature look broken when it is working.
+  static const _realTitles = [
+    'The Shawshank Redemption', 'Pulp Fiction', 'Fight Club', 'Forrest Gump',
+    'The Matrix', 'Goodfellas', 'Se7en', 'Interstellar', 'Gladiator',
+    'The Prestige', 'Memento', 'Heat', 'Casino', 'Sicario', 'Prisoners',
+    'Arrival', 'Blade Runner 2049', 'Dune', 'No Country for Old Men',
+    'There Will Be Blood', 'The Departed', 'Inception', 'Zodiac', 'Nightcrawler',
+    'Drive', 'Gone Girl', 'The Social Network', 'Whiplash', 'La La Land',
+    'Mad Max Fury Road', 'Deep Water', 'The Shape of Water', 'Shutter Island',
+  ];
+
   @override
   Stream<List<MoviesCompanion>> movies(int sourceId) async* {
     var batch = <MoviesCompanion>[];
     for (var i = 0; i < filmCount; i++) {
-      final name = 'Film Number $i';
+      final name = i < _realTitles.length
+          ? 'UK| ${_realTitles[i]} 1080p'
+          : 'Film Number $i';
       batch.add(
         MoviesCompanion.insert(
           sourceId: sourceId,

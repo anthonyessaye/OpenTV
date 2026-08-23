@@ -4,6 +4,7 @@
 /// unaffected by the tvOS toolchain question.
 library;
 
+export 'src/components/artwork.dart';
 export 'src/components/channel_tile.dart';
 export 'src/components/detail_screen.dart';
 export 'src/components/player_chrome.dart';

@@ -6,6 +6,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 
 import 'catalogue_screen.dart';
 import 'player_screen.dart';
+import 'rich_detail_screen.dart';
 import 'core_probe.dart';
 
 void main() => runApp(const SpikeApp());
@@ -98,6 +99,21 @@ class _BootState extends State<Boot> {
               Text(line, style: OpenTvType.bodyMuted),
           ],
         ),
+      );
+    }
+
+    // --dart-define=SHOW_RICH=true plus TMDB_KEY renders the detail screen
+    // with real metadata behind it. The key is passed at build time and never
+    // committed.
+    if (const bool.fromEnvironment('SHOW_RICH')) {
+      return RichDetailScreen(
+        db: probe.db!,
+        sourceId: probe.sourceId!,
+        providerTitle: const String.fromEnvironment(
+          'PROVIDER_TITLE',
+          defaultValue: 'UK| The Weight of Water (2019) 1080p MULTI',
+        ),
+        apiKey: const String.fromEnvironment('TMDB_KEY'),
       );
     }
 

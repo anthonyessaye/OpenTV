@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../focus/focus_column.dart';
 import '../focus/focusable_tile.dart';
 import '../tokens/tokens.dart';
 import 'player_chrome.dart' show PlayerButton;
@@ -91,6 +92,8 @@ class DetailScreen extends StatelessWidget {
     this.onToggleFavourite,
     this.onBack,
     this.trailing,
+    this.sections = const [],
+    this.backgroundColor = OpenTvColors.ground,
   });
 
   final DetailContent content;
@@ -98,82 +101,124 @@ class DetailScreen extends StatelessWidget {
   final VoidCallback? onToggleFavourite;
   final VoidCallback? onBack;
 
-  /// Episode list, related items — whatever the kind calls for.
+  /// A single block below the actions. For several, use [sections].
   final Widget? trailing;
+
+  /// Rows below the hero — cast, recommendations, episodes.
+  ///
+  /// Given as separate items rather than one widget so each becomes a stop in
+  /// the vertical scroll: a detail screen with a cast row and a
+  /// recommendations row is taller than any television, and the hero has to
+  /// move out of the way as focus descends.
+  final List<Widget> sections;
+
+  /// Set to a transparent colour when something is drawn behind this — an
+  /// AmbientBackdrop, for instance. The default paints its own ground, and
+  /// would otherwise hide whatever it is layered over.
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
+    final hasSections = sections.isNotEmpty;
+
     return Container(
-      color: OpenTvColors.ground,
+      color: backgroundColor,
       child: Stack(
         fit: StackFit.expand,
         children: [
           if (content.backdrop != null)
             content.backdrop!
-          else
+          else if (backgroundColor.a > 0)
             const _BackdropPlaceholder(),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xF507090C),
-                  Color(0xC007090C),
-                  Color(0x3307090C),
-                ],
-                stops: [0, 0.55, 1],
+          if (backgroundColor.a > 0)
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Color(0xF507090C),
+                    Color(0xC007090C),
+                    Color(0x3307090C),
+                  ],
+                  stops: [0, 0.55, 1],
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: OpenTvSpace.safe,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1100),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _Heading(content: content),
-                      if (content.synopsis != null) ...[
-                        const SizedBox(height: OpenTvSpace.md),
-                        Text(
-                          content.synopsis!,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: OpenTvType.bodyMuted,
-                        ),
-                      ],
-                      if (content.facts.isNotEmpty) ...[
-                        const SizedBox(height: OpenTvSpace.md),
-                        _Readout(facts: content.facts),
-                      ],
-                      if (content.hasResume) ...[
-                        const SizedBox(height: OpenTvSpace.md),
-                        _ResumeBar(content: content),
-                      ],
-                      const SizedBox(height: OpenTvSpace.lg),
-                      _Actions(
-                        content: content,
-                        onPlay: onPlay,
-                        onToggleFavourite: onToggleFavourite,
-                        onBack: onBack,
-                      ),
-                    ],
-                  ),
-                ),
-                if (trailing != null) ...[
-                  const SizedBox(height: OpenTvSpace.lg),
-                  trailing!,
+          if (hasSections)
+            FocusColumn(
+              padding: OpenTvSpace.safe,
+              itemCount: sections.length + 1,
+              itemBuilder: (context, index) => index == 0
+                  ? Padding(
+                      padding: const EdgeInsets.only(bottom: OpenTvSpace.lg),
+                      child: _hero(),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.only(bottom: OpenTvSpace.lg),
+                      child: sections[index - 1],
+                    ),
+            )
+          else
+            Padding(
+              padding: OpenTvSpace.safe,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _hero(),
+                  if (trailing != null) ...[
+                    const SizedBox(height: OpenTvSpace.lg),
+                    trailing!,
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _hero() {
+    // Align first, then constrain. A ConstrainedBox alone cannot shrink below
+    // a tight parent width — enforce() clamps its maximum back up — so inside
+    // a list item the limit is silently ignored and the synopsis runs the full
+    // width of a television, which is far past a comfortable line length.
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1100),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Heading(content: content),
+            if (content.synopsis != null) ...[
+              const SizedBox(height: OpenTvSpace.md),
+              Text(
+                content.synopsis!,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: OpenTvType.bodyMuted,
+              ),
+            ],
+            if (content.facts.isNotEmpty) ...[
+              const SizedBox(height: OpenTvSpace.md),
+              _Readout(facts: content.facts),
+            ],
+            if (content.hasResume) ...[
+              const SizedBox(height: OpenTvSpace.md),
+              _ResumeBar(content: content),
+            ],
+            const SizedBox(height: OpenTvSpace.lg),
+            _Actions(
+              content: content,
+              onPlay: onPlay,
+              onToggleFavourite: onToggleFavourite,
+              onBack: onBack,
+            ),
+          ],
+        ),
       ),
     );
   }
