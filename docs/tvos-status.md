@@ -23,7 +23,7 @@ already made in a commit message.
 |---|---|
 | **Pause** | *verified.* The shared chrome has a pause button. Android implemented `pause`; tvOS returned `FlutterMethodNotImplemented`. The button did nothing on Apple TV. |
 | **Resume** | *verified.* Android's `play` with no url resumes. tvOS required a url and returned `bad-args`, so nothing could be resumed after a pause even once pause existed. |
-| **Cleartext HTTP** | *documented.* Android needed `usesCleartextTraffic` or every channel failed to open — observed directly. tvOS has the same problem through App Transport Security and had no exception declared, so the same failure was waiting there. Now declared. |
+| **Cleartext HTTP** | *verified on Android, documented on tvOS.* Android needed `usesCleartextTraffic` or every channel failed to open — observed directly. tvOS has the same problem through App Transport Security and had no exception declared, so the same failure was waiting there. Now declared. |
 
 The first two matter beyond their size: they were the first evidence that "one
 interface, two engines" is a claim that decays unless something checks it. See
@@ -61,20 +61,22 @@ catalogue.
 should be verified on real hardware before it is designed around, because the
 purge behaviour is the part that cannot be observed in a simulator.
 
-### 2. Credentials have nowhere to go on either platform, and tvOS is harder
+### 2. The credential store is written but unproven on Apple TV
 
-*verified — nothing implements it anywhere.*
+*implemented on both platforms; verified on Android, unverified on tvOS.*
 
-The schema has been right about this from the start: `Sources` has no password
-column, only a `credentialRef` meant to hold a keystore handle. Nothing writes
-or reads that keystore, on either platform. Onboarding currently hands the
-password to a callback and the callback throws it away.
+This was listed here as missing on both platforms and is no longer. The
+schema had been right about it from the start — `Sources` holds a
+`credentialRef` and has no password column — and there is now something
+behind that reference: `EncryptedSharedPreferences` on Android with the key
+in the hardware keystore, and the Keychain on tvOS, device-only and never
+synchronised.
 
-Android has a clear answer — the platform keystore, via
-`EncryptedSharedPreferences`. tvOS has Keychain, but the usual Flutter package
-for this does not claim tvOS support, so it means a small platform channel
-written by hand. It also interacts with item 1: the credential reference is
-precisely the kind of thing that must survive a catalogue purge.
+What is not settled is the tvOS half. It is written and it compiles, but no
+Apple TV has run it, and Keychain behaviour is exactly the kind of thing that
+differs between a simulator and a device. It also interacts with item 1: the
+credential reference has to survive a catalogue purge, and whether it does is
+the same open question.
 
 ### 3. The licence conflict lands hardest here
 
