@@ -47,3 +47,15 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Media3 is the Android engine. Unlike AVPlayer it demuxes MPEG-TS and
+    // Matroska natively, which between them are the great majority of a real
+    // IPTV catalogue — so Android needs no third-party player at all, and the
+    // libVLC dependency stays an Apple-only concern.
+    val media3 = "1.4.1"
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3")
+    implementation("androidx.media3:media3-exoplayer-dash:$media3")
+    implementation("androidx.media3:media3-ui:$media3")
+}

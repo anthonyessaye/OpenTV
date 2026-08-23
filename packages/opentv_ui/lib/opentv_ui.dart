@@ -8,6 +8,7 @@ export 'src/components/artwork.dart';
 export 'src/components/channel_tile.dart';
 export 'src/components/detail_screen.dart';
 export 'src/components/player_chrome.dart';
+export 'src/components/player_surface.dart';
 export 'src/focus/focus_column.dart';
 export 'src/focus/focus_row.dart';
 export 'src/focus/focusable_tile.dart';

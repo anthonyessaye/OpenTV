@@ -5,7 +5,17 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- IPTV portals overwhelmingly have no usable TLS — the one probed for
+         this project rejects a modern handshake outright — so every stream
+         URL is plain http. Android has blocked cleartext by default since
+         API 28, and without this every channel fails to open.
+
+         This is a real exposure, not a formality: Xtream embeds the username
+         and password in the path of every stream URL, so they travel in the
+         clear on each channel change. It is a property of the protocol and
+         the provider, not a choice the app makes. -->
     <application
+        android:usesCleartextTraffic="true"
         android:label="tvos_playback"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

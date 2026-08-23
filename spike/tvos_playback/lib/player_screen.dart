@@ -14,6 +14,7 @@ class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
     required this.streamUrl,
+    this.streamOptions = const {},
     this.isLive = true,
     this.channelName,
     this.channelNumber,
@@ -23,6 +24,10 @@ class PlayerScreen extends StatefulWidget {
   });
 
   final String streamUrl;
+
+  /// Directives the playlist attached to this stream, which some providers
+  /// require in order to serve it at all.
+  final Map<String, String> streamOptions;
 
   /// Stated by the caller, which read it from the catalogue. See the note on
   /// PlaybackStatus.isLive for why the engine cannot be asked.
@@ -50,7 +55,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _onViewCreated(int id) {
-    _channel = MethodChannel('opentv/vlc/$id');
+    _channel = MethodChannel('opentv/player/$id');
     _poll = Timer.periodic(const Duration(milliseconds: 500), (_) async {
       final raw = await _channel?.invokeMapMethod<String, Object?>('state');
       if (raw == null || !mounted) return;
@@ -104,11 +109,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          UiKitView(
-            viewType: 'opentv/vlc-player',
-            creationParams: {'url': widget.streamUrl},
-            creationParamsCodec: const StandardMessageCodec(),
-            onPlatformViewCreated: _onViewCreated,
+          PlayerSurface(
+            url: widget.streamUrl,
+            streamOptions: widget.streamOptions,
+            onCreated: _onViewCreated,
           ),
           PlayerChrome(
             status: _status,

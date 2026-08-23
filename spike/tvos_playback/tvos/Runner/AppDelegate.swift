@@ -27,7 +27,7 @@ class AppDelegate: FlutterAppDelegate {
         let registrar = engine.registrar(forPlugin: "opentv-vlc")!
         registrar.register(
             VlcPlayerFactory(messenger: registrar.messenger()),
-            withId: "opentv/vlc-player"
+            withId: "opentv/player"
         )
 
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -83,7 +83,7 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
         container = UIView(frame: frame)
         container.backgroundColor = .black
         channel = FlutterMethodChannel(
-            name: "opentv/vlc/\(viewId)",
+            name: "opentv/player/\(viewId)",
             binaryMessenger: messenger
         )
         super.init()
