@@ -71,9 +71,39 @@ anonymity by itself, and the interface should not imply that it is.
 4. **Say what it does and does not cover** in the interface, rather than
    letting a padlock imply more than it delivers.
 
-Nothing here is built yet. This document exists so the decision is made on
-what is actually true rather than on the assumption that OpenVPN is the
-default choice.
+## What is built
+
+**The configuration parser**, in `packages/opentv_core/lib/src/vpn/`, with 16
+tests. Both platforms need it and neither should own it: Android's
+`VpnService` and tvOS's `NEPacketTunnelProvider` want the same handful of
+facts in different shapes, so the `.conf` a provider hands out is read once,
+where it can be tested without a device, a network or an entitlement.
+
+It refuses what cannot work, with sentences a viewer can act on, because the
+realistic failure is a half-pasted file rather than a malformed byte. The
+check that matters most is key length: a truncated key builds a tunnel that
+connects and passes no traffic, which is the least diagnosable failure in the
+whole feature. It also reports whether a tunnel is full or split, because that
+decides what the interface may honestly claim — calling a split tunnel
+"protected" would be a lie in one of the two cases.
+
+**Deliberately not built: any interface for it.** There is no VPN toggle, no
+status indicator and no padlock anywhere in the app, and there will not be one
+until a tunnel actually exists. A control that implies protection it cannot
+deliver is worse than the feature being absent — someone would trust it.
+
+## What remains
+
+1. The Android tunnel: `VpnService` plus a WireGuard implementation
+   cross-compiled for four ABIs. No approval needed; this is where the
+   plumbing should be proven.
+2. The Apple entitlement request. It has a lead time and can be refused, so
+   it should be sent before the work it gates, not after.
+3. The tvOS packet-tunnel extension target.
+4. The interface, last — once there is something true to show.
+
+This document exists so the decision is made on what is actually true rather
+than on the assumption that OpenVPN is the default choice.
 
 ## Sources
 
