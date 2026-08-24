@@ -831,27 +831,41 @@ class PlayerButton extends StatelessWidget {
       // Buttons sit in a tight row; a grid's worth of lift would shove
       // neighbours around.
       scaleOnFocus: 1.04,
-      child: Container(
-        alignment: Alignment.center,
-        constraints: const BoxConstraints(minWidth: 88),
-        padding: EdgeInsets.symmetric(
-          // A glyph is squarer than a word, so it needs less shoulder.
-          horizontal: glyph == null ? OpenTvSpace.lg : OpenTvSpace.md,
-          vertical: OpenTvSpace.sm,
-        ),
-        color: emphasis ? OpenTvColors.surfaceLifted : OpenTvColors.surface,
-        child: glyph == null
-            ? Text(
-                label,
-                style: OpenTvType.label.copyWith(
-                  color: emphasis ? OpenTvColors.ink : OpenTvColors.inkMuted,
+      // Sized to its own content, and this needs saying because it did not
+      // used to need saying.
+      //
+      // A Container given an `alignment` wraps its child in an Align, and an
+      // Align expands to fill whatever loose constraints it is handed. In the
+      // horizontal list this row used to be, the width was unbounded, so
+      // there was nothing to expand into and every button came out the size
+      // of its label. In a Wrap the width is loose but bounded — so each
+      // button took the full width of the screen and landed on a line of its
+      // own, which is precisely the stack of full-width bars that came back
+      // as a regression.
+      child: IntrinsicWidth(
+        child: Container(
+          alignment: Alignment.center,
+          constraints: const BoxConstraints(minWidth: 88),
+          padding: EdgeInsets.symmetric(
+            // A glyph is squarer than a word, so it needs less shoulder.
+            horizontal: glyph == null ? OpenTvSpace.lg : OpenTvSpace.md,
+            vertical: OpenTvSpace.sm,
+          ),
+          color: emphasis ? OpenTvColors.surfaceLifted : OpenTvColors.surface,
+          child: glyph == null
+              ? Text(
+                  label,
+                  maxLines: 1,
+                  style: OpenTvType.label.copyWith(
+                    color: emphasis ? OpenTvColors.ink : OpenTvColors.inkMuted,
+                  ),
+                )
+              : GlyphIcon(
+                  glyph!,
+                  filled: glyphFilled,
+                  color: emphasis ? OpenTvColors.tally : OpenTvColors.ink,
                 ),
-              )
-            : GlyphIcon(
-                glyph!,
-                filled: glyphFilled,
-                color: emphasis ? OpenTvColors.tally : OpenTvColors.ink,
-              ),
+        ),
       ),
     );
   }

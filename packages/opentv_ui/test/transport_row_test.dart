@@ -115,4 +115,45 @@ void main() {
 
     expect(FocusManager.instance.primaryFocus?.debugLabel, first);
   });
+
+  testWidgets('each control is the size of its own label', (tester) async {
+    await show(tester);
+
+    // The regression this exists to stop. A Container given an `alignment`
+    // wraps its child in an Align, and an Align fills whatever loose
+    // constraints it gets. The horizontal list this row used to be handed it
+    // an unbounded width, so there was nothing to fill; a Wrap hands it a
+    // bounded one, so every button took the whole screen and landed on a line
+    // of its own — a column of full-width bars where a row of buttons had
+    // been.
+    final widths = [
+      for (final element in find.byType(PlayerButton).evaluate())
+        (element.renderObject! as RenderBox).size.width,
+    ];
+
+    expect(widths, isNotEmpty);
+    for (final width in widths) {
+      expect(
+        width,
+        lessThan(400),
+        reason: 'a control this wide is a bar, not a button',
+      );
+    }
+  });
+
+  testWidgets('the controls sit on one line when they fit', (tester) async {
+    await show(tester);
+
+    final tops = {
+      for (final element in find.byType(PlayerButton).evaluate())
+        (element.renderObject! as RenderBox)
+            .localToGlobal(Offset.zero)
+            .dy
+            .round(),
+    };
+
+    // Wrapping is for controls that genuinely do not fit. With this many they
+    // do, and stacking them would be the bug rather than the layout.
+    expect(tops, hasLength(1));
+  });
 }

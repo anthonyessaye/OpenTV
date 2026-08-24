@@ -379,7 +379,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         Navigator.of(context).pop();
       },
       child: Focus(
-        autofocus: true,
+        // Deliberately not autofocusing.
+        //
+        // This node exists to watch keys, not to hold focus — it says so on
+        // the next line — and asking a node that cannot take focus to take it
+        // on arrival is at best meaningless. At worst it claims the scope's
+        // autofocus and the transport's own first button never gets it, which
+        // leaves a player nothing on screen is highlighted in and no press
+        // can reach.
         canRequestFocus: false,
         skipTraversal: true,
         onKeyEvent: _onKey,

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/widgets.dart';
 
@@ -49,6 +51,18 @@ class FocusRow extends StatefulWidget {
 
   final ScrollController? controller;
 
+  /// The least horizontal room the row will leave for the focus ring.
+  ///
+  /// Applied as a floor rather than as an addition, so a row already padded
+  /// to the title-safe inset is unchanged and a row padded to nothing still
+  /// gets enough. Callers kept passing zero — reasonably, since their own
+  /// container was already inset — and the viewport then clipped precisely
+  /// the overhang the ring needs, so the first and last tile of a shelf
+  /// showed a highlight with one side sliced off. That ring is how a viewer
+  /// knows what a press will do, which makes it the last thing that should
+  /// be cropped.
+  static const ringInset = 20.0;
+
   /// Vertical room reserved above and below the tiles for the focus state.
   ///
   /// A focused tile grows and casts a glow, and without headroom the viewport
@@ -87,17 +101,22 @@ class _FocusRowState extends State<FocusRow> {
     // leading edge. It starts at the title-safe inset rather than the screen
     // edge: parking it at zero pushes the tile under the bezel and clips its
     // focus ring, which is the one cue that must stay visible.
-    final usable =
-        (viewport -
-                widget.padding.left -
-                widget.padding.right -
-                widget.itemExtent)
-            .clamp(0.0, double.infinity);
-    final resting = widget.padding.left + (usable * widget.restingAlignment);
+    // The same figures the list is actually padded with, floor included.
+    // Reading widget.padding directly here would put the resting position a
+    // few pixels out on any row that took the floor, which shows up as the
+    // focused tile never quite settling where it should.
+    final leading = math.max(widget.padding.left, FocusRow.ringInset);
+    final trailing = math.max(widget.padding.right, FocusRow.ringInset);
+
+    final usable = (viewport - leading - trailing - widget.itemExtent).clamp(
+      0.0,
+      double.infinity,
+    );
+    final resting = leading + (usable * widget.restingAlignment);
 
     // An item's leading edge in scroll coordinates already includes the
     // list's leading padding.
-    final target = widget.padding.left + (index * stride) - resting;
+    final target = leading + (index * stride) - resting;
     final clamped = target.clamp(
       _scroll.position.minScrollExtent,
       _scroll.position.maxScrollExtent,
@@ -139,6 +158,8 @@ class _FocusRowState extends State<FocusRow> {
         // Cross-axis padding is what gives the focus state its headroom: in a
         // horizontal list the children's height is the viewport minus this.
         padding: widget.padding.copyWith(
+          left: math.max(widget.padding.left, FocusRow.ringInset),
+          right: math.max(widget.padding.right, FocusRow.ringInset),
           top: widget.focusHeadroom,
           bottom: widget.focusHeadroom,
         ),

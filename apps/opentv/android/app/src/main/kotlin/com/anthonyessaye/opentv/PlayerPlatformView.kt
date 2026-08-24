@@ -72,6 +72,9 @@ class PlayerPlatformView(
     private var framesSeen = false
     private var lastError: String? = null
 
+    /** The app's sunken black, matching OpenTvColors.sunken on the Dart side. */
+    private val BLACK = 0xFF040608.toInt()
+
     /** How the picture is fitted to the panel. See [applyAspect]. */
     private var aspectMode = "fit"
 
@@ -113,6 +116,17 @@ class PlayerPlatformView(
             .setMediaSourceFactory(DefaultMediaSourceFactory(http))
             .build()
             .also { it.addListener(this) }
+
+        // Black behind the surface, in the Android hierarchy rather than in
+        // Flutter's.
+        //
+        // A SurfaceView in hybrid composition punches a hole through
+        // everything Flutter painted beneath it, so the ColoredBox the Dart
+        // side puts under the video does not cover anything: until the first
+        // frame arrives the hole shows whatever was on screen before — the
+        // browse screen, sitting behind a failure banner. This background is
+        // inside the hole, which is the only place that can fill it.
+        container.setBackgroundColor(BLACK)
 
         container.addView(surface)
         player.setVideoSurfaceView(surface)
