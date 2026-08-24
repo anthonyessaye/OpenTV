@@ -509,6 +509,99 @@ void main() {
     });
   });
 
+  group('hiding every category of a kind', () {
+    // The realistic first move on a real provider: hide the lot, then bring
+    // back the four you watch. Two or three hundred categories set one at a
+    // time with a remote is not a task anybody completes.
+    Future<int> populate() async {
+      final id = await _addSource();
+      await db.upsertCategories([
+        CategoriesCompanion.insert(
+          sourceId: id,
+          kind: ItemKind.live,
+          remoteId: 'news',
+          name: 'News',
+        ),
+        CategoriesCompanion.insert(
+          sourceId: id,
+          kind: ItemKind.movie,
+          remoteId: 'drama',
+          name: 'Drama',
+        ),
+      ]);
+      await db.upsertChannels([
+        _channel(id, 'c1', 'One', category: 'news'),
+        // No category at all, which a real playlist has plenty of.
+        _channel(id, 'c2', 'Loose'),
+      ]);
+      return id;
+    }
+
+    test('hides one kind and leaves the others alone', () async {
+      final id = await populate();
+
+      await db.setAllCategoriesHidden(
+        sourceId: id,
+        kind: ItemKind.live,
+        hidden: true,
+      );
+
+      final live = await db.allCategoriesFor(id, ItemKind.live);
+      final films = await db.allCategoriesFor(id, ItemKind.movie);
+      expect(live.single.hidden, isTrue);
+      expect(films.single.hidden, isFalse, reason: 'films were untouched');
+    });
+
+    test('hides the contents too, not just the heading', () async {
+      final id = await populate();
+
+      await db.setAllCategoriesHidden(
+        sourceId: id,
+        kind: ItemKind.live,
+        hidden: true,
+      );
+
+      // Otherwise "All" lists them anyway and the setting reads as broken.
+      final counts = await db.countsByCategory(id, ItemKind.live);
+      expect(counts['news'] ?? 0, 0);
+    });
+
+    test('leaves rows that belong to no category visible', () async {
+      final id = await populate();
+
+      await db.setAllCategoriesHidden(
+        sourceId: id,
+        kind: ItemKind.live,
+        hidden: true,
+      );
+
+      // They are not in any of the categories being hidden, and hiding them
+      // here would put them out of reach with nothing in the interface able
+      // to bring them back.
+      final loose = await (db.select(
+        db.channels,
+      )..where((c) => c.remoteId.equals('c2'))).getSingle();
+      expect(loose.hidden, isFalse);
+    });
+
+    test('shows them all again', () async {
+      final id = await populate();
+      await db.setAllCategoriesHidden(
+        sourceId: id,
+        kind: ItemKind.live,
+        hidden: true,
+      );
+      await db.setAllCategoriesHidden(
+        sourceId: id,
+        kind: ItemKind.live,
+        hidden: false,
+      );
+
+      final counts = await db.countsByCategory(id, ItemKind.live);
+      expect(counts['news'], 1);
+    });
+  });
+
   group('playback state', () {
     test('reads a whole season in one query', () async {
       // A row of episodes needs every one of their positions to draw. Asked

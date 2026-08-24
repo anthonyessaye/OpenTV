@@ -63,6 +63,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Category> _categories = const [];
   List<_CategoryEntry> _allCategories = const [];
 
+  /// Which kind the hidden-categories panel is showing.
+  ///
+  /// One at a time, for the same reason the setup step shows one at a time:
+  /// three hundred categories from three sections in a single list is not
+  /// something a viewer can navigate or decide about.
+  ItemKind _hiddenKind = ItemKind.live;
+
   /// Non-null while a PIN is being entered.
   String? _entry;
   String? _note;
@@ -581,6 +588,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// protects nothing — it is a shopping channel, a duplicate feed, or films
   /// in a language nobody in the house speaks.
   Widget _hidden() {
+    final showing = [
+      for (final entry in _allCategories)
+        if (entry.kind == _hiddenKind) entry,
+    ];
+    final hiddenNow = showing.where((e) => e.category.hidden).length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -591,17 +604,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: OpenTvType.bodyMuted,
         ),
         const SizedBox(height: OpenTvSpace.md),
+
+        // The kinds and the bulk actions on one line above the list, so
+        // neither is at the far end of three hundred rows.
+        Row(
+          children: [
+            for (final kind in [
+              ItemKind.live,
+              ItemKind.movie,
+              ItemKind.series,
+            ]) ...[
+              PlayerButton(
+                label: switch (kind) {
+                  ItemKind.live => 'CHANNELS',
+                  ItemKind.movie => 'FILMS',
+                  ItemKind.series => 'SERIES',
+                  ItemKind.episode => 'EPISODES',
+                },
+                emphasis: kind == _hiddenKind,
+                autofocus: kind == ItemKind.live,
+                onSelect: () => setState(() => _hiddenKind = kind),
+              ),
+              const SizedBox(width: OpenTvSpace.xs),
+            ],
+            const SizedBox(width: OpenTvSpace.md),
+            // Hide the lot, then bring back the few you watch. On a provider
+            // with hundreds of categories that is the only workable order.
+            PlayerButton(label: 'HIDE ALL', onSelect: () => _setAllHidden(true)),
+            const SizedBox(width: OpenTvSpace.xs),
+            PlayerButton(
+              label: 'SHOW ALL',
+              onSelect: () => _setAllHidden(false),
+            ),
+          ],
+        ),
+        const SizedBox(height: OpenTvSpace.sm),
+        Text(
+          '$hiddenNow of ${showing.length} hidden',
+          style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+        ),
+        const SizedBox(height: OpenTvSpace.sm),
+
         Expanded(
-          child: _allCategories.isEmpty
-              ? const Text('Nothing to hide yet.', style: OpenTvType.bodyMuted)
+          child: showing.isEmpty
+              ? const Text(
+                  'Nothing of this kind to hide.',
+                  style: OpenTvType.bodyMuted,
+                )
               : ListView.builder(
-                  itemCount: _allCategories.length,
+                  itemCount: showing.length,
                   itemBuilder: (context, index) {
-                    final entry = _allCategories[index];
+                    final entry = showing[index];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 2),
                       child: _LockRow(
-                        name: '${entry.category.name}  ·  ${entry.kindLabel}',
+                        name: entry.category.name,
                         locked: entry.category.hidden,
                         lockedLabel: 'HIDDEN',
                         onToggle: () => _toggleHidden(entry),
@@ -612,6 +669,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _setAllHidden(bool hidden) async {
+    await widget.db.setAllCategoriesHidden(
+      sourceId: widget.active.id,
+      kind: _hiddenKind,
+      hidden: hidden,
+    );
+    await _load();
   }
 
   Future<void> _toggleHidden(_CategoryEntry entry) async {

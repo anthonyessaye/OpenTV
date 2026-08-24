@@ -51,6 +51,13 @@ class _SetupScreenState extends State<SetupScreen> {
 
   List<({Category category, ItemKind kind})> _categories = const [];
 
+  /// Which kind the list is showing. One at a time, because three hundred
+  /// categories from three different sections in one list is not something a
+  /// viewer can navigate, let alone decide about.
+  ItemKind _showing = ItemKind.live;
+
+  bool _busyHiding = false;
+
   @override
   void initState() {
     super.initState();
@@ -302,7 +309,7 @@ class _SetupScreenState extends State<SetupScreen> {
         ),
         const SizedBox(height: OpenTvSpace.xs),
         const SizedBox(
-          width: 1100,
+          width: 1500,
           child: Text(
             'Providers carry hundreds of categories, most of them for '
             'somebody else — other countries, other languages, sports you do '
@@ -314,44 +321,123 @@ class _SetupScreenState extends State<SetupScreen> {
         ),
         const SizedBox(height: OpenTvSpace.md),
         Expanded(
-          child: _categories.isEmpty
-              ? const Text(
-                  'This provider sent no categories to hide.',
-                  style: OpenTvType.bodyMuted,
-                )
-              : ListView.builder(
-                  itemCount: _categories.length,
-                  itemBuilder: (context, index) {
-                    final entry = _categories[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: _HideRow(
-                        name: entry.category.name,
-                        kind: switch (entry.kind) {
-                          ItemKind.live => 'Channels',
-                          ItemKind.movie => 'Films',
-                          ItemKind.series => 'Series',
-                          // Episodes have no categories of their own; they
-                          // inherit their series'. Nothing reaches this.
-                          ItemKind.episode => 'Episodes',
-                        },
-                        hidden: entry.category.hidden,
-                        autofocus: index == 0,
-                        onToggle: () => _toggle(entry),
-                      ),
-                    );
-                  },
-                ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 420, child: _rail()),
+              const SizedBox(width: OpenTvSpace.lg),
+              Expanded(child: _list()),
+            ],
+          ),
         ),
+      ],
+    );
+  }
+
+  /// The kinds, the bulk actions, and the way out.
+  ///
+  /// A rail rather than a header, and this is the whole point of the layout.
+  /// The first version put a list of every category from all three sections
+  /// on the screen with Finish underneath it — so leaving the step meant
+  /// travelling down through three hundred rows, and there was no way to
+  /// look at only the films. Here everything that is not a category sits to
+  /// the left of the list, one press away from any row in it.
+  Widget _rail() {
+    final counts = <ItemKind, int>{
+      for (final kind in [ItemKind.live, ItemKind.movie, ItemKind.series])
+        kind: _categories.where((entry) => entry.kind == kind).length,
+    };
+    final hiddenNow = _visible.where((e) => e.category.hidden).length;
+
+    return ListView(
+      children: [
+        for (final kind in [ItemKind.live, ItemKind.movie, ItemKind.series])
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: _RailRow(
+              label: switch (kind) {
+                ItemKind.live => 'Channels',
+                ItemKind.movie => 'Films',
+                ItemKind.series => 'Series',
+                ItemKind.episode => 'Episodes',
+              },
+              count: counts[kind] ?? 0,
+              selected: kind == _showing,
+              autofocus: kind == ItemKind.live,
+              onSelect: () => setState(() => _showing = kind),
+            ),
+          ),
+
         const SizedBox(height: OpenTvSpace.md),
+        Text(
+          '$hiddenNow of ${_visible.length} hidden',
+          style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+        ),
+        const SizedBox(height: OpenTvSpace.xs),
+
+        // The realistic first move on a real provider: hide the lot, then
+        // bring back the four you watch. Doing that one row at a time with a
+        // remote is not a task anybody finishes.
+        PlayerButton(
+          label: 'HIDE ALL',
+          onSelect: _busyHiding ? null : () => _setAll(true),
+        ),
+        const SizedBox(height: OpenTvSpace.xs),
+        PlayerButton(
+          label: 'SHOW ALL',
+          onSelect: _busyHiding ? null : () => _setAll(false),
+        ),
+
+        const SizedBox(height: OpenTvSpace.lg),
         PlayerButton(
           label: 'FINISH',
           emphasis: true,
-          autofocus: _categories.isEmpty,
           onSelect: widget.onDone,
         ),
       ],
     );
+  }
+
+  /// The categories of the kind currently being looked at.
+  List<({Category category, ItemKind kind})> get _visible => [
+    for (final entry in _categories)
+      if (entry.kind == _showing) entry,
+  ];
+
+  Widget _list() {
+    final entries = _visible;
+    if (entries.isEmpty) {
+      return const Text(
+        'This provider sent no categories of this kind.',
+        style: OpenTvType.bodyMuted,
+      );
+    }
+
+    return ListView.builder(
+      itemCount: entries.length,
+      itemBuilder: (context, index) {
+        final entry = entries[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: _HideRow(
+            name: entry.category.name,
+            hidden: entry.category.hidden,
+            onToggle: () => _toggle(entry),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _setAll(bool hidden) async {
+    setState(() => _busyHiding = true);
+    await widget.db.setAllCategoriesHidden(
+      sourceId: widget.source.id,
+      kind: _showing,
+      hidden: hidden,
+    );
+    await _load();
+    if (mounted) setState(() => _busyHiding = false);
   }
 }
 
@@ -393,26 +479,81 @@ class _Instructions extends StatelessWidget {
   }
 }
 
-class _HideRow extends StatelessWidget {
-  const _HideRow({
-    required this.name,
-    required this.kind,
-    required this.hidden,
-    required this.onToggle,
+/// One kind, with how many categories it has.
+class _RailRow extends StatelessWidget {
+  const _RailRow({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onSelect,
     this.autofocus = false,
   });
 
-  final String name;
-  final String kind;
-  final bool hidden;
-  final VoidCallback onToggle;
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onSelect;
   final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
     return FocusableTile(
-      onSelect: onToggle,
+      onSelect: onSelect,
       autofocus: autofocus,
+      semanticLabel: '$label, $count categories',
+      borderRadius: OpenTvRadius.tile,
+      scaleOnFocus: 1.01,
+      child: Container(
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: OpenTvSpace.md),
+        decoration: BoxDecoration(
+          color: selected ? OpenTvColors.surface : null,
+          borderRadius: OpenTvRadius.tile,
+          // A bar rather than a fill, so the selected kind is legible
+          // whether or not this row also happens to hold focus.
+          border: Border(
+            left: BorderSide(
+              color: selected ? OpenTvColors.tally : OpenTvColors.rule,
+              width: 3,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: OpenTvType.body.copyWith(
+                  color: selected ? OpenTvColors.ink : OpenTvColors.inkMuted,
+                ),
+              ),
+            ),
+            Text(
+              '$count',
+              style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HideRow extends StatelessWidget {
+  const _HideRow({
+    required this.name,
+    required this.hidden,
+    required this.onToggle,
+  });
+
+  final String name;
+  final bool hidden;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableTile(
+      onSelect: onToggle,
       semanticLabel: hidden ? 'Show $name' : 'Hide $name',
       borderRadius: OpenTvRadius.tile,
       scaleOnFocus: 1.005,
@@ -435,11 +576,6 @@ class _HideRow extends StatelessWidget {
                 ),
               ),
             ),
-            Text(
-              kind.toUpperCase(),
-              style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
-            ),
-            const SizedBox(width: OpenTvSpace.md),
             SizedBox(
               width: 90,
               child: Text(

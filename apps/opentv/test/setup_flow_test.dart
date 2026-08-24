@@ -59,6 +59,12 @@ void main() {
         remoteId: 'adult',
         name: 'Adult',
       ),
+      CategoriesCompanion.insert(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: 'drama',
+        name: 'Drama',
+      ),
     ]);
   });
 
@@ -147,5 +153,42 @@ void main() {
 
     final categories = await db.allCategoriesFor(source.id, ItemKind.live);
     expect(categories.single.hidden, isTrue);
+  });
+
+  testWidgets('shows one kind at a time, with a way out beside it', (
+    tester,
+  ) async {
+    secrets[SettingsScreen.tmdbReference] = 'already-set';
+    secrets[SettingsScreen.pinReference] = '1234';
+    await show(tester, onDone: () {});
+
+    // Live is what it opens on, so the film category is not in the list.
+    expect(find.text('Adult'), findsOneWidget);
+    expect(find.text('Drama'), findsNothing);
+
+    // And Finish sits in the rail beside the list rather than under it. The
+    // first version put every category from all three sections in one column
+    // with Finish at the bottom, so leaving the step meant travelling down
+    // through three hundred rows.
+    expect(find.text('FINISH'), findsOneWidget);
+
+    await activate(tester, 'Films');
+    expect(find.text('Drama'), findsOneWidget);
+    expect(find.text('Adult'), findsNothing);
+  });
+
+  testWidgets('hides everything of the kind being shown, and only that', (
+    tester,
+  ) async {
+    secrets[SettingsScreen.tmdbReference] = 'already-set';
+    secrets[SettingsScreen.pinReference] = '1234';
+    await show(tester, onDone: () {});
+
+    await activate(tester, 'HIDE ALL');
+
+    final live = await db.allCategoriesFor(source.id, ItemKind.live);
+    final films = await db.allCategoriesFor(source.id, ItemKind.movie);
+    expect(live.single.hidden, isTrue);
+    expect(films.single.hidden, isFalse, reason: 'films were not on screen');
   });
 }

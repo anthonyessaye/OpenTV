@@ -749,6 +749,45 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     };
   }
 
+  /// Hides or shows every category of one kind at once.
+  ///
+  /// Exists because the realistic first move on a real provider is "hide all
+  /// of these, then show me back the four I watch". A catalogue arrives with
+  /// two or three hundred categories, most of them for other countries and
+  /// other languages, and setting them one at a time is not a task anybody
+  /// completes with a remote in their hand.
+  Future<void> setAllCategoriesHidden({
+    required int sourceId,
+    required ItemKind kind,
+    required bool hidden,
+  }) async {
+    await (update(categories)..where(
+      (c) => c.sourceId.equals(sourceId) & c.kind.equalsValue(kind),
+    )).write(CategoriesCompanion(hidden: Value(hidden)));
+
+    // And their contents, so "All" does not quietly list them anyway. Rows
+    // with no category are left alone: they are not in any of the categories
+    // being hidden, and hiding them here would make them unreachable with
+    // nothing in the interface that could bring them back.
+    switch (kind) {
+      case ItemKind.live:
+        await (update(channels)..where(
+          (c) =>
+              c.sourceId.equals(sourceId) & c.categoryRemoteId.isNotNull(),
+        )).write(ChannelsCompanion(hidden: Value(hidden)));
+      case ItemKind.movie:
+        await (update(movies)..where(
+          (m) =>
+              m.sourceId.equals(sourceId) & m.categoryRemoteId.isNotNull(),
+        )).write(MoviesCompanion(hidden: Value(hidden)));
+      case ItemKind.series || ItemKind.episode:
+        await (update(seriesEntries)..where(
+          (e) =>
+              e.sourceId.equals(sourceId) & e.categoryRemoteId.isNotNull(),
+        )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
+    }
+  }
+
   /// Every category, including the hidden ones, for a screen that manages
   /// them. [categoriesFor] deliberately excludes hidden rows, which is right
   /// for browsing and useless for un-hiding.
