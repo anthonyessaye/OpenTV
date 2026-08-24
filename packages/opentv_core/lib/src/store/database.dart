@@ -33,7 +33,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   OpenTvDatabase(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -42,6 +42,36 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // not touch a catalogue that took minutes to sync, and on tvOS may be
       // the only copy left after a cache purge.
       if (from < 2) await m.createTable(preferences);
+
+      // 3 adds the indexes the shelves order by. Created rather than
+      // rebuilt: on a real catalogue this is a few seconds once, against
+      // five seconds on every screen open without them.
+      if (from < 3) {
+        for (final index in [
+          Index('channel_order',
+              'CREATE INDEX channel_order ON channels (source_id, number, name)'),
+          Index('movie_rating',
+              'CREATE INDEX movie_rating ON movies (source_id, rating)'),
+          Index('movie_added',
+              'CREATE INDEX movie_added ON movies (source_id, added_at)'),
+          Index('movie_name',
+              'CREATE INDEX movie_name ON movies (source_id, name)'),
+          Index('series_rating',
+              'CREATE INDEX series_rating ON series_entries (source_id, rating)'),
+          Index('series_modified',
+              'CREATE INDEX series_modified ON series_entries (source_id, last_modified)'),
+          Index('series_name',
+              'CREATE INDEX series_name ON series_entries (source_id, name)'),
+          Index('channel_counts',
+              'CREATE INDEX channel_counts ON channels (source_id, hidden, category_remote_id)'),
+          Index('movie_counts',
+              'CREATE INDEX movie_counts ON movies (source_id, hidden, category_remote_id)'),
+          Index('series_counts',
+              'CREATE INDEX series_counts ON series_entries (source_id, hidden, category_remote_id)'),
+        ]) {
+          await m.createIndex(index);
+        }
+      }
     },
     beforeOpen: (details) async {
       // Off by default in SQLite. Without it the cascade deletes that clean

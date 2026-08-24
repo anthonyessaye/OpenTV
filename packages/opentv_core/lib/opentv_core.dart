@@ -23,6 +23,7 @@ export 'src/sync/xtream_fetcher.dart';
 export 'src/vpn/wireguard_config.dart';
 export 'src/xtream/catchup.dart';
 export 'src/xtream/coerce.dart';
+export 'src/xtream/xtream_account.dart';
 export 'src/xtream/xtream_credentials.dart';
 export 'src/xtream/xtream_models.dart';
 export 'src/xtream/xtream_urls.dart';

@@ -124,23 +124,52 @@ whole feature. It also reports whether a tunnel is full or split, because that
 decides what the interface may honestly claim — calling a split tunnel
 "protected" would be a lie in one of the two cases.
 
-**Deliberately not built: any interface for it.** There is no VPN toggle, no
-status indicator and no padlock anywhere in the app, and there will not be one
-until a tunnel actually exists. A control that implies protection it cannot
-deliver is worse than the feature being absent — someone would trust it.
+**The Android tunnel**, in
+`apps/opentv/android/app/src/main/kotlin/com/anthonyessaye/opentv/VpnChannel.kt`.
+It uses `com.wireguard.android:tunnel` — WireGuard's own library, Apache-2.0,
+carrying the audited Go implementation for all four ABIs and declaring its own
+`VpnService` in its manifest. Nothing was cross-compiled and no crypto was
+written: a userspace WireGuard implementation is a cryptographic component,
+which is not something to write for the practice.
+
+The `.conf` is parsed twice on purpose. Dart parses it to tell a viewer what
+is wrong with a file they half-pasted, before any tunnel is attempted; the
+library parses it because the library is the thing that has to be satisfied,
+and re-marshalling a config through a map of strings only invents a way for
+the two to disagree.
+
+Two details are load-bearing:
+
+- **The whole configuration is a secret, not just its private key.** An
+  endpoint, a port and a public key together identify which provider is being
+  used, which is most of what a tunnel exists to keep to itself. It goes to
+  the keystore, alongside the provider password, and never to the database.
+- **Errors cross the channel as a message and nothing else.** Some WireGuard
+  failure paths carry the configuration in the exception, and a stack trace
+  reaching Dart is a private key one bug report away from being public.
+
+Bringing a tunnel up blocks on a handshake with a host that may not answer, so
+it runs off the main thread. On the main thread that is a frozen television,
+and the viewer's only reading of that is that the app has crashed.
+
+**The interface**, as a settings panel, now that there is something true to
+show. It states what a tunnel does and does not do — that it moves who can see
+this traffic from the viewer's network to whoever runs the tunnel, rather than
+making it invisible — and it distinguishes a full tunnel from a split one,
+because calling a split tunnel "protected" would be a lie in one of the two
+cases. On tvOS the panel says there is no tunnel yet rather than offering a
+button that fails.
 
 ## What remains
 
-1. The Android tunnel: `VpnService` plus a WireGuard implementation
-   cross-compiled for four ABIs. No approval needed; this is where the
-   plumbing should be proven.
-2. The Apple entitlement request. It has a lead time and can be refused, so
-   it should be sent before the work it gates, not after.
-3. The tvOS packet-tunnel extension target.
-4. The interface, last — once there is something true to show.
-
-This document exists so the decision is made on what is actually true rather
-than on the assumption that OpenVPN is the default choice.
+1. The Apple entitlement. `com.apple.developer.networking.networkextension`
+   has been self-serve since November 2016 — there is no approval queue and no
+   lead time, contrary to what an earlier draft of this document said. It does
+   need a paid account, which is the actual gate.
+2. The tvOS packet-tunnel extension target.
+3. A real-world test on hardware against a provider's own endpoint. The
+   emulator can install and configure the tunnel but cannot usefully prove one
+   carries traffic.
 
 ## Sources
 

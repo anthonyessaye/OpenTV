@@ -21,6 +21,7 @@ class TextEntryField extends StatefulWidget {
     required this.value,
     this.active = false,
     this.obscure = false,
+    this.multiline = false,
     this.hint,
     this.problem,
     this.onChanged,
@@ -34,6 +35,15 @@ class TextEntryField extends StatefulWidget {
   final bool active;
 
   final bool obscure;
+
+  /// Whether the value may contain line breaks.
+  ///
+  /// Set for a pasted file rather than for prose. A WireGuard `.conf` is
+  /// several lines and means nothing flattened into one, so a field that
+  /// swallowed its newlines would take a valid configuration and store a
+  /// broken one — with no sign to the viewer that it had.
+  final bool multiline;
+
   final String? hint;
 
   /// A stated reason the value is not acceptable yet.
@@ -61,6 +71,11 @@ class TextEntryField extends StatefulWidget {
 ///
 /// Not `const`: [LogicalKeyboardKey] overrides `==`, so a constant set of
 /// them is rejected — the same reason the select and back key sets are final.
+final _hardEscapes = <LogicalKeyboardKey>{
+  LogicalKeyboardKey.escape,
+  LogicalKeyboardKey.goBack,
+};
+
 final _escapes = <LogicalKeyboardKey>{
   LogicalKeyboardKey.arrowUp,
   LogicalKeyboardKey.arrowDown,
@@ -144,7 +159,16 @@ class _TextEntryFieldState extends State<TextEntryField> {
     final obscure = widget.obscure;
     final hint = widget.hint;
     final problem = widget.problem;
-    final shown = obscure ? '•' * value.length : value;
+    final lines = widget.multiline ? value.split('\n').length : 1;
+    final shown = switch ((obscure, widget.multiline)) {
+      // A hundred dots on one line says nothing. The count of lines is what
+      // tells someone whether the whole file arrived.
+      (true, true) => '$lines lines pasted',
+      (true, false) => '•' * value.length,
+      // Flattened for display only: the stored value keeps its breaks.
+      (false, true) => value.replaceAll('\n', ' · '),
+      (false, false) => value,
+    };
     final empty = value.isEmpty;
 
     return Column(
@@ -230,7 +254,13 @@ class _TextEntryFieldState extends State<TextEntryField> {
                         if (event is! KeyDownEvent) {
                           return KeyEventResult.ignored;
                         }
-                        if (!_escapes.contains(event.logicalKey)) {
+                        final escapes = widget.multiline
+                            // Up and down move between lines here, so only
+                            // back and escape leave. Otherwise reviewing what
+                            // was pasted throws the viewer out of the field.
+                            ? _hardEscapes
+                            : _escapes;
+                        if (!escapes.contains(event.logicalKey)) {
                           return KeyEventResult.ignored;
                         }
                         _release();
@@ -239,7 +269,14 @@ class _TextEntryFieldState extends State<TextEntryField> {
                       child: EditableText(
                         controller: _controller ?? TextEditingController(),
                         focusNode: _editor ?? FocusNode(),
-                        obscureText: obscure,
+                        maxLines: widget.multiline ? null : 1,
+                        // Never obscured here, and it does not need to be:
+                        // this editable is one pixel wide and off the edge of
+                        // legibility. The masking that matters is the readout
+                        // above, which is the part anyone in the room can
+                        // see. Flutter also refuses obscureText on a
+                        // multi-line field outright.
+                        obscureText: obscure && !widget.multiline,
                         style: OpenTvType.data,
                         cursorColor: OpenTvColors.tally,
                         backgroundCursorColor: OpenTvColors.inkFaint,
@@ -248,7 +285,9 @@ class _TextEntryFieldState extends State<TextEntryField> {
                         // capitalise a hostname and break it.
                         autocorrect: false,
                         enableSuggestions: false,
-                        textInputAction: TextInputAction.done,
+                        textInputAction: widget.multiline
+                            ? TextInputAction.newline
+                            : TextInputAction.done,
                         onTapOutside: (_) => _release(),
                       ),
                     ),

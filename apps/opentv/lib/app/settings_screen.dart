@@ -3,6 +3,8 @@ import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
 import 'host.dart';
+import 'source_service.dart';
+import 'vpn_service.dart';
 
 /// Where a provider is chosen, and where the television is locked.
 ///
@@ -18,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
     required this.onSwitch,
     required this.onAddSource,
     required this.onRemoveSource,
+    required this.service,
     this.host = const Host(),
   });
 
@@ -28,6 +31,9 @@ class SettingsScreen extends StatefulWidget {
   final ValueChanged<Source> onSwitch;
   final VoidCallback onAddSource;
   final ValueChanged<Source> onRemoveSource;
+
+  /// Used to ask the portal about the account and to re-read the catalogue.
+  final SourceService service;
 
   final Host host;
 
@@ -47,7 +53,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-enum _Panel { sources, account, hidden, metadata, parental, about }
+enum _Panel { sources, account, hidden, metadata, vpn, parental, about }
 
 class _SettingsScreenState extends State<SettingsScreen> {
   _Panel _panel = _Panel.sources;
@@ -61,6 +67,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _entry;
   String? _note;
   String _tmdbKey = '';
+
+  XtreamAccount? _account;
+  bool _askingPortal = false;
+
+  /// Set while a refresh runs, so the button cannot be pressed twice and the
+  /// viewer can see which stage is running.
+  bool _refreshing = false;
+  String? _refreshNote;
+
+  /// How much the catalogue currently holds, which is the other half of
+  /// "is this working" and comes from the database rather than the portal.
+  Map<ItemKind, int> _counts = const {};
+
+  final _vpnService = VpnService();
+  WireGuardConfig? _tunnel;
+  String _tunnelDraft = '';
+  String? _tunnelProblem;
+  bool _connecting = false;
 
   @override
   void initState() {
@@ -88,8 +112,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _CategoryEntry(category: category, kind: kind),
     ];
 
+    final counts = <ItemKind, int>{
+      for (final kind in [ItemKind.live, ItemKind.movie, ItemKind.series])
+        kind: (await widget.db.countsByCategory(widget.active.id, kind)).values
+            .fold(0, (sum, value) => sum + value),
+    };
+
+    final tunnel = await _vpnService.stored();
+    await _vpnService.resync();
+
     if (!mounted) return;
     setState(() {
+      _tunnel = tunnel;
+      _counts = counts;
       _hasPin = pin != null && pin.isNotEmpty;
       _tmdbKey = tmdb ?? '';
       _locked = locked;
@@ -154,16 +189,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Panel.account => 'Account',
                       _Panel.hidden => 'Hidden categories',
                       _Panel.metadata => 'Metadata',
+                      _Panel.vpn => 'Private tunnel',
                       _Panel.parental => 'Parental lock',
                       _Panel.about => 'About',
                     },
                     selected: panel == _panel,
                     autofocus: panel == _Panel.sources,
-                    onSelect: () => setState(() {
-                      _panel = panel;
-                      _note = null;
-                      _entry = null;
-                    }),
+                    onSelect: () {
+                      setState(() {
+                        _panel = panel;
+                        _note = null;
+                        _entry = null;
+                      });
+                      // Asked on opening rather than on every build, and only
+                      // once — a portal round trip per rebuild would make the
+                      // panel flicker and hammer the provider.
+                      if (panel == _Panel.account &&
+                          _account == null &&
+                          !_askingPortal) {
+                        _askPortal();
+                      }
+                    },
                   ),
                 ),
             ],
@@ -177,9 +223,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: switch (_panel) {
               _Panel.sources => _sources(),
-              _Panel.account => _account(),
+              _Panel.account => _accountPanel(),
               _Panel.hidden => _hidden(),
               _Panel.metadata => _metadata(),
+              _Panel.vpn => _vpn(),
               _Panel.parental => _parental(),
               _Panel.about => _about(),
             },
@@ -342,42 +389,181 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Read live rather than stored, because the two facts worth knowing —
   /// whether it is active and when it expires — are exactly the ones that
   /// change without the app being told.
-  Widget _account() {
-    if (widget.active.kind != SourceKind.xtream) {
-      return const Text(
-        'A playlist has no account behind it. There is nothing to expire and '
-        'nothing to check.',
-        style: OpenTvType.bodyMuted,
+  Widget _accountPanel() {
+    final source = widget.active;
+
+    if (source.kind != SourceKind.xtream) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'A playlist has no account behind it. There is nothing to expire '
+            'and no connection limit to report.',
+            style: OpenTvType.bodyMuted,
+          ),
+          const SizedBox(height: OpenTvSpace.md),
+          ..._localFacts(),
+          const SizedBox(height: OpenTvSpace.lg),
+          _refreshControl(),
+        ],
       );
     }
+
+    final account = _account;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Fact(label: 'Provider', value: widget.active.name),
-        _Fact(label: 'Portal', value: widget.active.url),
-        _Fact(label: 'Username', value: widget.active.username ?? '—'),
-        _Fact(
-          label: 'Password',
-          // Never shown. It lives in the keystore and there is no version of
-          // "check my account" that requires putting it on a television
-          // screen in a room with other people in it.
-          value: widget.active.credentialRef == null ? 'Not stored' : 'Stored',
-        ),
-        _Fact(
-          label: 'Last synced',
-          value: widget.active.lastSyncedAt == null
-              ? 'Never'
-              : _when(widget.active.lastSyncedAt!),
-        ),
-        const SizedBox(height: OpenTvSpace.md),
-        Text(
-          'Expiry and connection limits come from the provider and are read '
-          'during a sync. Nothing here is sent anywhere.',
-          style: OpenTvType.bodyMuted,
+        Expanded(
+          child: ListView(
+            children: [
+              _Fact(label: 'Provider', value: source.name),
+              _Fact(label: 'Portal', value: source.url),
+              _Fact(label: 'Username', value: source.username ?? '—'),
+              _Fact(
+                label: 'Password',
+                // Never shown. There is no version of "check my account" that
+                // requires putting it on a television in a room with other
+                // people in it.
+                value: source.credentialRef == null ? 'Not stored' : 'Stored',
+              ),
+              const SizedBox(height: OpenTvSpace.sm),
+
+              if (_askingPortal)
+                const Text('Asking the provider…', style: OpenTvType.bodyMuted)
+              else if (account == null)
+                const Text(
+                  'The provider did not answer. The catalogue still works; '
+                  'only these figures are unavailable.',
+                  style: OpenTvType.bodyMuted,
+                )
+              else ...[
+                _Fact(
+                  label: 'Status',
+                  value: account.isTrial
+                      ? '${account.status} · trial'
+                      : account.status,
+                ),
+                _Fact(label: 'Expires', value: _expiry(account)),
+                _Fact(
+                  label: 'Connections',
+                  value: account.maxConnections == null
+                      ? '—'
+                      : '${account.activeConnections ?? 0} of '
+                            '${account.maxConnections} in use',
+                ),
+              ],
+
+              const SizedBox(height: OpenTvSpace.sm),
+              ..._localFacts(),
+              const SizedBox(height: OpenTvSpace.lg),
+              _refreshControl(),
+            ],
+          ),
         ),
       ],
     );
+  }
+
+  /// What the catalogue holds, which the portal does not report and which is
+  /// the other half of "is this working".
+  List<Widget> _localFacts() => [
+    _Fact(label: 'Channels', value: _plain(_counts[ItemKind.live])),
+    _Fact(label: 'Films', value: _plain(_counts[ItemKind.movie])),
+    _Fact(label: 'Series', value: _plain(_counts[ItemKind.series])),
+    _Fact(
+      label: 'Last synced',
+      value: widget.active.lastSyncedAt == null
+          ? 'Never'
+          : _when(widget.active.lastSyncedAt!),
+    ),
+  ];
+
+  static String _plain(int? count) =>
+      count == null ? '—' : count.toString().replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+$)'),
+        (m) => '${m[1]},',
+      );
+
+  String _expiry(XtreamAccount account) {
+    final at = account.expiresAt;
+    // Some panels report nothing for unlimited accounts. Showing that as
+    // expired would tell a viewer their working account is dead.
+    if (at == null) return 'No expiry reported';
+
+    final days = account.daysRemaining(DateTime.now()) ?? 0;
+    final when = _when(at);
+    if (days < 0) return '$when · lapsed ${-days} days ago';
+    if (days == 0) return '$when · today';
+    return '$when · $days days left';
+  }
+
+  /// Re-reads the whole catalogue from the provider.
+  Widget _refreshControl() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            PlayerButton(
+              label: _refreshing ? 'REFRESHING…' : 'REFRESH CATALOGUE',
+              emphasis: !_refreshing,
+              onSelect: _refreshing ? null : _refresh,
+            ),
+            if (!_refreshing && widget.active.kind == SourceKind.xtream) ...[
+              const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(label: 'CHECK ACCOUNT', onSelect: _askPortal),
+            ],
+          ],
+        ),
+        if (_refreshing) ...[
+          const SizedBox(height: OpenTvSpace.sm),
+          ValueListenableBuilder<String>(
+            valueListenable: widget.service.progress,
+            builder: (context, text, _) => Text(
+              text,
+              style: OpenTvType.data.copyWith(color: OpenTvColors.tally),
+            ),
+          ),
+        ],
+        if (_refreshNote != null) ...[
+          const SizedBox(height: OpenTvSpace.sm),
+          Text(
+            _refreshNote!,
+            style: OpenTvType.bodyMuted.copyWith(
+              color: _refreshNote!.startsWith('Updated')
+                  ? OpenTvColors.onAir
+                  : OpenTvColors.alert,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _askPortal() async {
+    setState(() => _askingPortal = true);
+    final account = await widget.service.account(widget.active);
+    if (!mounted) return;
+    setState(() {
+      _account = account;
+      _askingPortal = false;
+    });
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _refreshing = true;
+      _refreshNote = null;
+    });
+    final failure = await widget.service.refresh(widget.active);
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+    setState(() {
+      _refreshing = false;
+      _refreshNote = failure ?? 'Updated from the provider.';
+    });
   }
 
   static String _when(DateTime at) {
@@ -493,6 +679,183 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ],
     );
+  }
+
+  /// The tunnel panel.
+  ///
+  /// Stated plainly rather than sold. A VPN moves the question of who can see
+  /// this traffic from the viewer's network to the tunnel provider's; it does
+  /// not make the traffic private, and an interface implying otherwise is
+  /// giving someone a false idea of their own exposure.
+  Widget _vpn() {
+    if (!_vpnService.isSupported) {
+      return const Text(
+        'The tunnel is Android-only for now. Apple TV needs a Network '
+        'Extension, which needs a paid developer account to sign — so rather '
+        'than a button that fails, there is none yet.',
+        style: OpenTvType.bodyMuted,
+      );
+    }
+
+    final tunnel = _tunnel;
+
+    return ValueListenableBuilder<VpnState>(
+      valueListenable: _vpnService.state,
+      builder: (context, state, _) => ListView(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: switch (state) {
+                    VpnState.up => OpenTvColors.onAir,
+                    VpnState.connecting => OpenTvColors.tally,
+                    VpnState.down => OpenTvColors.inkFaint,
+                  },
+                ),
+              ),
+              const SizedBox(width: OpenTvSpace.xs),
+              Text(
+                switch (state) {
+                  VpnState.up => 'CARRYING TRAFFIC',
+                  VpnState.connecting => 'CONNECTING',
+                  VpnState.down => 'NOT CONNECTED',
+                },
+                style: OpenTvType.label.copyWith(
+                  color: switch (state) {
+                    VpnState.up => OpenTvColors.onAir,
+                    VpnState.connecting => OpenTvColors.tally,
+                    VpnState.down => OpenTvColors.inkFaint,
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: OpenTvSpace.sm),
+
+          const Text(
+            'A WireGuard tunnel carries this app\'s traffic to your provider '
+            'instead of over your own connection. It moves who can see that '
+            'traffic — from your network to whoever runs the tunnel. It does '
+            'not make it invisible, and it is only as trustworthy as they are.',
+            style: OpenTvType.bodyMuted,
+          ),
+          const SizedBox(height: OpenTvSpace.md),
+
+          if (tunnel != null) ...[
+            _Fact(label: 'Endpoint', value: tunnel.peer.endpoint),
+            _Fact(
+              label: 'Routes',
+              // The distinction the viewer's expectations rest on.
+              value: tunnel.isFullTunnel
+                  ? 'Everything'
+                  : tunnel.peer.allowedIps.join(', '),
+            ),
+            _Fact(
+              label: 'DNS',
+              value: tunnel.dns.isEmpty ? 'Unchanged' : tunnel.dns.join(', '),
+            ),
+            if (tunnel.mtu != null)
+              _Fact(label: 'MTU', value: '\${tunnel.mtu}'),
+            const SizedBox(height: OpenTvSpace.md),
+            Row(
+              children: [
+                PlayerButton(
+                  label: state == VpnState.up ? 'DISCONNECT' : 'CONNECT',
+                  emphasis: state != VpnState.up,
+                  onSelect: _connecting
+                      ? null
+                      : state == VpnState.up
+                      ? _disconnect
+                      : _connect,
+                ),
+                const SizedBox(width: OpenTvSpace.sm),
+                PlayerButton(
+                  label: 'FORGET TUNNEL',
+                  onSelect: _connecting ? null : _forgetTunnel,
+                ),
+              ],
+            ),
+          ] else ...[
+            SizedBox(
+              width: 900,
+              child: TextEntryField(
+                label: 'WireGuard configuration',
+                value: _tunnelDraft,
+                hint: 'Paste the .conf your provider gave you',
+                active: true,
+                // Masked: the file contains a private key, and a television
+                // is a screen other people are in the room with.
+                obscure: true,
+                multiline: true,
+                problem: _tunnelProblem,
+                onChanged: (text) => setState(() => _tunnelDraft = text),
+                onDone: _saveTunnel,
+              ),
+            ),
+            const SizedBox(height: OpenTvSpace.sm),
+            const Text(
+              'Easiest from your phone: open this screen, then type into it '
+              'with a keyboard app rather than the remote.',
+              style: OpenTvType.bodyMuted,
+            ),
+            const SizedBox(height: OpenTvSpace.md),
+            PlayerButton(
+              label: 'SAVE TUNNEL',
+              emphasis: true,
+              onSelect: _tunnelDraft.isEmpty ? null : _saveTunnel,
+            ),
+          ],
+
+          if (_vpnService.problem.value != null) ...[
+            const SizedBox(height: OpenTvSpace.sm),
+            Text(
+              _vpnService.problem.value!,
+              style: OpenTvType.bodyMuted.copyWith(color: OpenTvColors.alert),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveTunnel() async {
+    final problem = await _vpnService.save(_tunnelDraft);
+    if (!mounted) return;
+    if (problem != null) {
+      setState(() => _tunnelProblem = problem);
+      return;
+    }
+    final tunnel = await _vpnService.stored();
+    if (!mounted) return;
+    setState(() {
+      _tunnel = tunnel;
+      _tunnelProblem = null;
+      // Dropped from memory once it is in the keystore. There is no reason
+      // for a private key to sit in a widget's state for the rest of the
+      // session.
+      _tunnelDraft = '';
+    });
+  }
+
+  Future<void> _connect() async {
+    setState(() => _connecting = true);
+    await _vpnService.connect();
+    if (mounted) setState(() => _connecting = false);
+  }
+
+  Future<void> _disconnect() async {
+    setState(() => _connecting = true);
+    await _vpnService.disconnect();
+    if (mounted) setState(() => _connecting = false);
+  }
+
+  Future<void> _forgetTunnel() async {
+    await _vpnService.forget();
+    if (mounted) setState(() => _tunnel = null);
   }
 
   Future<void> _saveKey() async {

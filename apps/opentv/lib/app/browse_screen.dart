@@ -2,12 +2,14 @@ import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
+import '../http_transport.dart';
 import '../player_screen.dart';
 import 'film_screen.dart';
 import 'guide_screen.dart';
 import 'host.dart';
 import 'search_screen.dart';
 import 'series_screen.dart';
+import 'source_service.dart';
 import 'settings_screen.dart';
 import 'stream_resolver.dart';
 
@@ -34,6 +36,7 @@ class BrowseScreen extends StatefulWidget {
     this.onSwitchSource,
     this.onAddSource,
     this.onRemoveSource,
+    required this.service,
   });
 
   final OpenTvDatabase db;
@@ -46,6 +49,9 @@ class BrowseScreen extends StatefulWidget {
   final ValueChanged<Source>? onSwitchSource;
   final VoidCallback? onAddSource;
   final ValueChanged<Source>? onRemoveSource;
+
+  /// Shared with settings, so a refresh reports through the same progress.
+  final SourceService service;
 
   @override
   State<BrowseScreen> createState() => _BrowseScreenState();
@@ -74,6 +80,17 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// instead: what is worth watching, what you were watching, what you kept.
   List<({String label, List<_Item> items})> _shelves = const [];
   bool _loading = true;
+
+  /// The address the live hero is currently playing, and what to play it
+  /// with. Null while it is being resolved, or when it cannot be.
+  ({String url, Map<String, String> options})? _leadStream;
+
+  /// Artwork and a line of description for the film or series being shown
+  /// off, asked of TMDB once per section rather than per tile.
+  TmdbDetails? _leadDetails;
+
+  final _transport = HttpTransport();
+  static const _images = TmdbImages();
   String? _problem;
 
   /// Guards against a slow query for a category the viewer has already left.
@@ -93,6 +110,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
     super.initState();
     _loadSection();
     _readTmdbKey();
+  }
+
+  @override
+  void dispose() {
+    _transport.close();
+    super.dispose();
   }
 
   Future<void> _readTmdbKey() async {
@@ -249,7 +272,53 @@ class _BrowseScreenState extends State<BrowseScreen> {
       _items = items;
       _shelves = shelves;
       _loading = false;
+      // Cleared rather than left standing: the old section's lead belongs to
+      // the old section, and showing it under a new heading is a lie the
+      // viewer has no way to spot.
+      _leadStream = null;
+      _leadDetails = null;
     });
+
+    await _prepareLead(generation, shelves);
+  }
+
+  /// Fills in whatever the hero needs beyond a row from the database.
+  ///
+  /// Deliberately after the screen is already painted. Both halves are
+  /// network calls — a keystore read and a URL build for live, a metadata
+  /// lookup for films — and a section that waits on either before drawing
+  /// anything is the five-second load this replaced.
+  Future<void> _prepareLead(
+    int generation,
+    List<({String label, List<_Item> items})> shelves,
+  ) async {
+    if (shelves.isEmpty || shelves.first.items.isEmpty) return;
+    final lead = shelves.first.items.first;
+
+    if (_section == TvSection.live) {
+      // Only the shelf that means "you were watching this" auto-plays. A
+      // channel the viewer has never chosen should not start making noise in
+      // their living room because it happened to sort first.
+      if (shelves.first.label != 'Continue watching') return;
+      final playable = lead.playable;
+      if (playable == null) return;
+
+      final url = await widget.resolver.urlFor(widget.source, playable);
+      if (!mounted || generation != _generation || url == null) return;
+      setState(() {
+        _leadStream = (
+          url: url,
+          options: widget.resolver.optionsFor(playable),
+        );
+      });
+      return;
+    }
+
+    if (_tmdbKey.isEmpty) return;
+    final client = TmdbClient(apiKey: _tmdbKey, transport: _transport);
+    final details = await client.lookup(lead.name);
+    if (!mounted || generation != _generation) return;
+    setState(() => _leadDetails = details);
   }
 
   /// Highlight, then what the viewer already has a relationship with, then
@@ -424,6 +493,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
     final playable = item.playable;
     if (playable == null) return;
     await _play(playable);
+    // What was last watched has just changed, and the hero is drawn from it.
+    if (mounted) await _loadSection();
   }
 
   /// Zapping, bounded by what is currently listed.
@@ -632,6 +703,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
       case TvSection.settings:
         return SettingsScreen(
           db: widget.db,
+          service: widget.service,
           sources: widget.sources.isEmpty ? [widget.source] : widget.sources,
           active: widget.source,
           onSwitch: (source) => widget.onSwitchSource?.call(source),
@@ -706,21 +778,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
               right: OpenTvSpace.safeHorizontal,
               bottom: OpenTvSpace.lg,
             ),
-            child: HeroBanner(
-              title: cleaned.title,
-              eyebrow: _shelves.first.label,
-              imageUrl: lead.imageUrl,
-              autofocus: true,
-              facts: [
-                if (cleaned.year != null)
-                  (label: 'year', value: '${cleaned.year}'),
-                if (lead.movie?.rating case final double score when score > 0)
-                  (label: 'rating', value: score.toStringAsFixed(1)),
-                if (cleaned.quality != null)
-                  (label: 'quality', value: cleaned.quality!),
-              ],
-              onSelect: () => _open(lead),
-            ),
+            child: _hero(lead, cleaned),
           );
         }
 
@@ -741,6 +799,87 @@ class _BrowseScreenState extends State<BrowseScreen> {
       },
     );
   }
+
+  /// What each section leads with.
+  ///
+  /// Three different things, because the sections are answering three
+  /// different questions. Live shows the channel you left, still running,
+  /// because "what is on" is only answerable by looking at it. Films and
+  /// series show a case for one title — poster, description, figures —
+  /// because choosing is the whole activity. Anything else falls back to the
+  /// plain banner.
+  Widget _hero(_Item lead, CleanedTitle cleaned) {
+    final stream = _leadStream;
+    if (_section == TvSection.live && stream != null) {
+      return LivePreview(
+        // Keyed on the generation as well as the address, so returning from
+        // the full player builds a fresh surface. The preview stops itself on
+        // the way out to free the provider's connection, and a stopped
+        // surface reused is a black box where the picture was.
+        key: ValueKey('${stream.url}#$_generation'),
+        url: stream.url,
+        streamOptions: stream.options,
+        title: cleaned.title,
+        subtitle: lead.channel?.categoryRemoteId == null
+            ? null
+            : _entries
+                  .firstWhere(
+                    (entry) => entry.id == lead.channel?.categoryRemoteId,
+                    orElse: () => (id: null, name: '', count: 0),
+                  )
+                  .name,
+        autofocus: true,
+        onSelect: () => _open(lead),
+      );
+    }
+
+    if (_section != TvSection.live) {
+      final details = _leadDetails;
+      return ShowcaseBanner(
+        title: details?.title.name ?? cleaned.title,
+        eyebrow: _shelves.first.label,
+        posterUrl: _images.poster(details?.title.posterPath) ?? lead.imageUrl,
+        // Only a real backdrop is used here. Falling back to the poster
+        // would put the same portrait image behind itself, which reads as a
+        // rendering fault rather than a design.
+        backdropUrl: _images.backdrop(details?.title.backdropPath),
+        synopsis: details?.title.overview,
+        autofocus: true,
+        facts: [
+          if (details?.title.year != null)
+            (label: 'year', value: '${details!.title.year}')
+          else if (cleaned.year != null)
+            (label: 'year', value: '${cleaned.year}'),
+          if (_rating(lead, details) case final double score when score > 0)
+            (label: 'rating', value: score.toStringAsFixed(1)),
+          if (cleaned.quality != null)
+            (label: 'quality', value: cleaned.quality!),
+        ],
+        onSelect: () => _open(lead),
+      );
+    }
+
+    return HeroBanner(
+      title: cleaned.title,
+      eyebrow: _shelves.first.label,
+      imageUrl: lead.imageUrl,
+      autofocus: true,
+      facts: [
+        if (cleaned.year != null) (label: 'year', value: '${cleaned.year}'),
+        if (cleaned.quality != null)
+          (label: 'quality', value: cleaned.quality!),
+      ],
+      onSelect: () => _open(lead),
+    );
+  }
+
+  /// The provider's own score, preferred over TMDB's.
+  ///
+  /// A provider that bothers to carry a rating is rating the copy it holds;
+  /// TMDB is rating the film. When both exist the first is the more useful
+  /// answer to "is this worth starting".
+  static double? _rating(_Item lead, TmdbDetails? details) =>
+      lead.movie?.rating ?? lead.series?.rating ?? details?.title.voteAverage;
 
   Widget _grid() {
     if (_loading) {

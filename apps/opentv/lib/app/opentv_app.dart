@@ -217,6 +217,7 @@ class _RootState extends State<_Root> {
       db: db,
       source: source,
       resolver: _resolver!,
+      service: service,
       sources: _sources,
       onSwitchSource: (next) => setState(() => _source = next),
       onAddSource: () => setState(() => _addingSource = true),

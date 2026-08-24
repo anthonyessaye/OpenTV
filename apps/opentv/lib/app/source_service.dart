@@ -26,6 +26,100 @@ class SourceService {
 
   void dispose() => progress.dispose();
 
+  /// Asks the portal what it says about the account.
+  ///
+  /// Live rather than stored: expiry and connection counts are exactly the
+  /// facts that change without the app being told, and a cached expiry is a
+  /// wrong expiry waiting to happen.
+  Future<XtreamAccount?> account(Source source) async {
+    if (source.kind != SourceKind.xtream) return null;
+    final reference = source.credentialRef;
+    final username = source.username;
+    if (reference == null || username == null) return null;
+
+    final password = await host.readSecret(reference);
+    if (password == null) return null;
+
+    final transport = HttpTransport();
+    try {
+      final urls = XtreamUrls(
+        XtreamCredentials(
+          host: source.url,
+          username: username,
+          password: password,
+        ),
+      );
+      final info = Coerce.asMap(await transport.getJson(urls.userInfo()));
+      return XtreamAccount.fromUserInfo(Coerce.asMap(info?['user_info']));
+    } on TransportException {
+      // A portal that will not answer is not an error worth a dialog; the
+      // panel says the information is unavailable and the app keeps working.
+      return null;
+    } finally {
+      transport.close();
+    }
+  }
+
+  /// Re-reads everything from the provider.
+  ///
+  /// Forced, which is what a manual refresh means: the sync engine's
+  /// checkpoints exist so an interrupted first import can resume, and
+  /// honouring them here would make the button do nothing on a source that
+  /// had already completed.
+  Future<String?> refresh(Source source) async {
+    final reference = source.credentialRef;
+    final username = source.username;
+
+    final transport = HttpTransport();
+    try {
+      if (source.kind == SourceKind.xtream) {
+        if (reference == null || username == null) {
+          return 'This provider has no stored account, so it cannot be '
+              'refreshed. Remove it and add it again.';
+        }
+        final password = await host.readSecret(reference);
+        if (password == null) {
+          return 'The account password could not be read back, so the '
+              'catalogue cannot be refreshed.';
+        }
+        return await _runSync(
+          source.id,
+          XtreamCatalogueFetcher(
+            credentials: XtreamCredentials(
+              host: source.url,
+              username: username,
+              password: password,
+            ),
+            transport: transport,
+          ),
+          force: true,
+        );
+      }
+
+      progress.value = 'Fetching the playlist…';
+      final playlist = await _download(
+        transport,
+        Uri.parse(source.url),
+        'playlist',
+      );
+      try {
+        return await _runSync(
+          source.id,
+          M3uCatalogueFetcher(openPlaylist: () => _readLines(playlist)),
+          force: true,
+        );
+      } finally {
+        await playlist.delete().catchError((_) => playlist);
+      }
+    } on TransportException catch (error) {
+      return _explain(error);
+    } on SocketException {
+      return 'That address could not be reached. Check the network.';
+    } finally {
+      transport.close();
+    }
+  }
+
   /// Adds the source and fills its catalogue.
   ///
   /// Returns null on success, or a sentence a viewer can act on. Failures
@@ -171,11 +265,15 @@ class SourceService {
     }
   }
 
-  Future<String?> _runSync(int sourceId, CatalogueFetcher fetcher) async {
+  Future<String?> _runSync(
+    int sourceId,
+    CatalogueFetcher fetcher, {
+    bool force = false,
+  }) async {
     final engine = SyncEngine(db);
     var wrote = 0;
 
-    await for (final step in engine.sync(sourceId, fetcher)) {
+    await for (final step in engine.sync(sourceId, fetcher, force: force)) {
       progress.value = switch (step.stage) {
         SyncStage.categories => 'Reading categories…',
         SyncStage.channels => 'Reading channels…',

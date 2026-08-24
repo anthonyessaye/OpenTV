@@ -54,7 +54,12 @@ class _SearchScreenState extends State<SearchScreen> {
   /// Stated once because two places need to agree: the box that animates and
   /// the box that pins the child. When they disagreed the keys were squashed
   /// rather than clipped.
-  static const _panelWidth = 1048.0;
+  ///
+  /// Measured, not guessed: ten keys of 84 with 8 of padding each is 920,
+  /// plus the safe margin and the room a focused key's ring and glow need to
+  /// overhang. It was three pixels short, which clipped the right-hand
+  /// column.
+  static const _panelWidth = 1084.0;
 
   @override
   void dispose() {

@@ -86,6 +86,10 @@ class Categories extends Table {
 )
 @TableIndex(name: 'channel_search', columns: {#sourceId, #searchName})
 @TableIndex(name: 'channel_epg', columns: {#sourceId, #epgChannelId})
+// Browsing order. Without it, listing a source means sorting every channel
+// it has before the first screenful can be drawn.
+@TableIndex(name: 'channel_order', columns: {#sourceId, #number, #name})
+@TableIndex(name: 'channel_counts', columns: {#sourceId, #hidden, #categoryRemoteId})
 class Channels extends Table {
   IntColumn get sourceId =>
       integer().references(Sources, #id, onDelete: KeyAction.cascade)();
@@ -136,6 +140,22 @@ class Channels extends Table {
   columns: {#sourceId, #categoryRemoteId},
 )
 @TableIndex(name: 'movie_search', columns: {#sourceId, #searchName})
+// The three orders the shelves and the grid ask for.
+//
+// These are the difference between a screen that opens and one that takes
+// five seconds. A provider carries 179,712 films; ordering by rating, by
+// date, or by name without an index means sorting all of them before the
+// first twenty can be shown — three times over, once per shelf.
+// Counting per category, which the rail needs before it can draw.
+//
+// Ordered so the filter is a prefix and the grouping follows it, and so the
+// index carries every column the query reads — SQLite can then count without
+// touching the table at all. Without `hidden` in it, counting 179,712 films
+// meant fetching each row to ask whether it was visible.
+@TableIndex(name: 'movie_counts', columns: {#sourceId, #hidden, #categoryRemoteId})
+@TableIndex(name: 'movie_rating', columns: {#sourceId, #rating})
+@TableIndex(name: 'movie_added', columns: {#sourceId, #addedAt})
+@TableIndex(name: 'movie_name', columns: {#sourceId, #name})
 class Movies extends Table {
   IntColumn get sourceId =>
       integer().references(Sources, #id, onDelete: KeyAction.cascade)();
@@ -171,6 +191,10 @@ class Movies extends Table {
   columns: {#sourceId, #categoryRemoteId},
 )
 @TableIndex(name: 'series_search', columns: {#sourceId, #searchName})
+@TableIndex(name: 'series_counts', columns: {#sourceId, #hidden, #categoryRemoteId})
+@TableIndex(name: 'series_rating', columns: {#sourceId, #rating})
+@TableIndex(name: 'series_modified', columns: {#sourceId, #lastModified})
+@TableIndex(name: 'series_name', columns: {#sourceId, #name})
 class SeriesEntries extends Table {
   IntColumn get sourceId =>
       integer().references(Sources, #id, onDelete: KeyAction.cascade)();

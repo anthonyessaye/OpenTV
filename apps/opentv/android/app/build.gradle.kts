@@ -64,4 +64,11 @@ dependencies {
     // every stream URL, so the app must keep the password to play anything —
     // which makes where it is kept a decision worth making properly.
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // The tunnel. Apache-2.0, from WireGuard themselves, carrying the audited
+    // Go implementation for all four ABIs and declaring its own VpnService.
+    // The alternative — an OpenVPN client — is GPL-2.0 or AGPL-3.0 in every
+    // usable form, which would decide this project's licence for it and shut
+    // the App Store out entirely.
+    implementation("com.wireguard.android:tunnel:1.0.20260102")
 }
