@@ -38,6 +38,11 @@
 	     username and password in the path of every stream URL, so they travel
 	     in the clear on each channel change. That is a property of the
 	     protocol and the provider, not a choice this app makes. -->
+	<!-- Serving the setup page needs local network access on tvOS 14 and
+	     later. Without this the listen succeeds and no phone can reach it,
+	     which is a failure with nothing on screen to explain it. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OpenTV serves a setup page on your own network, so you can enter your provider details from a phone instead of a remote. It runs only while setup is open.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

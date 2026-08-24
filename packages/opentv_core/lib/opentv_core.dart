@@ -20,6 +20,8 @@ export 'src/sync/m3u_fetcher.dart';
 export 'src/sync/sync_engine.dart';
 export 'src/sync/transport.dart';
 export 'src/sync/xtream_fetcher.dart';
+export 'src/setup/setup_server.dart';
+export 'src/setup/setup_submission.dart';
 export 'src/vpn/wireguard_config.dart';
 export 'src/xtream/catchup.dart';
 export 'src/xtream/coerce.dart';

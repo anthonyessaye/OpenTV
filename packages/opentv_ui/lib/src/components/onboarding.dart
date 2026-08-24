@@ -88,6 +88,7 @@ class OnboardingScreen extends StatefulWidget {
     required this.onSubmit,
     this.progress,
     this.onCancel,
+    this.onUsePhone,
   });
 
   /// Performs the connection and the first sync. Returns null when the source
@@ -104,6 +105,13 @@ class OnboardingScreen extends StatefulWidget {
   final ValueListenable<String>? progress;
 
   final VoidCallback? onCancel;
+
+  /// Offered when the app can serve a setup page on the local network.
+  ///
+  /// Typing a portal address, a username and a password on a remote is the
+  /// worst part of this app; a WireGuard configuration is barely possible at
+  /// all. Null when there is no network to serve it on.
+  final VoidCallback? onUsePhone;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -265,7 +273,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       color: OpenTvColors.ground,
       padding: OpenTvSpace.safe,
       child: switch (_stage) {
-        _Stage.kind => _KindStep(onChoose: _choose, onCancel: widget.onCancel),
+        _Stage.kind => _KindStep(
+          onChoose: _choose,
+          onCancel: widget.onCancel,
+          onUsePhone: widget.onUsePhone,
+        ),
         _Stage.details => _DetailsStep(
           field: _fields[_index],
           value: _values[_index],
@@ -320,10 +332,11 @@ class _Masthead extends StatelessWidget {
 }
 
 class _KindStep extends StatelessWidget {
-  const _KindStep({required this.onChoose, this.onCancel});
+  const _KindStep({required this.onChoose, this.onCancel, this.onUsePhone});
 
   final ValueChanged<OnboardingSourceKind> onChoose;
   final VoidCallback? onCancel;
+  final VoidCallback? onUsePhone;
 
   @override
   Widget build(BuildContext context) {
@@ -369,10 +382,29 @@ class _KindStep extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onCancel != null) ...[
+              if (onUsePhone != null) ...[
                 const SizedBox(height: OpenTvSpace.md),
-                PlayerButton(label: 'BACK', onSelect: onCancel),
+                const Text(
+                  'Or fill this in on your phone instead — the same '
+                  'questions, on a keyboard that has letters.',
+                  style: OpenTvType.bodyMuted,
+                ),
+                const SizedBox(height: OpenTvSpace.xs),
               ],
+              Row(
+                children: [
+                  if (onUsePhone != null)
+                    PlayerButton(
+                      label: 'USE MY PHONE',
+                      emphasis: true,
+                      onSelect: onUsePhone,
+                    ),
+                  if (onUsePhone != null && onCancel != null)
+                    const SizedBox(width: OpenTvSpace.sm),
+                  if (onCancel != null)
+                    PlayerButton(label: 'BACK', onSelect: onCancel),
+                ],
+              ),
             ],
           ),
         ),

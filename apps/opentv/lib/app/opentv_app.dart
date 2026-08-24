@@ -9,6 +9,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 
 import 'browse_screen.dart';
 import 'host.dart';
+import 'phone_setup_screen.dart';
 import 'setup_screen.dart';
 import 'source_service.dart';
 import 'stream_resolver.dart';
@@ -95,6 +96,13 @@ class _RootState extends State<_Root> {
   /// Set to the provider that has just finished importing, while the three
   /// one-time questions are asked about it.
   Source? _settingUp;
+
+  /// True while the local setup page is being served.
+  ///
+  /// Only ever true because somebody asked for it on this screen, and false
+  /// again the moment they leave — the server is not something that runs in
+  /// the background.
+  bool _usingPhone = false;
 
   @override
   void initState() {
@@ -251,9 +259,21 @@ class _RootState extends State<_Root> {
       );
     }
 
+    if (_usingPhone) {
+      return PhoneSetupScreen(
+        service: service,
+        onDone: () async {
+          setState(() => _usingPhone = false);
+          await _adopt();
+        },
+        onCancel: () => setState(() => _usingPhone = false),
+      );
+    }
+
     final source = _source;
     if (source == null || _addingSource) {
       return OnboardingScreen(
+        onUsePhone: () => setState(() => _usingPhone = true),
         // Adding a second provider can be abandoned; a first cannot, because
         // there would be nothing behind it to go back to.
         onCancel: _addingSource
