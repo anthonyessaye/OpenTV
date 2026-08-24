@@ -21,6 +21,7 @@ class SettingsScreen extends StatefulWidget {
     required this.onAddSource,
     required this.onRemoveSource,
     required this.service,
+    required this.vpn,
     this.host = const Host(),
   });
 
@@ -34,6 +35,10 @@ class SettingsScreen extends StatefulWidget {
 
   /// Used to ask the portal about the account and to re-read the catalogue.
   final SourceService service;
+
+  /// The app's one tunnel. Not built here: a panel with its own instance
+  /// would report a state nothing else agreed with.
+  final VpnService vpn;
 
   final Host host;
 
@@ -87,7 +92,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// "is this working" and comes from the database rather than the portal.
   Map<ItemKind, int> _counts = const {};
 
-  final _vpnService = VpnService();
   WireGuardConfig? _tunnel;
   String _tunnelDraft = '';
   String? _tunnelProblem;
@@ -125,8 +129,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .fold(0, (sum, value) => sum + value),
     };
 
-    final tunnel = await _vpnService.stored();
-    await _vpnService.resync();
+    final tunnel = await widget.vpn.stored();
+    await widget.vpn.resync();
 
     if (!mounted) return;
     setState(() {
@@ -756,7 +760,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// not make the traffic private, and an interface implying otherwise is
   /// giving someone a false idea of their own exposure.
   Widget _vpn() {
-    if (!_vpnService.isSupported) {
+    if (!widget.vpn.isSupported) {
       return const Text(
         'The tunnel is Android-only for now. Apple TV needs a Network '
         'Extension, which needs a paid developer account to sign — so rather '
@@ -768,7 +772,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final tunnel = _tunnel;
 
     return ValueListenableBuilder<VpnState>(
-      valueListenable: _vpnService.state,
+      valueListenable: widget.vpn.state,
       builder: (context, state, _) => ListView(
         children: [
           Row(
@@ -878,10 +882,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
 
-          if (_vpnService.problem.value != null) ...[
+          if (widget.vpn.problem.value != null) ...[
             const SizedBox(height: OpenTvSpace.sm),
             Text(
-              _vpnService.problem.value!,
+              widget.vpn.problem.value!,
               style: OpenTvType.bodyMuted.copyWith(color: OpenTvColors.alert),
             ),
           ],
@@ -926,13 +930,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveTunnel() async {
-    final problem = await _vpnService.save(_tunnelDraft);
+    final problem = await widget.vpn.save(_tunnelDraft);
     if (!mounted) return;
     if (problem != null) {
       setState(() => _tunnelProblem = problem);
       return;
     }
-    final tunnel = await _vpnService.stored();
+    final tunnel = await widget.vpn.stored();
     if (!mounted) return;
     setState(() {
       _tunnel = tunnel;
@@ -946,18 +950,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _connect() async {
     setState(() => _connecting = true);
-    await _vpnService.connect();
+    await widget.vpn.connect();
     if (mounted) setState(() => _connecting = false);
   }
 
   Future<void> _disconnect() async {
     setState(() => _connecting = true);
-    await _vpnService.disconnect();
+    await widget.vpn.disconnect();
     if (mounted) setState(() => _connecting = false);
   }
 
   Future<void> _forgetTunnel() async {
-    await _vpnService.forget();
+    await widget.vpn.forget();
     if (mounted) setState(() => _tunnel = null);
   }
 

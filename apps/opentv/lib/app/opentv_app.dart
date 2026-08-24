@@ -13,6 +13,7 @@ import 'phone_setup_screen.dart';
 import 'setup_screen.dart';
 import 'source_service.dart';
 import 'stream_resolver.dart';
+import 'vpn_service.dart';
 
 /// The application.
 ///
@@ -79,8 +80,12 @@ class _Root extends StatefulWidget {
   State<_Root> createState() => _RootState();
 }
 
-class _RootState extends State<_Root> {
+class _RootState extends State<_Root> with WidgetsBindingObserver {
   static const _host = Host();
+
+  /// The tunnel, held here because it is app-wide and follows the app's own
+  /// lifecycle rather than any one screen's.
+  final _vpn = VpnService(host: _host);
 
   OpenTvDatabase? _db;
   SourceService? _service;
@@ -107,14 +112,53 @@ class _RootState extends State<_Root> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _open();
+    // On launch, if there is a tunnel and permission was granted when it was
+    // set up, it comes up on its own. A tunnel somebody configured and then
+    // has to switch on by hand every time is one they will forget to switch
+    // on, and the point of it is that it is carrying the traffic.
+    _vpn.connectIfConfigured();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _vpn.dispose();
     _service?.dispose();
     _db?.close();
     super.dispose();
+  }
+
+  /// Brings the tunnel down when the app is not on screen, and back up when
+  /// it is.
+  ///
+  /// Down, because a tunnel routing a television's traffic while the app that
+  /// asked for it is not running is not something anybody agreed to — and on
+  /// Android a VpnService left up is a permanent notification and a key icon
+  /// for an app that is doing nothing.
+  ///
+  /// [AppLifecycleState.inactive] is deliberately not acted on. It fires for
+  /// a transient loss of focus — a volume overlay, a system toast — and
+  /// tearing a tunnel down and rebuilding it for those would interrupt
+  /// playback repeatedly for no reason.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Not while the OS is showing the permission dialog this app asked for.
+    // That dialog is another activity, so it backgrounds this one — and
+    // disconnecting there would undo the thing the viewer is agreeing to.
+    if (_vpn.isAwaitingPermission) return;
+
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _vpn.disconnect();
+      case AppLifecycleState.resumed:
+        _vpn.connectIfConfigured();
+      case AppLifecycleState.inactive:
+        break;
+    }
   }
 
   Future<void> _open() async {
@@ -262,6 +306,7 @@ class _RootState extends State<_Root> {
     if (_usingPhone) {
       return PhoneSetupScreen(
         service: service,
+        vpn: _vpn,
         onDone: () async {
           setState(() => _usingPhone = false);
           await _adopt();
@@ -301,6 +346,7 @@ class _RootState extends State<_Root> {
 
     return BrowseScreen(
       db: db,
+      vpn: _vpn,
       source: source,
       resolver: _resolver!,
       service: service,

@@ -160,6 +160,38 @@ because calling a split tunnel "protected" would be a lie in one of the two
 cases. On tvOS the panel says there is no tunnel yet rather than offering a
 button that fails.
 
+## When it connects
+
+On launch, and on returning from the background, if a tunnel is configured
+**and** permission was already granted when it was set up. A tunnel somebody
+configured and then has to switch on by hand every time is one they will
+forget to switch on, and the whole point of it is that it is carrying the
+traffic.
+
+Permission is checked rather than requested. The one moment to ask is when a
+viewer sets the tunnel up and is expecting it — not when they turn the
+television on. A television that greets somebody with a system permission
+dialog they did not ask for has taught them to dismiss it.
+
+It comes down when the app is not on screen. A tunnel routing a television's
+traffic while the app that asked for it is not running is not something
+anybody agreed to, and on Android it means a permanent notification and a key
+icon for an app doing nothing.
+
+Two states are deliberately not acted on:
+
+- **`inactive`**, which fires for a transient loss of focus — a volume
+  overlay, a system toast. Tearing a tunnel down and rebuilding it for those
+  would interrupt playback repeatedly for no reason.
+- **Backgrounding caused by the permission dialog itself.** That dialog is
+  another activity, so asking for it backgrounds the app — and disconnecting
+  there would undo the thing the viewer is in the middle of agreeing to. The
+  service flags the request and the lifecycle watcher stands aside.
+
+One service, owned by the app. Two would each hold their own idea of whether
+the tunnel is up, and one of them would be wrong — the settings panel had
+its own instance until this landed.
+
 ## What remains
 
 1. The Apple entitlement. `com.apple.developer.networking.networkextension`

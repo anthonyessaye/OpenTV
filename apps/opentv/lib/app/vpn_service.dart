@@ -63,6 +63,45 @@ class VpnService {
     }
   }
 
+  /// Whether the OS has already allowed this app to route traffic.
+  ///
+  /// Distinct from [requestPermission], which answers the same question by
+  /// showing a dialog. Connecting on launch needs the answer without the
+  /// dialog: a television that has just been turned on should not greet its
+  /// viewer with a system permission prompt they did not ask for.
+  Future<bool> hasPermission() async {
+    if (!isSupported) return false;
+    try {
+      return await _channel.invokeMethod<bool>('hasPermission') ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Brings the tunnel up if there is one and it can be done silently.
+  ///
+  /// Called on launch and on returning from the background. Deliberately
+  /// quiet about every reason it might not act — no configuration, no
+  /// permission yet, not this platform — because none of those are failures
+  /// and none of them are worth a message on a screen somebody is trying to
+  /// watch television on. The panel in settings is where the state is
+  /// reported.
+  ///
+  /// Returns whether it connected.
+  Future<bool> connectIfConfigured() async {
+    if (!isSupported) return false;
+    if (state.value != VpnState.down) return false;
+
+    final text = await host.readSecret(configReference);
+    if (text == null || text.isEmpty) return false;
+
+    // Permission is checked rather than requested. The one moment a viewer
+    // should be asked is when they set the tunnel up and are expecting it.
+    if (!await hasPermission()) return false;
+
+    return await connect() == null;
+  }
+
   /// Checks and, if necessary, asks for the OS permission to route traffic.
   ///
   /// False means the viewer declined, which is a decision to respect rather
@@ -70,11 +109,22 @@ class VpnService {
   Future<bool> requestPermission() async {
     if (!isSupported) return false;
     try {
+      // Flagged for the lifecycle watcher. The permission dialog is another
+      // activity, so showing it sends this app to the background — and the
+      // rule "disconnect when backgrounded" would otherwise tear the tunnel
+      // down at the exact moment the viewer was granting permission for it.
+      _awaitingPermission = true;
       return await _channel.invokeMethod<bool>('prepare') ?? false;
     } on PlatformException {
       return false;
+    } finally {
+      _awaitingPermission = false;
     }
   }
+
+  /// Whether a system dialog this app asked for is currently in front.
+  bool get isAwaitingPermission => _awaitingPermission;
+  bool _awaitingPermission = false;
 
   /// Validates and stores a configuration without connecting.
   ///
@@ -162,6 +212,18 @@ class VpnService {
     } on PlatformException {
       return null;
     }
+  }
+
+  /// Releases the notifiers and stops listening to the platform.
+  ///
+  /// The channel handler is set on a channel shared by every instance, so a
+  /// second service quietly replaces the first one's handler and the first
+  /// stops hearing about state changes. One instance, owned by the app, is
+  /// the arrangement this expects.
+  void dispose() {
+    _channel.setMethodCallHandler(null);
+    state.dispose();
+    problem.dispose();
   }
 
   /// Re-reads the tunnel's actual state from the OS.

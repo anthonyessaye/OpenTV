@@ -10,6 +10,7 @@ import 'host.dart';
 import 'search_screen.dart';
 import 'series_screen.dart';
 import 'source_service.dart';
+import 'vpn_service.dart';
 import 'settings_screen.dart';
 import 'stream_resolver.dart';
 
@@ -37,6 +38,7 @@ class BrowseScreen extends StatefulWidget {
     this.onAddSource,
     this.onRemoveSource,
     required this.service,
+    required this.vpn,
   });
 
   final OpenTvDatabase db;
@@ -52,6 +54,10 @@ class BrowseScreen extends StatefulWidget {
 
   /// Shared with settings, so a refresh reports through the same progress.
   final SourceService service;
+
+  /// One tunnel, owned by the app. Two services would each hold their own
+  /// idea of whether it is up, and one of them would be wrong.
+  final VpnService vpn;
 
   @override
   State<BrowseScreen> createState() => _BrowseScreenState();
@@ -726,6 +732,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
         return SettingsScreen(
           db: widget.db,
           service: widget.service,
+          vpn: widget.vpn,
           sources: widget.sources.isEmpty ? [widget.source] : widget.sources,
           active: widget.source,
           onSwitch: (source) => widget.onSwitchSource?.call(source),

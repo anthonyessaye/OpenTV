@@ -21,6 +21,7 @@ class PhoneSetupScreen extends StatefulWidget {
     required this.service,
     required this.onDone,
     required this.onCancel,
+    required this.vpn,
     this.host = const Host(),
   });
 
@@ -30,6 +31,11 @@ class PhoneSetupScreen extends StatefulWidget {
   final VoidCallback onDone;
 
   final VoidCallback onCancel;
+
+  /// The app's one tunnel, so a configuration sent from a phone is saved
+  /// through the same service that reports on it everywhere else.
+  final VpnService vpn;
+
   final Host host;
 
   @override
@@ -99,7 +105,7 @@ class _PhoneSetupScreenState extends State<PhoneSetupScreen> {
     }
     final tunnel = submission.wireGuardConfig;
     if (tunnel != null) {
-      await VpnService(host: widget.host).save(tunnel);
+      await widget.vpn.save(tunnel);
     }
 
     _server.report(SetupPhase.working, 'Reading the catalogue…');

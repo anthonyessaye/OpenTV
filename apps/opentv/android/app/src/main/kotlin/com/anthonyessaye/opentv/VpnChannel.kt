@@ -84,6 +84,14 @@ class VpnChannel(private val activity: Activity) {
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "prepare" -> prepare(result)
+            "hasPermission" -> result.success(
+                // Asked without launching anything. Connecting on launch has
+                // to be able to tell "already allowed" from "would put a
+                // system dialog in front of somebody who just turned their
+                // television on", and prepare() cannot: it answers by
+                // showing the dialog.
+                GoBackend.VpnService.prepare(activity) == null,
+            )
             "up" -> up(call.argument<String>("config"), result)
             "down" -> down(result)
             "state" -> state(result)
