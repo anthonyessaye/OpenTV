@@ -22,6 +22,7 @@ class TextEntryField extends StatefulWidget {
     this.active = false,
     this.obscure = false,
     this.multiline = false,
+    this.systemKeyboard = true,
     this.hint,
     this.problem,
     this.onChanged,
@@ -43,6 +44,16 @@ class TextEntryField extends StatefulWidget {
   /// swallowed its newlines would take a valid configuration and store a
   /// broken one — with no sign to the viewer that it had.
   final bool multiline;
+
+  /// Whether selecting this field may put the platform's own keyboard on
+  /// screen.
+  ///
+  /// False where the app already draws one. Two keyboards over each other is
+  /// the platform's covering ours, and the viewer aiming at keys they can no
+  /// longer see. The input connection is still opened either way — that is
+  /// what a phone or a voice remote types into, and closing it to hide the
+  /// keyboard would take that away to fix a cosmetic problem.
+  final bool systemKeyboard;
 
   final String? hint;
 
@@ -127,6 +138,23 @@ class _TextEntryFieldState extends State<TextEntryField> {
     SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
   }
 
+  /// Keeps the platform keyboard down while still holding the connection.
+  ///
+  /// Asked more than once on purpose. The engine raises the keyboard itself
+  /// when an input connection attaches, so a single hide in the same turn is
+  /// answered before the thing it is answering has happened; and Android TV's
+  /// leanback keyboard animates in, taking the request only once it has.
+  void _suppress() {
+    void hide() =>
+        SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+
+    hide();
+    WidgetsBinding.instance.addPostFrameCallback((_) => hide());
+    Future<void>.delayed(const Duration(milliseconds: 150), () {
+      if (mounted && (_editor?.hasFocus ?? false)) hide();
+    });
+  }
+
   void _emit() {
     final text = _controller?.text;
     if (text != null && text != widget.value) widget.onChanged?.call(text);
@@ -145,7 +173,11 @@ class _TextEntryFieldState extends State<TextEntryField> {
       // interface.
       onSelect: () {
         _editor?.requestFocus();
-        SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+        if (widget.systemKeyboard) {
+          SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+        } else {
+          _suppress();
+        }
       },
       child: child,
     );

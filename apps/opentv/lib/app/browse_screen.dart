@@ -89,6 +89,19 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// off, asked of TMDB once per section rather than per tile.
   TmdbDetails? _leadDetails;
 
+  /// Whether the hero's preview is torn down because something else is on
+  /// screen.
+  ///
+  /// Not an optimisation. Both the preview and the full player are hybrid
+  /// composition platform views — real Android surfaces in the view
+  /// hierarchy, not textures Flutter draws — and two of them alive at once
+  /// leaves the z-order to whichever the compositor decides last. The symptom
+  /// was a live channel going black the moment the chrome faded, because with
+  /// nothing painted above it the compositor re-stacked and put the browse
+  /// screen's dormant surface on top. Films and series never showed it: their
+  /// hero is a picture, so there was only ever one surface.
+  bool _previewSuspended = false;
+
   final _transport = HttpTransport();
   static const _images = TmdbImages();
   String? _problem;
@@ -455,6 +468,15 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   Future<void> _open(_Item? item) async {
     if (item == null) return;
+    setState(() => _previewSuspended = true);
+    try {
+      await _openInner(item);
+    } finally {
+      if (mounted) setState(() => _previewSuspended = false);
+    }
+  }
+
+  Future<void> _openInner(_Item item) async {
     // A series is not a stream; it is a list of them. It gets its own screen,
     // which fetches the episodes the bulk sync deliberately skipped.
     if (item.series case final SeriesEntry entry) {
@@ -810,7 +832,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// plain banner.
   Widget _hero(_Item lead, CleanedTitle cleaned) {
     final stream = _leadStream;
-    if (_section == TvSection.live && stream != null) {
+    if (_section == TvSection.live && stream != null && !_previewSuspended) {
       return LivePreview(
         // Keyed on the generation as well as the address, so returning from
         // the full player builds a fresh surface. The preview stops itself on

@@ -229,11 +229,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _restartIdleTimer();
   }
 
+  /// What the material is, so the modes make sense.
+  ///
+  /// Three of the four modes are the same picture when the source and the
+  /// panel share a shape, which for a 16:9 stream on a television is almost
+  /// always. Selecting FILL and seeing nothing change reads as a broken
+  /// button unless the sheet says why — so it says why, rather than removing
+  /// modes that are correct and occasionally needed.
+  String? _pictureNote() {
+    final width = _status.videoWidth;
+    final height = _status.videoHeight;
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+
+    final ratio = width / height;
+    const panel = 16 / 9;
+    final matches = (ratio - panel).abs() < 0.02;
+
+    return matches
+        ? 'Source $width×$height, the same shape as the screen — so fit, '
+              'fill and stretch all give this picture. They differ on 4:3 '
+              'and other shapes.'
+        : 'Source $width×$height, a different shape from the screen.';
+  }
+
   Widget _chooser() {
     switch (_sheet!) {
       case _Sheet.aspect:
         return TrackSheet(
           title: 'Picture',
+          note: _pictureNote(),
           options: [
             for (final mode in AspectMode.values)
               SheetOption(

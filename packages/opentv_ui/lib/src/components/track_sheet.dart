@@ -90,10 +90,20 @@ class TrackSheet extends StatelessWidget {
     required this.options,
     required this.onSelect,
     this.onDismiss,
+    this.note,
     this.width = 620,
   });
 
   final String title;
+
+  /// A line under the title stating what the material actually is.
+  ///
+  /// Written for the picture modes, where three of the four produce an
+  /// identical result on a 16:9 source shown on a 16:9 panel — which is most
+  /// of what a provider carries. Without saying so the sheet looks broken:
+  /// the viewer selects FILL, nothing changes, and the reasonable conclusion
+  /// is that the button does not work.
+  final String? note;
 
   /// `id` is handed back to [onSelect] unread. A null id means "let the
   /// engine choose", which is how subtitles are turned off.
@@ -135,6 +145,10 @@ class TrackSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(title.toUpperCase(), style: OpenTvType.label),
+              if (note != null) ...[
+                const SizedBox(height: OpenTvSpace.xs),
+                Text(note!, style: OpenTvType.bodyMuted),
+              ],
               const SizedBox(height: OpenTvSpace.sm),
               Flexible(
                 child: ListView.builder(

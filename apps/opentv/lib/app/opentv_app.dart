@@ -1,12 +1,15 @@
 import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
 import 'browse_screen.dart';
 import 'host.dart';
+import 'setup_screen.dart';
 import 'source_service.dart';
 import 'stream_resolver.dart';
 
@@ -89,6 +92,10 @@ class _RootState extends State<_Root> {
   /// over an app that already has one.
   bool _addingSource = false;
 
+  /// Set to the provider that has just finished importing, while the three
+  /// one-time questions are asked about it.
+  Source? _settingUp;
+
   @override
   void initState() {
     super.initState();
@@ -149,6 +156,11 @@ class _RootState extends State<_Root> {
       _sources = sources;
       _source = sources.last;
       _addingSource = false;
+      // Asked once per provider, straight after its catalogue lands. This is
+      // the only moment the questions are all answerable at once: the
+      // categories to hide are now known, and the viewer is setting things up
+      // rather than trying to watch something.
+      _settingUp = sources.last;
     });
   }
 
@@ -164,8 +176,53 @@ class _RootState extends State<_Root> {
     });
   }
 
+  /// Asks before closing, and gives every screen a chance first.
+  ///
+  /// This is the only place on Android where the back button can be caught at
+  /// all. The framework routes it to the navigator rather than to the key
+  /// handlers, so a screen that wanted the press — search returning to its
+  /// keyboard, say — never heard it, and the app closed instead. The registry
+  /// is those screens; the panel is what happens when none of them wants it.
+  void _onSystemBack() {
+    if (BackKeysRegistry.dispatch()) return;
+
+    final navigator = Navigator.of(context);
+    navigator.push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierDismissible: false,
+        transitionDuration: OpenTvMotion.fade,
+        pageBuilder: (context, animation, _) => ConfirmPanel(
+          title: 'Leave OpenTV?',
+          detail: 'Nothing is playing that will be lost.',
+          confirmLabel: 'QUIT',
+          onConfirm: SystemNavigator.pop,
+          onCancel: () => Navigator.of(context).pop(),
+        ),
+        transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Only on Android. tvOS requires Menu at the root to return to the system
+    // home screen, and an app that refuses is rejected — so there the press
+    // goes through, and the key handlers above deal with the rest.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _onSystemBack();
+        },
+        child: _content(),
+      );
+    }
+    return _content();
+  }
+
+  Widget _content() {
     if (_failure != null) {
       return Container(
         color: OpenTvColors.ground,
@@ -210,6 +267,15 @@ class _RootState extends State<_Root> {
           if (failure == null) await _adopt();
           return failure;
         },
+      );
+    }
+
+    final settingUp = _settingUp;
+    if (settingUp != null) {
+      return SetupScreen(
+        db: db,
+        source: settingUp,
+        onDone: () => setState(() => _settingUp = null),
       );
     }
 

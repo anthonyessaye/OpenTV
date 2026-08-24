@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
@@ -49,6 +50,12 @@ class _SearchScreenState extends State<SearchScreen> {
   /// scrolling all the way home.
   bool _browsingResults = false;
 
+  /// Where the results begin, so a left press can tell "move within the
+  /// results" from "leave them".
+  final _resultsKey = GlobalKey();
+
+
+
   /// The keyboard's natural width plus its safe margin.
   ///
   /// Stated once because two places need to agree: the box that animates and
@@ -59,7 +66,14 @@ class _SearchScreenState extends State<SearchScreen> {
   /// plus the safe margin and the room a focused key's ring and glow need to
   /// overhang. It was three pixels short, which clipped the right-hand
   /// column.
-  static const _panelWidth = 1084.0;
+  /// Wide enough for the keyboard and the margins either side of it.
+  ///
+  /// Taken from the keyboard rather than measured by eye, which is what the
+  /// three previous values here were. Each was arrived at by looking at a
+  /// screenshot, and each was wrong by a different amount — the last by
+  /// twenty-four pixels, which cost the rightmost column of keys.
+  static const _panelWidth =
+      OpenTvSpace.safeHorizontal + TvKeyboard.preferredWidth + OpenTvSpace.lg;
 
   @override
   void dispose() {
@@ -138,7 +152,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return BackKeys(
       onBack: () {
         if (!_browsingResults) return false;
-        setState(() => _browsingResults = false);
+        _returnToKeyboard();
         return true;
       },
       child: Row(
@@ -152,71 +166,61 @@ class _SearchScreenState extends State<SearchScreen> {
           // shrinking outer width crush the keyboard instead of hiding it —
           // the keys squeezed into a column of slivers rather than sliding
           // off the edge.
+          // Collapsed to a spine rather than clipped out of the way.
+          //
+          // The earlier version kept the whole keyboard laid out at full
+          // width behind a clip, on the theory that focus could travel back
+          // into it. It could not be relied on to: the keys were at
+          // coordinates the viewer could not see, directional traversal made
+          // its own judgement about which of them was leftwards of a result,
+          // and when it judged wrong there was nothing focused at all — which
+          // is the state where back leaves the app instead of returning to
+          // the keyboard. The spine is one target, always in the same place,
+          // and returning through it is a decision this screen makes rather
+          // than one it hopes for.
           AnimatedContainer(
             duration: OpenTvMotion.scroll,
             curve: OpenTvMotion.scrollCurve,
             width: _browsingResults ? 96 : _panelWidth,
-            child: ClipRect(
-              child: OverflowBox(
-                alignment: Alignment.centerLeft,
-                minWidth: _panelWidth,
-                maxWidth: _panelWidth,
-                child: Padding(
-                  padding: const EdgeInsets.only(
-                    left: OpenTvSpace.safeHorizontal,
-                    right: OpenTvSpace.lg,
+            // The open panel is pinned to its full width and clipped, so the
+            // in-between frames of the animation clip the keyboard rather
+            // than squeezing it. Without this the keys are asked to fit a
+            // box that is briefly seven hundred pixels wide, and a Row of
+            // fixed-width keys answers that by overflowing.
+            child: _browsingResults
+                ? _spine()
+                : ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      minWidth: _panelWidth,
+                      maxWidth: _panelWidth,
+                      child: _panel(),
+                    ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 920,
-                        child: TextEntryField(
-                          label: 'Search',
-                          value: _term,
-                          hint: 'Title, channel or series',
-                          active: true,
-                          onChanged: (text) {
-                            if (text == _term) return;
-                            setState(() => _term = text);
-                            _schedule();
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: OpenTvSpace.md),
-                      TvKeyboard(
-                        autofocus: true,
-                        onKey: _type,
-                        onDelete: _delete,
-                        // There is nothing to commit: results follow the term as it
-                        // is typed, so a "search" key would only repeat what already
-                        // happened.
-                        doneLabel: 'CLEAR',
-                        onDone: _term.isEmpty
-                            ? null
-                            : () {
-                                setState(() {
-                                  _term = '';
-                                  _hits = const [];
-                                });
-                              },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
           ),
           Expanded(
             child: Focus(
+              key: _resultsKey,
               canRequestFocus: false,
               skipTraversal: true,
+              // Left is answered here rather than left to directional
+              // traversal, which cannot be relied on to make this particular
+              // journey. Flutter remembers the path focus took rightwards and
+              // retraces it on the way back — but the keyboard it would
+              // retrace into no longer exists once the panel has collapsed,
+              // so the retrace requests focus on a discarded node, reports
+              // success, and moves nothing. Pressing left from the first
+              // result did nothing at all, however many times it was pressed.
+              onKeyEvent: _onResultsKey,
               // The keyboard slides aside as soon as focus lands in the
               // results, and returns when it leaves.
+              // Only ever sets the collapsed state. Restoring it is the
+              // spine's job, because that path has to move focus as well as
+              // change a flag, and a widget that has just been rebuilt out of
+              // existence cannot do the second half.
               onFocusChange: (hasFocus) {
-                if (hasFocus == _browsingResults) return;
-                setState(() => _browsingResults = hasFocus);
+                if (!hasFocus || _browsingResults) return;
+                setState(() => _browsingResults = true);
               },
               child: _results(),
             ),
@@ -224,6 +228,147 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
       ),
     );
+  }
+
+  /// The keyboard side: what has been typed, and what to type with.
+  ///
+  /// Deliberately not wrapped in a [FocusScope]. One was tried, to give
+  /// [_returnToKeyboard] something to hand focus to — and it walled the
+  /// keyboard off: directional traversal stays inside a scope, so pressing
+  /// right from the last key went nowhere and the results became unreachable
+  /// by remote. The keyboard's own autofocus does the same job for free,
+  /// because this whole subtree is built afresh when the panel reopens.
+  Widget _panel() {
+    return Padding(
+        padding: const EdgeInsets.only(
+          left: OpenTvSpace.safeHorizontal,
+          right: OpenTvSpace.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 920,
+              child: TextEntryField(
+                label: 'Search',
+                value: _term,
+                hint: 'Title, channel or series',
+                active: true,
+                // This screen draws its own keyboard. The platform's would
+                // land on top of it, hiding the keys the viewer is aiming at.
+                // The connection still opens, so a phone or a voice remote
+                // types here exactly as before.
+                systemKeyboard: false,
+                onChanged: (text) {
+                  if (text == _term) return;
+                  setState(() => _term = text);
+                  _schedule();
+                },
+              ),
+            ),
+            const SizedBox(height: OpenTvSpace.md),
+            TvKeyboard(
+              autofocus: true,
+              onKey: _type,
+              onDelete: _delete,
+              // There is nothing to commit: results follow the term as it is
+              // typed, so a "search" key would only repeat what already
+              // happened.
+              doneLabel: 'CLEAR',
+              onDone: _term.isEmpty
+                  ? null
+                  : () {
+                      setState(() {
+                        _term = '';
+                        _hits = const [];
+                      });
+                    },
+            ),
+          ],
+        ),
+    );
+  }
+
+  /// What is left of the keyboard while results are being browsed.
+  ///
+  /// Full height, and that is the whole reason it works. Flutter's leftward
+  /// traversal only considers nodes whose vertical extent overlaps the one
+  /// leaving — so a spine sized to its own label sat at the top of the screen
+  /// and was invisible to every result below it. Focus reached the first
+  /// result and stopped there, which is precisely the dead end this was
+  /// built to remove.
+  Widget _spine() {
+    return Padding(
+      padding: const EdgeInsets.only(left: OpenTvSpace.md),
+      child: SizedBox.expand(
+        child: FocusableTile(
+        semanticLabel: 'Back to the keyboard',
+        borderRadius: OpenTvRadius.tile,
+        scaleOnFocus: 1.02,
+        onSelect: _returnToKeyboard,
+        // Focus alone is the whole gesture. Arriving here means the viewer
+        // moved left out of the results, which is already the request; asking
+        // them to press select as well would make the return two steps where
+        // going the other way was one.
+        onFocusChange: (hasFocus) {
+          if (hasFocus) _returnToKeyboard();
+        },
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: OpenTvColors.surface,
+            borderRadius: OpenTvRadius.tile,
+          ),
+          child: RotatedBox(
+            quarterTurns: 3,
+            child: Text(
+              _term.isEmpty ? 'KEYBOARD' : _term.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: OpenTvType.label.copyWith(color: OpenTvColors.tally),
+            ),
+          ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Whether a left press means "leave the results".
+  ///
+  /// Only from the leftmost column: anywhere else, left is moving between
+  /// results and belongs to the shelf.
+  KeyEventResult _onResultsKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey != LogicalKeyboardKey.arrowLeft) {
+      return KeyEventResult.ignored;
+    }
+    if (!_browsingResults) return KeyEventResult.ignored;
+
+    final box = _resultsKey.currentContext?.findRenderObject() as RenderBox?;
+    final focused = FocusManager.instance.primaryFocus;
+    if (box == null || focused == null) return KeyEventResult.ignored;
+
+    final edge = box.localToGlobal(Offset.zero).dx;
+    // A tolerance rather than an equality: tiles carry their own padding, and
+    // a focused one is scaled up slightly, so nothing sits exactly on the
+    // edge.
+    if (focused.rect.left > edge + 40) return KeyEventResult.ignored;
+
+    _returnToKeyboard();
+    return KeyEventResult.handled;
+  }
+
+  /// Opens the keyboard again.
+  ///
+  /// Focus follows on its own: the panel is built from nothing by this
+  /// rebuild, and the keyboard inside it autofocuses its first key as it
+  /// mounts. Nothing else is holding focus by then — the spine that had it
+  /// is the widget being replaced.
+  void _returnToKeyboard() {
+    if (!_browsingResults) return;
+    setState(() => _browsingResults = false);
   }
 
   /// Results grouped by what they are.

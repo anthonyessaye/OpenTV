@@ -1,6 +1,7 @@
 package com.anthonyessaye.opentv
 
 import android.content.Context
+import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
 import android.widget.FrameLayout
@@ -306,7 +307,16 @@ class PlayerPlatformView(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT,
         )
-        surface.layoutParams = params
+
+        // Centred, and this is the whole of it.
+        //
+        // FrameLayout anchors a child top-left unless told otherwise, and
+        // every mode below sizes the surface to something other than the
+        // panel. So a letterboxed picture sat against the top-left corner
+        // with all of its black on the opposite two sides, and `original`
+        // put a small raster in the corner of a television. Neither is a
+        // sizing bug — both are this one missing line.
+        params.gravity = Gravity.CENTER
 
         // Media3's own resize modes live on PlayerView, which this does not
         // use, so the equivalent is applied to the surface directly.

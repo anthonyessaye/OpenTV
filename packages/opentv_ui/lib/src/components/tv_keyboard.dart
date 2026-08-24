@@ -21,6 +21,16 @@ import '../tokens/tokens.dart';
 /// pad: a fixed grid where every key is reachable by counting presses, with
 /// digits on the top row because provider hosts and ports are mostly numeric.
 class TvKeyboard extends StatefulWidget {
+  /// How wide this keyboard lays itself out.
+  ///
+  /// A stated number rather than a derived one, because deriving it from the
+  /// key width and the gaps gets the wrong answer — a key is not exactly its
+  /// nominal width once its border and focus ring are counted, and the sum
+  /// was out by twenty-four pixels. A caller sizing a panel around this
+  /// needs the real figure, so `tv_keyboard_test.dart` measures the laid-out
+  /// widget and fails if the two ever disagree.
+  static const preferredWidth = 980.0;
+
   const TvKeyboard({
     super.key,
     required this.onKey,

@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -19,11 +20,49 @@ import 'package:flutter/widgets.dart';
 ///   on an Android TV emulator. This widget therefore stands aside on
 ///   Android and lets the framework do its job.
 ///
+/// On Android the press therefore arrives by a different road. The framework
+/// dispatches it to the navigator, which pops a route or, finding none, lets
+/// the activity finish — and a handler that only listens for key events never
+/// hears about any of it. That was true of every screen using this widget:
+/// back inside search was supposed to return to the keyboard and instead
+/// closed the app, because the handler asking to keep it was never called.
+/// So on Android the handler is registered with [BackKeysRegistry] instead,
+/// which the root route consults before letting anything happen.
+///
 /// [onBack] returns whether it consumed the press. Returning false lets the
 /// platform do its default thing, which at the root of the app is exactly
-/// what should happen: tvOS leaves for the home screen, Android leaves the
-/// app. Consuming the press there instead would trap the viewer inside.
-class BackKeys extends StatelessWidget {
+/// what should happen on tvOS: leaving for the home screen. Consuming the
+/// press there instead would trap the viewer inside.
+///
+/// Registration order stands in for depth. A screen mounted later is the one
+/// nearer the viewer, so the most recent handler is asked first.
+class BackKeysRegistry {
+  BackKeysRegistry._();
+
+  static final _handlers = <bool Function()>[];
+
+  static void add(bool Function() handler) => _handlers.add(handler);
+
+  static void remove(bool Function() handler) => _handlers.remove(handler);
+
+  /// Offers the press to each handler, innermost first.
+  ///
+  /// Returns whether any of them took it. Copied before iterating because a
+  /// handler may well unmount the screen it belongs to, which mutates the
+  /// list underneath the loop.
+  static bool dispatch() {
+    for (final handler in _handlers.reversed.toList()) {
+      if (handler()) return true;
+    }
+    return false;
+  }
+
+  /// Only for tests, which would otherwise inherit handlers from each other.
+  @visibleForTesting
+  static void reset() => _handlers.clear();
+}
+
+class BackKeys extends StatefulWidget {
   const BackKeys({
     super.key,
     required this.onBack,
@@ -38,6 +77,9 @@ class BackKeys extends StatelessWidget {
 
   /// Overridden by tests, which cannot change the real platform.
   final TargetPlatform? platform;
+
+  @override
+  State<BackKeys> createState() => _BackKeysState();
 
   /// Whether this widget should handle back on a given platform.
   ///
@@ -76,6 +118,29 @@ class BackKeys extends StatelessWidget {
       // pops two screens for one press.
       event is KeyDownEvent && keys.contains(event.logicalKey);
 
+}
+
+class _BackKeysState extends State<BackKeys> {
+  /// Calls through to whatever the current callback is, rather than
+  /// capturing the first one. Registered and unregistered by tear-off, which
+  /// is a stable identity for the lifetime of this state.
+  bool _handler() => widget.onBack();
+
+  bool get _usesRegistry =>
+      (widget.platform ?? defaultTargetPlatform) == TargetPlatform.android;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_usesRegistry) BackKeysRegistry.add(_handler);
+  }
+
+  @override
+  void dispose() {
+    if (_usesRegistry) BackKeysRegistry.remove(_handler);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Focus(
@@ -84,13 +149,15 @@ class BackKeys extends StatelessWidget {
       canRequestFocus: false,
       skipTraversal: true,
       onKeyEvent: (node, event) {
-        if (!neededOn(platform ?? defaultTargetPlatform)) {
+        if (!BackKeys.neededOn(widget.platform ?? defaultTargetPlatform)) {
           return KeyEventResult.ignored;
         }
-        if (!handles(event)) return KeyEventResult.ignored;
-        return onBack() ? KeyEventResult.handled : KeyEventResult.ignored;
+        if (!BackKeys.handles(event)) return KeyEventResult.ignored;
+        return widget.onBack()
+            ? KeyEventResult.handled
+            : KeyEventResult.ignored;
       },
-      child: child,
+      child: widget.child,
     );
   }
 }

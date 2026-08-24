@@ -7,6 +7,7 @@ library;
 export 'src/components/artwork.dart';
 export 'src/components/channel_tile.dart';
 export 'src/components/browse.dart';
+export 'src/components/confirm_panel.dart';
 export 'src/components/detail_screen.dart';
 export 'src/components/glyphs.dart';
 export 'src/components/hero_banner.dart';
