@@ -69,6 +69,27 @@ class PlayerSurface extends StatelessWidget {
       if (startAt != null) 'startAtMs': startAt!.inMilliseconds,
     };
 
+    // The video is never a place focus can land.
+    //
+    // PlatformViewLink puts a focus node around the native view so that a
+    // platform widget which *is* operable — a map, a web view — can be
+    // reached with a keyboard. A video surface is not one of those: every
+    // control is a Flutter widget drawn over it, and a remote has no pointer
+    // to give it. Left in the traversal it is a full-screen focus stop with
+    // no highlight, sitting to the right of the last transport control — so
+    // pressing right past the end put focus on the picture, the ring vanished
+    // with nothing to say where it had gone, and the native view took Android
+    // focus and swallowed the presses that would have brought it back.
+    //
+    // That is the whole of the bug reported three times as "you can scroll
+    // past the buttons and cannot come back". It had nothing to do with
+    // scrolling, which is why removing the scrolling did not fix it, and it
+    // is invisible to any test that renders the chrome without a real
+    // platform view underneath it.
+    return ExcludeFocus(child: _engine(params));
+  }
+
+  Widget _engine(Map<String, Object?> params) {
     return switch (defaultTargetPlatform) {
       TargetPlatform.android => _HybridAndroidSurface(
         params: params,

@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.media3.common.C
 import androidx.media3.common.Format
@@ -127,6 +128,17 @@ class PlayerPlatformView(
         // browse screen, sitting behind a failure banner. This background is
         // inside the hole, which is the only place that can fill it.
         container.setBackgroundColor(BLACK)
+
+        // Never takes Android focus, on either view.
+        //
+        // The Dart side already keeps this out of Flutter's traversal, and
+        // this is the other half of the same statement: a focused native view
+        // consumes d-pad presses before Flutter sees them, so focus landing
+        // here once would be permanent — the presses that would move it back
+        // are the ones being eaten.
+        container.isFocusable = false
+        container.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        surface.isFocusable = false
 
         container.addView(surface)
         player.setVideoSurfaceView(surface)
