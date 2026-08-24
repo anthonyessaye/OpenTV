@@ -159,69 +159,77 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Widget _metadata() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Artwork and descriptions', style: OpenTvType.section),
-        const SizedBox(height: OpenTvSpace.xs),
-        const SizedBox(
-          width: 1100,
-          child: Text(
-            'Your provider sends film and series names, and usually a poster. '
-            'It does not send a synopsis, a cast list or a rating. TMDB does, '
-            'free, and OpenTV will ask it for them if you give it a key.',
+    // Scrolls rather than being trimmed to fit. This step is four numbered
+    // instructions, a field and two buttons, and it has already overflowed
+    // twice for the sake of a sentence — once by twenty pixels, which is one
+    // line of wrapped text. Copy should be edited because it reads badly,
+    // not because the layout cannot hold it.
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Artwork and descriptions', style: OpenTvType.section),
+          const SizedBox(height: OpenTvSpace.xs),
+          const SizedBox(
+            width: 1100,
+            child: Text(
+              'Your provider sends film and series names, and usually a poster. '
+              'It does not send a synopsis, a cast list or a rating. TMDB does, '
+              'free, and OpenTV will ask it for them if you give it a key.',
+              style: OpenTvType.bodyMuted,
+            ),
+          ),
+          const SizedBox(height: OpenTvSpace.md),
+
+          // Written out rather than linked. A television cannot open a browser,
+          // and the viewer will be doing this on a phone in their other hand.
+          const _Instructions([
+            'On a phone or a computer, go to themoviedb.org and create a free '
+                'account.',
+            'Open Settings, then API, and request an API key. Choose the '
+                'developer option; personal use is accepted.',
+            'Copy either the "API Key" — thirty-two letters and digits — or '
+                'the much longer "API Read Access Token". OpenTV works out '
+                'which you gave it.',
+            'Type it below, or select the field and type from your phone.',
+          ]),
+          const SizedBox(height: OpenTvSpace.md),
+
+          SizedBox(
+            width: 1100,
+            child: TextEntryField(
+              label: 'TMDB API key',
+              value: _tmdbKey,
+              hint: 'Paste from themoviedb.org',
+              active: true,
+              obscure: true,
+              onChanged: (text) => setState(() => _tmdbKey = text),
+              onDone: _saveKey,
+            ),
+          ),
+          const SizedBox(height: OpenTvSpace.md),
+          Row(
+            children: [
+              PlayerButton(
+                label: 'SAVE AND CONTINUE',
+                emphasis: true,
+                onSelect: _tmdbKey.trim().isEmpty || _busy ? null : _saveKey,
+              ),
+              const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(
+                label: 'SKIP — NAMES ONLY',
+                autofocus: true,
+                onSelect: _next,
+              ),
+            ],
+          ),
+          const SizedBox(height: OpenTvSpace.sm),
+          const Text(
+            'You can add or change this later in Settings, under Metadata.',
             style: OpenTvType.bodyMuted,
           ),
-        ),
-        const SizedBox(height: OpenTvSpace.md),
-
-        // Written out rather than linked. A television cannot open a browser,
-        // and the viewer will be doing this on a phone in their other hand.
-        const _Instructions([
-          'On a phone or a computer, go to themoviedb.org and create a free '
-              'account.',
-          'Open Settings, then API, and request an API key. Choose the '
-              'developer option; personal use is accepted.',
-          'Copy the key labelled "API Read Access Token" or "API Key (v3 '
-              'auth)". Either works.',
-          'Type it below, or select the field and type from your phone.',
-        ]),
-        const SizedBox(height: OpenTvSpace.md),
-
-        SizedBox(
-          width: 1100,
-          child: TextEntryField(
-            label: 'TMDB API key',
-            value: _tmdbKey,
-            hint: 'Paste from themoviedb.org',
-            active: true,
-            obscure: true,
-            onChanged: (text) => setState(() => _tmdbKey = text),
-            onDone: _saveKey,
-          ),
-        ),
-        const SizedBox(height: OpenTvSpace.md),
-        Row(
-          children: [
-            PlayerButton(
-              label: 'SAVE AND CONTINUE',
-              emphasis: true,
-              onSelect: _tmdbKey.trim().isEmpty || _busy ? null : _saveKey,
-            ),
-            const SizedBox(width: OpenTvSpace.sm),
-            PlayerButton(
-              label: 'SKIP — NAMES ONLY',
-              autofocus: true,
-              onSelect: _next,
-            ),
-          ],
-        ),
-        const SizedBox(height: OpenTvSpace.sm),
-        const Text(
-          'You can add or change this later in Settings, under Metadata.',
-          style: OpenTvType.bodyMuted,
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -288,7 +296,10 @@ class _SetupScreenState extends State<SetupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Anything you would rather not see', style: OpenTvType.section),
+        const Text(
+          'Anything you would rather not see',
+          style: OpenTvType.section,
+        ),
         const SizedBox(height: OpenTvSpace.xs),
         const SizedBox(
           width: 1100,

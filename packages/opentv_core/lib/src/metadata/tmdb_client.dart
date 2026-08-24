@@ -26,9 +26,31 @@ class TmdbClient {
   final String language;
   final String baseUrl;
 
+  /// Whether the key is a v4 Read Access Token rather than a v3 API key.
+  ///
+  /// TMDB issues two credentials from the same settings page and shows them
+  /// one above the other. They are not interchangeable: the v3 key goes in
+  /// the query string, and the v4 token is a JWT that only works as a bearer
+  /// header — sent as `api_key` it comes back 401. Since both are offered,
+  /// and the token is the one printed first, people will paste either.
+  ///
+  /// Detected by shape rather than by length. A JWT is three base64url
+  /// segments separated by dots and begins with the encoding of `{"`, which
+  /// nothing else here can be confused with; a v3 key is thirty-two
+  /// hexadecimal characters and has no dots at all.
+  bool get _isReadAccessToken =>
+      apiKey.startsWith('eyJ') && apiKey.split('.').length == 3;
+
+  Map<String, String>? get _headers =>
+      _isReadAccessToken ? {'Authorization': 'Bearer $apiKey'} : null;
+
   Uri _url(String path, [Map<String, String> query = const {}]) {
     return Uri.parse('$baseUrl$path').replace(
-      queryParameters: {'api_key': apiKey, 'language': language, ...query},
+      queryParameters: {
+        if (!_isReadAccessToken) 'api_key': apiKey,
+        'language': language,
+        ...query,
+      },
     );
   }
 
@@ -52,6 +74,7 @@ class TmdbClient {
           if (cleaned.year != null)
             wantsSeries ? 'first_air_date_year' : 'year': '${cleaned.year}',
         }),
+        headers: _headers,
       );
     } on TransportException {
       return null;
@@ -109,6 +132,7 @@ class TmdbClient {
         _url('/$kind/${title.id}', {
           'append_to_response': 'credits,recommendations',
         }),
+        headers: _headers,
       );
     } on TransportException {
       return null;

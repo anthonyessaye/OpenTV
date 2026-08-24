@@ -11,9 +11,14 @@ class FakeTransport implements Transport {
   final Map<String, TransportException> failures;
   final requested = <Uri>[];
 
+  /// Recorded alongside the URL, because which of TMDB's two credentials was
+  /// pasted decides which of the two it travels in.
+  final sentHeaders = <Map<String, String>?>[];
+
   @override
   Future<Object?> getJson(Uri url, {Map<String, String>? headers}) async {
     requested.add(url);
+    sentHeaders.add(headers);
     for (final entry in failures.entries) {
       if (url.path.contains(entry.key)) throw entry.value;
     }
@@ -276,6 +281,45 @@ void main() {
       // Common: TMDB has the title but no artwork for it.
       expect(images.backdrop(null), isNull);
       expect(images.backdrop(''), isNull);
+    });
+  });
+
+  group('credentials', () {
+    // TMDB issues two from the same settings page and shows them one above
+    // the other. They are not interchangeable, and the one printed first is
+    // the one that does not work in a query string — so people paste either.
+    //
+    // Guessing wrong fails as a 401, which this client swallows by design.
+    // The whole of metadata then goes quiet with nothing to read anywhere,
+    // which is the least diagnosable outcome available.
+
+    /// Thirty-two hexadecimal characters, which is the whole of a v3 key.
+    const v3 = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+    /// A JWT: three base64url segments. Real ones run to a couple of hundred
+    /// characters — the shape is what identifies it, not the length.
+    const v4 =
+        'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJhYmMiLCJzdWIiOiIxIn0.c2lnbmF0dXJl';
+
+    test('sends a v3 key in the query string', () async {
+      final transport = FakeTransport();
+      await TmdbClient(apiKey: v3, transport: transport).match('Arrival');
+
+      expect(transport.requested.single.queryParameters['api_key'], v3);
+      expect(transport.sentHeaders.single?['Authorization'], isNull);
+    });
+
+    test('sends a read access token as a bearer header', () async {
+      final transport = FakeTransport();
+      await TmdbClient(apiKey: v4, transport: transport).match('Arrival');
+
+      // Never in the query string, and never both. A URL is the thing most
+      // likely to end up in a log.
+      expect(
+        transport.requested.single.queryParameters.containsKey('api_key'),
+        isFalse,
+      );
+      expect(transport.sentHeaders.single?['Authorization'], 'Bearer $v4');
     });
   });
 }
