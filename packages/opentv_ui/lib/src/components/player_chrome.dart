@@ -189,6 +189,23 @@ class _PlayerChromeState extends State<PlayerChrome> {
         (focused == handle || focused.ancestors.contains(handle));
   }
 
+  /// Whether the focused control is on the topmost line of the wrap.
+  ///
+  /// Compared in bands rather than exactly: a focused control is scaled up
+  /// and sits a pixel or two higher than its neighbours, which an exact
+  /// comparison reads as a line of its own.
+  bool _onFirstControlLine() {
+    final focused = FocusManager.instance.primaryFocus;
+    if (focused == null) return true;
+
+    final tops = [
+      for (final node in _controls.descendants)
+        if (node.canRequestFocus && !node.skipTraversal) node.rect.top ~/ 20,
+    ];
+    if (tops.isEmpty) return true;
+    return focused.rect.top ~/ 20 <= tops.reduce((a, b) => a < b ? a : b);
+  }
+
   /// Up and down between the bar and the controls, decided here.
   ///
   /// Left to geometry it went wrong the same way the shelves did: the scrub
@@ -208,8 +225,11 @@ class _PlayerChromeState extends State<PlayerChrome> {
     if (down && _holds(_bar) && focusFirstWithin(_controls)) {
       return KeyEventResult.handled;
     }
-    if (up && _holds(_controls) && focusFirstWithin(_bar)) {
-      return KeyEventResult.handled;
+    // Only from the top line of controls. They wrap when there are more than
+    // fit across, and up from a second line means the line above it — jumping
+    // straight to the bar would skip half the controls on the way past.
+    if (up && _holds(_controls) && _onFirstControlLine()) {
+      if (focusFirstWithin(_bar)) return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
@@ -707,94 +727,69 @@ class _Controls extends StatelessWidget {
   Widget build(BuildContext context) {
     final paused = status.phase == PlaybackPhase.paused;
 
-    // Scrollable, and not for the usual reason. With every control present —
-    // transport, tracks, subtitles, picture, favourite — the row was wider
-    // than the title-safe area, so focus could move to a button drawn past
-    // the edge of the screen. The highlight simply vanished and the viewer
-    // had no way to tell whether the press had done anything. A row that
-    // scrolls its focused child into view cannot strand focus however many
-    // controls it grows.
-    return Actions(
-      // Arrow keys must not scroll this row.
-      //
-      // The physics below refuse user input, but ScrollAction never consults
-      // them: it asks only whether a Scrollable exists and then moves the
-      // position itself. That is why the row could still be scrolled past
-      // its last button — traversal declined the press, and the scrollable
-      // took it.
-      actions: <Type, Action<Intent>>{
-        ScrollIntent: DoNothingAction(consumesKey: false),
-      },
-      child: SizedBox(
-        height: 96,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          // Scrolled by focus, never by the remote.
-          //
-          // With the default physics the arrow keys reach the scrollable after
-          // traversal has run out of buttons, so pressing right at the last
-          // control scrolled the row into the empty space past it — carrying
-          // the focused button off screen with nothing to move to and no way
-          // to scroll back, because the same press kept scrolling further.
-          // Focus-driven scrolling still works with this: it is programmatic,
-          // and only user input is refused.
-          physics: const NeverScrollableScrollPhysics(),
-          // Room for the focus ring and glow, which a tight viewport clips into
-          // two stray vertical lines.
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          children: [
-            if (onPreviousChannel != null) ...[
-              PlayerButton(
-                glyph: Glyph.previous,
-                label: 'Previous channel',
-                onSelect: onPreviousChannel,
-                autofocus: true,
-              ),
-              const SizedBox(width: OpenTvSpace.sm),
-            ],
+    // Wrapped, not scrolled — and that is the fix for a bug reported twice.
+    //
+    // This row was a horizontal list, on the reasoning that a viewer with
+    // every control present needs more width than the title-safe area
+    // allows. But a scrolling viewport is a place focus can be carried out
+    // of, and it was: right at the last control moved the viewport rather
+    // than the highlight, and the press that would have come back kept going
+    // the same way. Two attempts to stop that — first the physics, then
+    // refusing the scroll intent — each fixed a mechanism without removing
+    // the possibility.
+    //
+    // A Wrap has no viewport. Controls that do not fit on one line go onto a
+    // second one, where they are visible rather than hidden behind a gesture,
+    // which on a television is the better answer anyway: a control a viewer
+    // cannot see is one they do not know they have.
+    return Padding(
+      // Room for the focus ring and glow, which tight bounds clip into two
+      // stray horizontal lines.
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Wrap(
+        spacing: OpenTvSpace.sm,
+        runSpacing: OpenTvSpace.sm,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (onPreviousChannel != null)
             PlayerButton(
-              glyph: paused ? Glyph.play : Glyph.pause,
-              label: paused ? 'Play' : 'Pause',
-              onSelect: onPlayPause,
-              emphasis: true,
-              autofocus: onPreviousChannel == null,
+              glyph: Glyph.previous,
+              label: 'Previous channel',
+              onSelect: onPreviousChannel,
+              autofocus: true,
             ),
-            if (onNextChannel != null) ...[
-              const SizedBox(width: OpenTvSpace.sm),
-              PlayerButton(
-                glyph: Glyph.next,
-                label: 'Next channel',
-                onSelect: onNextChannel,
-              ),
-            ],
-            // Words from here on, deliberately. A glyph for "subtitles" or
-            // "aspect ratio" is a puzzle at ten feet; play and pause are not.
-            if (status.audioTrackCount > 1) ...[
-              const SizedBox(width: OpenTvSpace.lg),
-              PlayerButton(label: 'AUDIO', onSelect: onAudioTracks),
-            ],
-            if (status.subtitleTrackCount > 0) ...[
-              const SizedBox(width: OpenTvSpace.sm),
-              PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
-            ],
-            if (onAspect != null) ...[
-              const SizedBox(width: OpenTvSpace.sm),
-              PlayerButton(label: 'PICTURE', onSelect: onAspect),
-            ],
-            if (onToggleFavourite != null) ...[
-              const SizedBox(width: OpenTvSpace.lg),
-              PlayerButton(
-                glyph: Glyph.heart,
-                glyphFilled: isFavourite,
-                label: isFavourite
-                    ? 'Remove from favourites'
-                    : 'Add to favourites',
-                onSelect: onToggleFavourite,
-                emphasis: isFavourite,
-              ),
-            ],
-          ],
-        ),
+          PlayerButton(
+            glyph: paused ? Glyph.play : Glyph.pause,
+            label: paused ? 'Play' : 'Pause',
+            onSelect: onPlayPause,
+            emphasis: true,
+            autofocus: onPreviousChannel == null,
+          ),
+          if (onNextChannel != null)
+            PlayerButton(
+              glyph: Glyph.next,
+              label: 'Next channel',
+              onSelect: onNextChannel,
+            ),
+          // Words from here on, deliberately. A glyph for "subtitles" or
+          // "aspect ratio" is a puzzle at ten feet; play and pause are not.
+          if (status.audioTrackCount > 1)
+            PlayerButton(label: 'AUDIO', onSelect: onAudioTracks),
+          if (status.subtitleTrackCount > 0)
+            PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
+          if (onAspect != null)
+            PlayerButton(label: 'PICTURE', onSelect: onAspect),
+          if (onToggleFavourite != null)
+            PlayerButton(
+              glyph: Glyph.heart,
+              glyphFilled: isFavourite,
+              label: isFavourite
+                  ? 'Remove from favourites'
+                  : 'Add to favourites',
+              onSelect: onToggleFavourite,
+              emphasis: isFavourite,
+            ),
+        ],
       ),
     );
   }

@@ -173,7 +173,7 @@ class _RootState extends State<_Root> {
   }
 
   Future<void> _removeSource(Source source) async {
-    await _db!.removeSource(source.id);
+    await _service!.forget(source);
     final sources = await _db!.allSources();
     if (!mounted) return;
     setState(() {

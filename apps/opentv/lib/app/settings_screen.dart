@@ -256,12 +256,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     source: source,
                     active: source.id == widget.active.id,
                     onSwitch: () => widget.onSwitch(source),
-                    // The last provider cannot be removed from here: doing so
-                    // would leave the app with nothing to show and no screen
-                    // to add one from.
-                    onRemove: widget.sources.length > 1
-                        ? () => widget.onRemoveSource(source)
-                        : null,
+                    // Including the last one. It used to be exempt, on the
+                    // reasoning that removing it leaves the app with nothing
+                    // to show — but it does not leave it with nowhere to go:
+                    // an app with no provider opens onboarding, which is
+                    // exactly the right place to be. Refusing meant a viewer
+                    // who wanted their account off this television had no way
+                    // to do it short of clearing the app's data.
+                    onRemove: () => _confirmRemove(source),
                   ),
                 ),
               const SizedBox(height: OpenTvSpace.sm),
@@ -818,6 +820,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Asks before forgetting a provider.
+  ///
+  /// Everything cascades — catalogue, favourites, history, and the password
+  /// in the keystore — and none of it comes back. That is worth one press to
+  /// confirm, and the panel names what goes rather than asking whether the
+  /// viewer is sure.
+  void _confirmRemove(Source source) {
+    final last = widget.sources.length == 1;
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierDismissible: false,
+        transitionDuration: OpenTvMotion.fade,
+        pageBuilder: (context, animation, _) => ConfirmPanel(
+          title: 'Forget ${source.name}?',
+          detail: last
+              ? 'Its catalogue, favourites, history and stored password are '
+                    'deleted. This is your only provider, so the app will '
+                    'return to setup.'
+              : 'Its catalogue, favourites, history and stored password are '
+                    'deleted. Your other providers are untouched.',
+          confirmLabel: 'FORGET',
+          cancelLabel: 'KEEP',
+          onCancel: () => Navigator.of(context).pop(),
+          onConfirm: () {
+            Navigator.of(context).pop();
+            widget.onRemoveSource(source);
+          },
+        ),
+        transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
       ),
     );
   }

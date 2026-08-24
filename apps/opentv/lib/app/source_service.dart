@@ -21,6 +21,22 @@ class SourceService {
   final OpenTvDatabase db;
   final Host host;
 
+  /// Forgets a provider, and everything kept on its behalf.
+  ///
+  /// The keystore entry goes with it. Removing a provider and leaving its
+  /// password behind is the worst of both outcomes: the viewer believes the
+  /// account is off this television, and the one part of it worth protecting
+  /// is still on it.
+  ///
+  /// The secret is deleted first. A failure part-way through then leaves a
+  /// catalogue that cannot be played rather than a credential nothing owns —
+  /// the first is visible and fixable, the second is invisible and permanent.
+  Future<void> forget(Source source) async {
+    final reference = source.credentialRef;
+    if (reference != null) await host.deleteSecret(reference);
+    await db.removeSource(source.id);
+  }
+
   /// What the sync is doing, for the progress line onboarding shows.
   final progress = ValueNotifier<String>('Contacting the provider…');
 
