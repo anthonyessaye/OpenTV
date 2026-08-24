@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../focus/focus_entry.dart';
 import '../focus/focusable_tile.dart';
 import '../tokens/tokens.dart';
 import 'glyphs.dart';
@@ -97,7 +98,7 @@ class PlaybackStatus {
 /// it — hence the scrim. And it is dismissed by not being used, so it must
 /// carry enough at a glance to answer "what am I watching and how long is
 /// left" without any button being pressed.
-class PlayerChrome extends StatelessWidget {
+class PlayerChrome extends StatefulWidget {
   const PlayerChrome({
     super.key,
     required this.status,
@@ -158,7 +159,79 @@ class PlayerChrome extends StatelessWidget {
   final String? videoCodec;
 
   @override
+  State<PlayerChrome> createState() => _PlayerChromeState();
+}
+
+class _PlayerChromeState extends State<PlayerChrome> {
+  /// Handles on the two things a viewer can move between down here. Neither
+  /// takes focus itself; they exist so up and down can name a destination.
+  final _bar = FocusNode(
+    debugLabel: 'scrub bar',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+  final _controls = FocusNode(
+    debugLabel: 'transport',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+
+  @override
+  void dispose() {
+    _bar.dispose();
+    _controls.dispose();
+    super.dispose();
+  }
+
+  bool _holds(FocusNode handle) {
+    final focused = FocusManager.instance.primaryFocus;
+    return focused != null &&
+        (focused == handle || focused.ancestors.contains(handle));
+  }
+
+  /// Up and down between the bar and the controls, decided here.
+  ///
+  /// Left to geometry it went wrong the same way the shelves did: the scrub
+  /// bar is twelve hundred pixels wide, so the control nearest its centre is
+  /// the third or fourth along rather than the first — and when the stream
+  /// offered fewer controls than that, the nearest candidate was nothing at
+  /// all and the highlight went out with no way to get it back.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final down = event.logicalKey == LogicalKeyboardKey.arrowDown;
+    final up = event.logicalKey == LogicalKeyboardKey.arrowUp;
+    if (!down && !up) return KeyEventResult.ignored;
+
+    if (down && _holds(_bar) && focusFirstWithin(_controls)) {
+      return KeyEventResult.handled;
+    }
+    if (up && _holds(_controls) && focusFirstWithin(_bar)) {
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final status = widget.status;
+    final now = widget.now;
+    final dynamicRange = widget.dynamicRange;
+    final videoCodec = widget.videoCodec;
+    final onSeek = widget.onSeek;
+    final onActivity = widget.onActivity;
+    final onPlayPause = widget.onPlayPause;
+    final onPreviousChannel = widget.onPreviousChannel;
+    final onNextChannel = widget.onNextChannel;
+    final onAudioTracks = widget.onAudioTracks;
+    final onSubtitles = widget.onSubtitles;
+    final onToggleFavourite = widget.onToggleFavourite;
+    final isFavourite = widget.isFavourite;
+    final onAspect = widget.onAspect;
+    final visible = widget.visible;
+
     // Built or not built, rather than faded.
     //
     // The fade was an opacity layer covering the whole screen, and the video
@@ -171,69 +244,84 @@ class PlayerChrome extends StatelessWidget {
     // instantly, and the picture is untouched either way.
     if (!visible) return const SizedBox.shrink();
 
-    return RepaintBoundary(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Video is unpredictable — a bright stadium, a white studio — so the
-          // chrome brings its own ground rather than trusting the picture.
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [
-                  Color(0xF207090C),
-                  Color(0x9907090C),
-                  Color(0x0007090C),
-                ],
-                stops: [0, 0.45, 1],
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: _onKey,
+      child: RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Video is unpredictable — a bright stadium, a white studio — so the
+            // chrome brings its own ground rather than trusting the picture.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Color(0xF207090C),
+                    Color(0x9907090C),
+                    Color(0x0007090C),
+                  ],
+                  stops: [0, 0.45, 1],
+                ),
               ),
             ),
-          ),
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: OpenTvSpace.safe,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (status.phase == PlaybackPhase.failed)
-                    _FailureBanner(message: status.error)
-                  else
-                    _NowPlaying(
-                      status: status,
-                      now: now,
-                      dynamicRange: dynamicRange,
-                      videoCodec: videoCodec,
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: OpenTvSpace.safe,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (status.phase == PlaybackPhase.failed)
+                      _FailureBanner(message: status.error)
+                    else
+                      _NowPlaying(
+                        status: status,
+                        now: now,
+                        dynamicRange: dynamicRange,
+                        videoCodec: videoCodec,
+                      ),
+                    const SizedBox(height: OpenTvSpace.md),
+                    Focus(
+                      focusNode: _bar,
+                      canRequestFocus: false,
+                      skipTraversal: true,
+                      child: _ProgressLine(
+                        status: status,
+                        now: now,
+                        // Live has no end to move within, and asking an engine
+                        // to seek one produces either nothing or a stall.
+                        onSeek: status.isLive ? null : onSeek,
+                        onActivity: onActivity,
+                      ),
                     ),
-                  const SizedBox(height: OpenTvSpace.md),
-                  _ProgressLine(
-                    status: status,
-                    now: now,
-                    // Live has no end to move within, and asking an engine to
-                    // seek one produces either nothing or a stall.
-                    onSeek: status.isLive ? null : onSeek,
-                    onActivity: onActivity,
-                  ),
-                  const SizedBox(height: OpenTvSpace.lg),
-                  _Controls(
-                    status: status,
-                    onPlayPause: onPlayPause,
-                    onPreviousChannel: onPreviousChannel,
-                    onNextChannel: onNextChannel,
-                    onAudioTracks: onAudioTracks,
-                    onSubtitles: onSubtitles,
-                    onToggleFavourite: onToggleFavourite,
-                    isFavourite: isFavourite,
-                    onAspect: onAspect,
-                  ),
-                ],
+                    const SizedBox(height: OpenTvSpace.lg),
+                    Focus(
+                      focusNode: _controls,
+                      canRequestFocus: false,
+                      skipTraversal: true,
+                      child: _Controls(
+                        status: status,
+                        onPlayPause: onPlayPause,
+                        onPreviousChannel: onPreviousChannel,
+                        onNextChannel: onNextChannel,
+                        onAudioTracks: onAudioTracks,
+                        onSubtitles: onSubtitles,
+                        onToggleFavourite: onToggleFavourite,
+                        isFavourite: isFavourite,
+                        onAspect: onAspect,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -415,10 +503,7 @@ class _ProgressLineState extends State<_ProgressLine> {
     });
 
     _streakEnd?.cancel();
-    _streakEnd = Timer(
-      const Duration(milliseconds: 700),
-      () => _streak = 0,
-    );
+    _streakEnd = Timer(const Duration(milliseconds: 700), () => _streak = 0);
 
     _commit?.cancel();
     _commit = Timer(const Duration(milliseconds: 420), _apply);
@@ -629,73 +714,87 @@ class _Controls extends StatelessWidget {
     // had no way to tell whether the press had done anything. A row that
     // scrolls its focused child into view cannot strand focus however many
     // controls it grows.
-    return SizedBox(
-      height: 96,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        // Scrolled by focus, never by the remote.
-        //
-        // With the default physics the arrow keys reach the scrollable after
-        // traversal has run out of buttons, so pressing right at the last
-        // control scrolled the row into the empty space past it — carrying
-        // the focused button off screen with nothing to move to and no way
-        // to scroll back, because the same press kept scrolling further.
-        // Focus-driven scrolling still works with this: it is programmatic,
-        // and only user input is refused.
-        physics: const NeverScrollableScrollPhysics(),
-        // Room for the focus ring and glow, which a tight viewport clips into
-        // two stray vertical lines.
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        children: [
-          if (onPreviousChannel != null) ...[
+    return Actions(
+      // Arrow keys must not scroll this row.
+      //
+      // The physics below refuse user input, but ScrollAction never consults
+      // them: it asks only whether a Scrollable exists and then moves the
+      // position itself. That is why the row could still be scrolled past
+      // its last button — traversal declined the press, and the scrollable
+      // took it.
+      actions: <Type, Action<Intent>>{
+        ScrollIntent: DoNothingAction(consumesKey: false),
+      },
+      child: SizedBox(
+        height: 96,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          // Scrolled by focus, never by the remote.
+          //
+          // With the default physics the arrow keys reach the scrollable after
+          // traversal has run out of buttons, so pressing right at the last
+          // control scrolled the row into the empty space past it — carrying
+          // the focused button off screen with nothing to move to and no way
+          // to scroll back, because the same press kept scrolling further.
+          // Focus-driven scrolling still works with this: it is programmatic,
+          // and only user input is refused.
+          physics: const NeverScrollableScrollPhysics(),
+          // Room for the focus ring and glow, which a tight viewport clips into
+          // two stray vertical lines.
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          children: [
+            if (onPreviousChannel != null) ...[
+              PlayerButton(
+                glyph: Glyph.previous,
+                label: 'Previous channel',
+                onSelect: onPreviousChannel,
+                autofocus: true,
+              ),
+              const SizedBox(width: OpenTvSpace.sm),
+            ],
             PlayerButton(
-              glyph: Glyph.previous,
-              label: 'Previous channel',
-              onSelect: onPreviousChannel,
-              autofocus: true,
+              glyph: paused ? Glyph.play : Glyph.pause,
+              label: paused ? 'Play' : 'Pause',
+              onSelect: onPlayPause,
+              emphasis: true,
+              autofocus: onPreviousChannel == null,
             ),
-            const SizedBox(width: OpenTvSpace.sm),
+            if (onNextChannel != null) ...[
+              const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(
+                glyph: Glyph.next,
+                label: 'Next channel',
+                onSelect: onNextChannel,
+              ),
+            ],
+            // Words from here on, deliberately. A glyph for "subtitles" or
+            // "aspect ratio" is a puzzle at ten feet; play and pause are not.
+            if (status.audioTrackCount > 1) ...[
+              const SizedBox(width: OpenTvSpace.lg),
+              PlayerButton(label: 'AUDIO', onSelect: onAudioTracks),
+            ],
+            if (status.subtitleTrackCount > 0) ...[
+              const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
+            ],
+            if (onAspect != null) ...[
+              const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(label: 'PICTURE', onSelect: onAspect),
+            ],
+            if (onToggleFavourite != null) ...[
+              const SizedBox(width: OpenTvSpace.lg),
+              PlayerButton(
+                glyph: Glyph.heart,
+                glyphFilled: isFavourite,
+                label: isFavourite
+                    ? 'Remove from favourites'
+                    : 'Add to favourites',
+                onSelect: onToggleFavourite,
+                emphasis: isFavourite,
+              ),
+            ],
           ],
-          PlayerButton(
-            glyph: paused ? Glyph.play : Glyph.pause,
-            label: paused ? 'Play' : 'Pause',
-            onSelect: onPlayPause,
-            emphasis: true,
-            autofocus: onPreviousChannel == null,
-          ),
-          if (onNextChannel != null) ...[
-            const SizedBox(width: OpenTvSpace.sm),
-            PlayerButton(
-              glyph: Glyph.next,
-              label: 'Next channel',
-              onSelect: onNextChannel,
-            ),
-          ],
-          // Words from here on, deliberately. A glyph for "subtitles" or
-          // "aspect ratio" is a puzzle at ten feet; play and pause are not.
-          if (status.audioTrackCount > 1) ...[
-            const SizedBox(width: OpenTvSpace.lg),
-            PlayerButton(label: 'AUDIO', onSelect: onAudioTracks),
-          ],
-          if (status.subtitleTrackCount > 0) ...[
-            const SizedBox(width: OpenTvSpace.sm),
-            PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
-          ],
-          if (onAspect != null) ...[
-            const SizedBox(width: OpenTvSpace.sm),
-            PlayerButton(label: 'PICTURE', onSelect: onAspect),
-          ],
-          if (onToggleFavourite != null) ...[
-            const SizedBox(width: OpenTvSpace.lg),
-            PlayerButton(
-              glyph: Glyph.heart,
-              glyphFilled: isFavourite,
-              label: isFavourite ? 'Remove from favourites' : 'Add to favourites',
-              onSelect: onToggleFavourite,
-              emphasis: isFavourite,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

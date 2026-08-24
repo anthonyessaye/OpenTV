@@ -22,6 +22,7 @@ export 'src/components/track_sheet.dart';
 export 'src/components/tv_keyboard.dart';
 export 'src/focus/back_keys.dart';
 export 'src/focus/focus_column.dart';
+export 'src/focus/focus_entry.dart';
 export 'src/focus/focus_grid.dart';
 export 'src/focus/focus_row.dart';
 export 'src/focus/focusable_tile.dart';

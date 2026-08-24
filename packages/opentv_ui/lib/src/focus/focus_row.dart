@@ -112,6 +112,23 @@ class _FocusRowState extends State<FocusRow> {
 
   @override
   Widget build(BuildContext context) {
+    return Actions(
+      // Arrow keys must not scroll this row.
+      //
+      // NeverScrollableScrollPhysics below is not enough on its own:
+      // ScrollAction asks only whether a Scrollable exists, never what its
+      // physics allow, and then moves the position programmatically. So a
+      // press traversal declined to act on scrolled the viewport instead —
+      // which is how the player's controls could be scrolled off past their
+      // own last button with no way back.
+      actions: <Type, Action<Intent>>{
+        ScrollIntent: DoNothingAction(consumesKey: false),
+      },
+      child: _list(),
+    );
+  }
+
+  Widget _list() {
     return SizedBox(
       height: widget.height == null
           ? null
