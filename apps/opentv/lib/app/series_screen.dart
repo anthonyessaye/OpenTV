@@ -40,6 +40,12 @@ class SeriesScreen extends StatefulWidget {
 
 class _SeriesScreenState extends State<SeriesScreen> {
   List<Episode> _episodes = const [];
+
+  /// How far through each episode the viewer got, by provider id.
+  ///
+  /// Read in one query rather than per tile: a season of twenty-four asked
+  /// individually is twenty-four round trips to build one row.
+  Map<String, PlaybackState> _progress = const {};
   List<int> _seasons = const [];
   int? _season;
   bool _loading = true;
@@ -69,7 +75,18 @@ class _SeriesScreenState extends State<SeriesScreen> {
         episodes.map((e) => e.season ?? 1).toSet().toList(growable: false)
           ..sort();
 
+    final progress = {
+      for (final state in await widget.db.playbackStatesFor(
+        sourceId: widget.source.id,
+        kind: ItemKind.episode,
+        remoteIds: [for (final row in episodes) row.remoteId],
+      ))
+        state.itemRemoteId: state,
+    };
+    if (!mounted) return;
+
     setState(() {
+      _progress = progress;
       _episodes = episodes;
       _seasons = seasons;
       _season = seasons.isEmpty ? null : seasons.first;
@@ -135,6 +152,18 @@ class _SeriesScreenState extends State<SeriesScreen> {
     } finally {
       transport.close();
     }
+  }
+
+  /// How far through an episode the viewer is, or null when it is untouched.
+  ///
+  /// The provider's runtime is used when there is one, because a playback
+  /// state records where the viewer stopped but not how long the thing was.
+  static double? _fractionOf(Episode episode, PlaybackState? state) {
+    if (state == null || state.completed) return null;
+    final seconds = episode.durationSeconds;
+    final position = state.positionMs;
+    if (seconds == null || seconds <= 0 || position == null) return null;
+    return (position / (seconds * 1000)).clamp(0.0, 1.0);
   }
 
   @override
@@ -223,17 +252,29 @@ class _SeriesScreenState extends State<SeriesScreen> {
                   : FocusRow(
                       height: EpisodeTile.preferredHeight,
                       itemExtent: EpisodeTile.preferredWidth,
-                      padding: EdgeInsets.zero,
+                      // Room at both ends for the focus ring, which grows the
+                      // tile and casts a glow past its own bounds. With zero
+                      // padding the viewport clipped exactly that overhang,
+                      // so the first and last cards showed a highlight with
+                      // one side sliced off — the one cue that has to be
+                      // trustworthy, since it is how a viewer knows what a
+                      // press will do.
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemCount: inSeason.length,
                       itemBuilder: (context, index) {
                         final episode = inSeason[index];
+                        final state = _progress[episode.remoteId];
                         return EpisodeTile(
                           title: episode.title,
                           season: episode.season ?? 1,
                           episodeNumber: episode.episodeNumber ?? index + 1,
+                          synopsis: episode.plot,
+                          imageUrl: episode.iconUrl,
                           duration: episode.durationSeconds == null
                               ? null
                               : Duration(seconds: episode.durationSeconds!),
+                          watched: state?.completed ?? false,
+                          progress: _fractionOf(episode, state),
                           autofocus: _seasons.length == 1 && index == 0,
                           onSelect: () =>
                               widget.onPlay(Playable.episode(episode)),

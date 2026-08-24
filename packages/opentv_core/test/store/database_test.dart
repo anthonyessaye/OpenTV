@@ -510,6 +510,54 @@ void main() {
   });
 
   group('playback state', () {
+    test('reads a whole season in one query', () async {
+      // A row of episodes needs every one of their positions to draw. Asked
+      // one at a time that is a round trip per tile, which is what this
+      // exists to replace.
+      final id = await _addSource();
+      final at = DateTime.utc(2026, 4, 1);
+
+      for (final remoteId in ['e1', 'e3']) {
+        await db.recordPlayback(
+          sourceId: id,
+          kind: ItemKind.episode,
+          remoteId: remoteId,
+          at: at,
+          positionMs: 60000,
+        );
+      }
+      // A different kind sharing an id must not leak in.
+      await db.recordPlayback(
+        sourceId: id,
+        kind: ItemKind.movie,
+        remoteId: 'e2',
+        at: at,
+        positionMs: 60000,
+      );
+
+      final states = await db.playbackStatesFor(
+        sourceId: id,
+        kind: ItemKind.episode,
+        remoteIds: ['e1', 'e2', 'e3'],
+      );
+
+      // Untouched episodes are absent rather than present and empty, which
+      // is what lets the caller treat a missing entry as "never started".
+      expect(states.map((s) => s.itemRemoteId).toSet(), {'e1', 'e3'});
+    });
+
+    test('asks nothing when there is nothing to ask about', () async {
+      final id = await _addSource();
+      expect(
+        await db.playbackStatesFor(
+          sourceId: id,
+          kind: ItemKind.episode,
+          remoteIds: const [],
+        ),
+        isEmpty,
+      );
+    });
+
     test('one table serves every item kind', () async {
       final id = await _addSource();
       final at = DateTime.utc(2026, 4, 1);

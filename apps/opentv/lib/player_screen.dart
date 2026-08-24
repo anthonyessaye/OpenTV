@@ -423,6 +423,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
             key: ValueKey(_resetFocus),
             visible: _chromeVisible,
                 onAspect: () => setState(() => _sheet = _Sheet.aspect),
+                onSeek: (position) => _channel?.invokeMethod<void>('seek', {
+                  'positionMs': position.inMilliseconds,
+                }),
+                // Scrubbing consumes the arrow keys before they reach the
+                // handler that keeps the chrome awake, so the bar says so
+                // itself. Without this the controls faded out from under a
+                // viewer who was actively using them.
+                onActivity: _restartIdleTimer,
                 dynamicRange: _dynamicRange,
                 videoCodec: _videoCodec,
               ),

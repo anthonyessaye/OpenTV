@@ -161,6 +161,22 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             selectTrack(type: type, id: args["id"] as? String)
             result(nil)
 
+        // Moves to a position, in milliseconds from the start.
+        //
+        // Clamped for the same reason Android clamps: a viewer holding the
+        // skip button asks for positions past the end well before they let
+        // go, and a seek past the end stops playback rather than finishing.
+        case "seek":
+            guard let requested = (call.arguments as? [String: Any])?["positionMs"] as? NSNumber else {
+                result(FlutterError(code: "bad-args", message: "positionMs required", details: nil))
+                return
+            }
+            let lengthMs = player.media?.length.intValue ?? 0
+            let ceiling = lengthMs > 0 ? Int32(lengthMs) - 1_000 : Int32.max
+            let target = min(max(Int32(truncating: requested), 0), max(0, ceiling))
+            player.time = VLCTime(int: target)
+            result(nil)
+
         case "setAspect":
             let mode = (call.arguments as? [String: Any])?["mode"] as? String ?? "fit"
             applyAspect(mode)

@@ -34,6 +34,10 @@ class PlayerContract {
     'tracks',
     // Chooses one, or hands the choice back with a null id.
     'selectTrack',
+    // Moves to a position, in milliseconds from the start. Clamped inside
+    // the engine, because a held skip button asks for the far side of the
+    // end long before the viewer lets go.
+    'seek',
     // How the picture is fitted to the panel.
     'setAspect',
   };

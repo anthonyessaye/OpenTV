@@ -147,6 +147,28 @@ class PlayerPlatformView(
                 result.success(null)
             }
 
+            /**
+             * Moves to a position, in milliseconds from the start.
+             *
+             * Clamped rather than trusted. A viewer holding the skip button
+             * asks for positions past the end long before they let go, and
+             * ExoPlayer answers a seek past the duration by ending playback
+             * — so a film that was nearly over would simply stop, which
+             * reads as a crash rather than as the end of a film.
+             */
+            "seek" -> {
+                val target = (call.arguments as? Map<*, *>)?.get("positionMs")
+                val requested = (target as? Number)?.toLong()
+                if (requested == null) {
+                    result.error("bad-args", "positionMs required", null)
+                    return
+                }
+                val duration = player.duration
+                val ceiling = if (duration > 0) duration - 1_000 else Long.MAX_VALUE
+                player.seekTo(requested.coerceIn(0, maxOf(0, ceiling)))
+                result.success(null)
+            }
+
             "setAspect" -> {
                 aspectMode = (call.arguments as? Map<*, *>)?.get("mode") as? String ?: "fit"
                 applyAspect()

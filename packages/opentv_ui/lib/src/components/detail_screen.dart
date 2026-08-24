@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../focus/focus_column.dart';
 import '../focus/focusable_tile.dart';
 import '../tokens/tokens.dart';
+import 'artwork.dart';
 import 'player_chrome.dart' show PlayerButton;
 
 /// What a detail screen is describing.
@@ -453,6 +454,17 @@ class _BackdropPlaceholder extends StatelessWidget {
 }
 
 /// One episode in a series' list.
+///
+/// A still, then the title under it — the shape of every video thumbnail a
+/// viewer has ever seen. The first version of this was a large flat rectangle
+/// with the episode name in it, repeated across the row: at ten feet that is
+/// a wall of text with nothing to tell one entry from another, and the only
+/// way to choose was to read all of them.
+///
+/// Providers do send episode stills, often. When one is missing the card
+/// keeps its shape and shows the placeholder motif rather than collapsing,
+/// because a row where some cards are short and some are tall is harder to
+/// read than a row where one picture is missing.
 class EpisodeTile extends StatelessWidget {
   const EpisodeTile({
     super.key,
@@ -460,7 +472,10 @@ class EpisodeTile extends StatelessWidget {
     this.season,
     this.episodeNumber,
     this.duration,
+    this.synopsis,
+    this.imageUrl,
     this.watched = false,
+    this.progress,
     this.onSelect,
     this.autofocus = false,
   });
@@ -469,64 +484,165 @@ class EpisodeTile extends StatelessWidget {
   final int? season;
   final int? episodeNumber;
   final Duration? duration;
+
+  /// A line or two about the episode, when the provider sent one.
+  final String? synopsis;
+
+  final String? imageUrl;
   final bool watched;
+
+  /// How far through this episode the viewer got, 0 to 1.
+  final double? progress;
+
   final VoidCallback? onSelect;
   final bool autofocus;
 
+  /// Width the tile is designed around.
+  static const preferredWidth = 384.0;
+
+  static const _imageHeight = preferredWidth * 9 / 16;
+
   /// Height this tile needs to draw without clipping.
   ///
-  /// Published rather than left implicit: a two-line title, its code row and
-  /// the padding come to this, and a row given less silently overflows. A
-  /// component that only works at heights the caller has to guess is a trap.
-  static const preferredHeight = 172.0;
-
-  /// Width the tile is designed around.
-  static const preferredWidth = 420.0;
+  /// Published rather than left implicit: the still, a title line, two lines
+  /// of synopsis and the padding come to this, and a row given less silently
+  /// overflows. A component that only works at heights the caller has to
+  /// guess is a trap.
+  static const preferredHeight = _imageHeight + 132;
 
   @override
   Widget build(BuildContext context) {
     return FocusableTile(
       onSelect: onSelect,
       autofocus: autofocus,
-      semanticLabel: title,
+      semanticLabel: _spoken(),
+      borderRadius: OpenTvRadius.tile,
       scaleOnFocus: 1.03,
-      child: Container(
+      child: SizedBox(
         width: preferredWidth,
-        padding: const EdgeInsets.all(OpenTvSpace.md),
-        color: OpenTvColors.surface,
+        height: preferredHeight,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                if (season != null || episodeNumber != null)
-                  Text(
-                    _code(season, episodeNumber),
-                    style: OpenTvType.data.copyWith(
-                      color: watched
-                          ? OpenTvColors.inkFaint
-                          : OpenTvColors.tally,
-                    ),
-                  ),
-                const Spacer(),
-                if (duration != null)
-                  Text('${duration!.inMinutes}m', style: OpenTvType.data),
-              ],
-            ),
-            const SizedBox(height: OpenTvSpace.xs),
+            _still(),
+            const SizedBox(height: OpenTvSpace.sm),
             Text(
               title,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: OpenTvType.body.copyWith(
                 color: watched ? OpenTvColors.inkMuted : OpenTvColors.ink,
               ),
             ),
+            if (synopsis != null && synopsis!.trim().isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                synopsis!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: OpenTvType.bodyMuted.copyWith(fontSize: 20),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Widget _still() {
+    return ClipRRect(
+      borderRadius: OpenTvRadius.tile,
+      child: SizedBox(
+        width: preferredWidth,
+        height: _imageHeight,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (imageUrl != null)
+              RemoteImage(url: imageUrl, fit: BoxFit.cover)
+            else
+              const _BackdropPlaceholder(),
+
+            // The code and the runtime sit on the picture rather than under
+            // it, which is what buys the card its height back. Banded, since
+            // a still is as likely to be bright as dark.
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xE607090C), Color(0x0007090C)],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    OpenTvSpace.sm,
+                    OpenTvSpace.md,
+                    OpenTvSpace.sm,
+                    OpenTvSpace.xs,
+                  ),
+                  child: Row(
+                    children: [
+                      if (season != null || episodeNumber != null)
+                        Text(
+                          _code(season, episodeNumber),
+                          style: OpenTvType.data.copyWith(
+                            color: watched
+                                ? OpenTvColors.inkMuted
+                                : OpenTvColors.tally,
+                          ),
+                        ),
+                      const Spacer(),
+                      if (watched)
+                        Text(
+                          'WATCHED',
+                          style: OpenTvType.label.copyWith(
+                            color: OpenTvColors.onAir,
+                          ),
+                        )
+                      else if (duration != null)
+                        Text(
+                          '${duration!.inMinutes}m',
+                          style: OpenTvType.data,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // How far in they got, drawn on the picture's own bottom edge —
+            // the same place every video player puts it, so it needs no
+            // label to be understood.
+            if (progress case final double fraction when fraction > 0.01)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: SizedBox(
+                  height: 5,
+                  child: Stack(
+                    children: [
+                      Container(color: OpenTvColors.rule),
+                      FractionallySizedBox(
+                        widthFactor: fraction.clamp(0.0, 1.0),
+                        child: Container(color: OpenTvColors.tally),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// What this reads as to anything not looking at it.
+  String _spoken() {
+    final code = _code(season, episodeNumber);
+    return code.isEmpty ? title : '$code, $title';
   }
 
   static String _code(int? season, int? episode) {

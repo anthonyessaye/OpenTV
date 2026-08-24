@@ -918,6 +918,29 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           ))
           .getSingleOrNull();
 
+  /// Playback state for a set of items at once.
+  ///
+  /// Exists because a season of twenty-four episodes drawn as a row needs all
+  /// twenty-four, and asking one at a time is twenty-four round trips to
+  /// build one shelf. Items with no state are simply absent from the result.
+  Future<List<PlaybackState>> playbackStatesFor({
+    required int sourceId,
+    required ItemKind kind,
+    required List<String> remoteIds,
+  }) {
+    // An empty IN clause is valid SQL that matches nothing, but building it
+    // is a query for no reason on every series with no history at all.
+    if (remoteIds.isEmpty) return Future.value(const []);
+
+    return (select(playbackStates)..where(
+          (p) =>
+              p.sourceId.equals(sourceId) &
+              p.itemKind.equalsValue(kind) &
+              p.itemRemoteId.isIn(remoteIds),
+        ))
+        .get();
+  }
+
   /// Most recently watched items that are not finished, newest first.
   Future<List<PlaybackState>> continueWatching({
     int? sourceId,
