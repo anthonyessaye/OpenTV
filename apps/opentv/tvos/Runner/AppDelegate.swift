@@ -78,6 +78,25 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
     /// than a human squinting at a screenshot.
     private var framesSeen = false
 
+    /// Whether this surface should hold the display awake while it plays.
+    ///
+    /// A television with nothing to do dims and hands over to its
+    /// screensaver, and it decides that from input rather than from whether
+    /// anything is on screen. Watching a film is the one activity where a
+    /// viewer sends no input for two hours by design, so the screensaver took
+    /// the picture while the film carried on behind it.
+    ///
+    /// False for the browse screen's preview: decoration must not keep a
+    /// panel lit because a channel is idling in a box.
+    private var keepAwake = true
+
+    /// Whether this view is the one currently holding the timer off.
+    ///
+    /// Tracked because the flag is application-wide while players are not.
+    /// Without it, one view finishing would clear a hold another had taken,
+    /// and the screensaver would arrive mid-film anyway.
+    private var holdingIdleTimer = false
+
     init(
         frame: CGRect,
         viewId: Int64,
@@ -99,6 +118,10 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             self?.handle(call, result: result)
         }
 
+        if let args = arguments as? [String: Any] {
+            keepAwake = args["keepAwake"] as? Bool ?? true
+        }
+
         if let args = arguments as? [String: Any],
            let urlString = args["url"] as? String {
             play(
@@ -110,6 +133,13 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
     }
 
     func view() -> UIView { container }
+
+    deinit {
+        // The hold is application-wide and this view is not. Left set by a
+        // view that no longer exists, it keeps the television awake until the
+        // app is killed.
+        releaseIdleTimer()
+    }
 
     private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
@@ -142,6 +172,10 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
 
         case "stop":
             player.stop()
+            // Asked for directly rather than waited for: stopping is the one
+            // path where the state notification is not guaranteed, and a
+            // missed one leaves the display pinned awake with nothing playing.
+            releaseIdleTimer()
             result(nil)
 
         case "state":
@@ -373,7 +407,29 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             lastError = "the stream could not be opened"
         }
         if player.hasVideoOut { framesSeen = true }
+        updateIdleTimer()
         channel.invokeMethod("state", arguments: snapshot())
+    }
+
+    /// Holds the display awake for as long as something is actually playing.
+    ///
+    /// Tied to playing rather than to existing, because a film left paused
+    /// overnight should be allowed to let the screen sleep.
+    private func updateIdleTimer() {
+        let wanted = keepAwake && player.isPlaying
+        guard wanted != holdingIdleTimer else { return }
+        holdingIdleTimer = wanted
+        UIApplication.shared.isIdleTimerDisabled = wanted
+    }
+
+    /// Releases the hold, whatever state the player was left in.
+    ///
+    /// Called on teardown: an application-wide flag left set by a view that
+    /// no longer exists keeps a television awake until the app is killed.
+    func releaseIdleTimer() {
+        guard holdingIdleTimer else { return }
+        holdingIdleTimer = false
+        UIApplication.shared.isIdleTimerDisabled = false
     }
 
     func mediaPlayerTimeChanged(_ aNotification: Notification) {

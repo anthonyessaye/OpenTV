@@ -90,6 +90,10 @@ class _LivePreviewState extends State<LivePreview> {
               PlayerSurface(
                 url: widget.url,
                 streamOptions: widget.streamOptions,
+                // A preview does not hold the television awake. Someone
+                // sitting on the home screen has not asked for a lit panel
+                // indefinitely just because a channel is running in a box.
+                keepAwake: false,
                 onCreated: _onCreated,
               ),
               // The caption is banded rather than laid straight over the

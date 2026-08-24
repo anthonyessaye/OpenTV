@@ -48,6 +48,28 @@ void main() {
     }
   });
 
+  group('both engines read every creation parameter', () {
+    for (final key in PlayerContract.creationParams) {
+      test('"$key" is read on Android', () {
+        expect(
+          android.readAsStringSync(),
+          contains('"$key"'),
+          reason:
+              'Android never reads "$key" from its creation params, so '
+              'whatever it controls is simply absent on that television.',
+        );
+      });
+
+      test('"$key" is read on Apple TV', () {
+        expect(
+          apple.readAsStringSync(),
+          contains('"$key"'),
+          reason: 'tvOS never reads "$key" from its creation params.',
+        );
+      });
+    }
+  });
+
   group('both engines report every required state key', () {
     // Checked against the snapshot itself rather than the whole file.
     //

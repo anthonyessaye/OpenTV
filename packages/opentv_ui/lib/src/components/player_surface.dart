@@ -28,6 +28,7 @@ class PlayerSurface extends StatelessWidget {
     required this.onCreated,
     this.streamOptions = const {},
     this.startAt,
+    this.keepAwake = true,
   });
 
   final String url;
@@ -45,6 +46,18 @@ class PlayerSurface extends StatelessWidget {
   /// opening seconds first, which reads as the app having forgotten.
   final Duration? startAt;
 
+  /// Whether this surface should hold the display awake while it plays.
+  ///
+  /// A television decides to dim from input, not from whether anything is on
+  /// screen — and watching a film is the one activity where a viewer sends no
+  /// input for two hours by design. So the player holds the display awake and
+  /// the screensaver stays away.
+  ///
+  /// Set false for a preview. An app left open on a browse screen must not
+  /// keep a panel lit indefinitely because a channel is idling in a box, and
+  /// nobody sitting on a home screen is asking for that.
+  final bool keepAwake;
+
   static const viewType = 'opentv/player';
 
   @override
@@ -52,6 +65,7 @@ class PlayerSurface extends StatelessWidget {
     final params = <String, Object?>{
       'url': url,
       'options': streamOptions,
+      'keepAwake': keepAwake,
       if (startAt != null) 'startAtMs': startAt!.inMilliseconds,
     };
 

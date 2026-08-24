@@ -75,10 +75,26 @@ class PlayerPlatformView(
     /** How the picture is fitted to the panel. See [applyAspect]. */
     private var aspectMode = "fit"
 
+    /**
+     * Whether this surface should hold the display awake while it plays.
+     *
+     * A television with nothing to do dims and then hands over to its
+     * screensaver, and it decides that from input, not from whether anything
+     * is on screen. Watching a film is the one activity where a viewer sends
+     * no input for two hours by design, so the screensaver took the picture
+     * while the film carried on behind it.
+     *
+     * False for the browse screen's preview. That is decoration, and an app
+     * left open on the home screen must not keep a panel lit indefinitely
+     * because a channel is idling in a box.
+     */
+    private var keepAwake = true
+
     init {
         @Suppress("UNCHECKED_CAST")
         val params = args as? Map<String, Any?> ?: emptyMap()
         val options = params["options"] as? Map<String, String> ?: emptyMap()
+        keepAwake = params["keepAwake"] as? Boolean ?: true
 
         // Providers frequently refuse to serve a stream without the user agent
         // or referrer their playlist named, so those have to reach the HTTP
@@ -112,6 +128,9 @@ class PlayerPlatformView(
 
     override fun dispose() {
         channel.setMethodCallHandler(null)
+        // Released before the player is, so a torn-down view can never leave
+        // the display pinned awake.
+        surface.keepScreenOn = false
         player.release()
     }
 
@@ -422,6 +441,21 @@ class PlayerPlatformView(
     }
 
     override fun onPlaybackStateChanged(playbackState: Int) {
+        channel.invokeMethod("state", snapshot())
+    }
+
+    /**
+     * Holds the display awake for as long as something is actually playing.
+     *
+     * Set on the view rather than as a window flag: it is scoped to this
+     * surface's lifetime, so a released player cannot leave a television
+     * awake forever, and there is no Activity to reach for from here.
+     *
+     * Tied to playing rather than to existing, because a film left paused
+     * overnight should be allowed to let the screen sleep.
+     */
+    override fun onIsPlayingChanged(isPlaying: Boolean) {
+        surface.keepScreenOn = keepAwake && isPlaying
         channel.invokeMethod("state", snapshot())
     }
 

@@ -42,6 +42,23 @@ class PlayerContract {
     'setAspect',
   };
 
+  /// Values handed to the native view when it is created.
+  ///
+  /// Listed for the same reason the methods are. A creation parameter one
+  /// platform reads and the other ignores fails silently and asymmetrically:
+  /// the feature simply is not there on one television, and nothing in Dart
+  /// can tell.
+  static const creationParams = <String>{
+    // The stream to open.
+    'url',
+    // Per-stream request directives some providers require.
+    'options',
+    // Whether this surface holds the display awake while it plays. A
+    // television dims from lack of input, and watching a film is two hours of
+    // deliberately sending none.
+    'keepAwake',
+  };
+
   /// Keys the state snapshot must carry.
   ///
   /// Absent keys read as null in Dart, which is a legitimate answer for some
