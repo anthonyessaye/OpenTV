@@ -169,10 +169,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
       limit: 60,
     );
     final favourites = await widget.db.favouritesOf(widget.source.id, _kind);
-    final mine = [
-      for (final state in resumable)
-        if (state.itemKind == _kind) state,
-    ];
+    final mine = _resumableIds(resumable, _kind);
 
     if (!mounted || generation != _generation) return;
 
@@ -210,11 +207,13 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (_category == _continueId || _category == _favouritesId) {
       final ids = _category == _continueId
           ? [
-              for (final state in await widget.db.continueWatching(
-                sourceId: sourceId,
-                limit: window,
-              ))
-                if (state.itemKind == _kind) state.itemRemoteId,
+              ..._resumableIds(
+                await widget.db.continueWatching(
+                  sourceId: sourceId,
+                  limit: window,
+                ),
+                _kind,
+              ),
             ]
           : [
               for (final row in await widget.db.favouritesOf(sourceId, _kind))
@@ -340,6 +339,38 @@ class _BrowseScreenState extends State<BrowseScreen> {
     setState(() => _leadDetails = details);
   }
 
+  /// The items this section is part-way through, newest first.
+  ///
+  /// Series are the awkward one, and were simply missing until now. Progress
+  /// is recorded against episodes — an episode is what actually gets watched
+  /// — so a viewer four episodes into a season has four episode rows and no
+  /// series row at all. Filtering these states for the series kind therefore
+  /// matched nothing, every time, and the shelf and its rail entry were
+  /// permanently empty for the one section where carrying on matters most.
+  ///
+  /// What the shelf is about is the parent, so that is what this returns,
+  /// deduplicated: six episodes of one series are one thing to carry on with,
+  /// not six.
+  static List<String> _resumableIds(
+    Iterable<PlaybackState> states,
+    ItemKind kind,
+  ) {
+    if (kind != ItemKind.series) {
+      return [
+        for (final state in states)
+          if (state.itemKind == kind) state.itemRemoteId,
+      ];
+    }
+
+    final seen = <String>{};
+    return [
+      for (final state in states)
+        if (state.itemKind == ItemKind.episode)
+          if (state.parentRemoteId case final parent?)
+            if (seen.add(parent)) parent,
+    ];
+  }
+
   /// Highlight, then what the viewer already has a relationship with, then
   /// the rest. That order is deliberate: a shelf of your own half-watched
   /// films is more useful than any editorial one, but it is empty on a first
@@ -414,10 +445,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
       if (updated.isNotEmpty) out.add((label: 'Recently updated', items: updated));
     }
 
-    final resumable = [
-      for (final state in watching)
-        if (state.itemKind == kind) state.itemRemoteId,
-    ];
+    final resumable = _resumableIds(watching, kind);
     if (resumable.isNotEmpty) {
       final rows = switch (kind) {
         ItemKind.movie => (await widget.db.moviesByRemoteIds(

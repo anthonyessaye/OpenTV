@@ -455,16 +455,15 @@ class _BackdropPlaceholder extends StatelessWidget {
 
 /// One episode in a series' list.
 ///
-/// A still, then the title under it — the shape of every video thumbnail a
-/// viewer has ever seen. The first version of this was a large flat rectangle
-/// with the episode name in it, repeated across the row: at ten feet that is
-/// a wall of text with nothing to tell one entry from another, and the only
-/// way to choose was to read all of them.
+/// Wide and short, with the still beside the words rather than above them.
 ///
-/// Providers do send episode stills, often. When one is missing the card
-/// keeps its shape and shows the placeholder motif rather than collapsing,
-/// because a row where some cards are short and some are tall is harder to
-/// read than a row where one picture is missing.
+/// A thumbnail stacked over its caption is the shape of a video grid, and it
+/// is the wrong shape here: a still tall enough to read sets the card's
+/// height, the caption adds to it, and a single shelf of episodes ends up
+/// taking a third of a television. Laid on its side the same still sets the
+/// height alone and the text fills space the screen has going spare — a
+/// television is far wider than it is tall, and a row of episodes is the one
+/// place that is worth spending.
 class EpisodeTile extends StatelessWidget {
   const EpisodeTile({
     super.key,
@@ -485,7 +484,7 @@ class EpisodeTile extends StatelessWidget {
   final int? episodeNumber;
   final Duration? duration;
 
-  /// A line or two about the episode, when the provider sent one.
+  /// A line about the episode, when the provider sent one.
   final String? synopsis;
 
   final String? imageUrl;
@@ -498,25 +497,16 @@ class EpisodeTile extends StatelessWidget {
   final bool autofocus;
 
   /// Width the tile is designed around.
-  ///
-  /// A still sets the height, so the width is what decides how much of a
-  /// television one row of episodes takes. The first version was wide enough
-  /// that a row came to more than a third of the screen.
-  static const preferredWidth = 320.0;
+  static const preferredWidth = 470.0;
 
-  static const _imageHeight = preferredWidth * 9 / 16;
+  static const _stillHeight = 118.0;
+  static const _stillWidth = _stillHeight * 16 / 9;
 
   /// Height this tile lays out at, not counting its focus ring.
   ///
   /// Measured rather than reasoned about: `episode_tile_test.dart` builds one
-  /// and fails if this and the real height disagree. The version arrived at
-  /// by adding up the parts was out by enough to matter, which a caller
-  /// sizing a row around it pays for in dead space or in clipping.
-  ///
-  /// The ring is excluded for the same reason [preferredWidth] excludes it:
-  /// these are the box the tile occupies in a row, and the ring is overhang
-  /// the row reserves separately.
-  static const preferredHeight = 249.0;
+  /// and fails if this and the real height disagree.
+  static const preferredHeight = 118.0;
 
   @override
   Widget build(BuildContext context) {
@@ -526,42 +516,64 @@ class EpisodeTile extends StatelessWidget {
       semanticLabel: _spoken(),
       borderRadius: OpenTvRadius.tile,
       scaleOnFocus: 1.03,
-      // Sized by its content rather than to a fixed height. A card told to
-      // be taller than it needs is dead space in every row that holds one,
-      // and a row is sized from the constant above — which the test keeps
-      // honest.
       child: SizedBox(
         width: preferredWidth,
-        child: Column(
+        height: preferredHeight,
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
             _still(),
-            const SizedBox(height: OpenTvSpace.xs),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: OpenTvType.body.copyWith(
-                color: watched ? OpenTvColors.inkMuted : OpenTvColors.ink,
-              ),
-            ),
-            if (synopsis != null && synopsis!.trim().isNotEmpty)
-              Text(
-                synopsis!,
-                // One line. Two told a viewer more and cost half again the
-                // height of the picture above it, which is the wrong trade
-                // for a row they are scanning rather than reading.
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: OpenTvType.bodyMuted.copyWith(
-                  fontSize: 18,
-                  height: 1.3,
-                ),
-              ),
+            const SizedBox(width: OpenTvSpace.sm),
+            Expanded(child: _words()),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _words() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            if (season != null || episodeNumber != null)
+              Text(
+                _code(season, episodeNumber),
+                style: OpenTvType.data.copyWith(
+                  color: watched ? OpenTvColors.inkFaint : OpenTvColors.tally,
+                ),
+              ),
+            const Spacer(),
+            if (watched)
+              Text(
+                'WATCHED',
+                style: OpenTvType.label.copyWith(color: OpenTvColors.onAir),
+              )
+            else if (duration != null)
+              Text(
+                '${duration!.inMinutes}m',
+                style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+              ),
+          ],
+        ),
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: OpenTvType.body.copyWith(
+            color: watched ? OpenTvColors.inkMuted : OpenTvColors.ink,
+          ),
+        ),
+        if (synopsis != null && synopsis!.trim().isNotEmpty)
+          Text(
+            synopsis!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: OpenTvType.bodyMuted.copyWith(fontSize: 18, height: 1.25),
+          ),
+      ],
     );
   }
 
@@ -569,8 +581,8 @@ class EpisodeTile extends StatelessWidget {
     return ClipRRect(
       borderRadius: OpenTvRadius.tile,
       child: SizedBox(
-        width: preferredWidth,
-        height: _imageHeight,
+        width: _stillWidth,
+        height: _stillHeight,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -579,59 +591,8 @@ class EpisodeTile extends StatelessWidget {
             else
               const _BackdropPlaceholder(),
 
-            // The code and the runtime sit on the picture rather than under
-            // it, which is what buys the card its height back. Banded, since
-            // a still is as likely to be bright as dark.
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Color(0xE607090C), Color(0x0007090C)],
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    OpenTvSpace.sm,
-                    OpenTvSpace.md,
-                    OpenTvSpace.sm,
-                    OpenTvSpace.xs,
-                  ),
-                  child: Row(
-                    children: [
-                      if (season != null || episodeNumber != null)
-                        Text(
-                          _code(season, episodeNumber),
-                          style: OpenTvType.data.copyWith(
-                            color: watched
-                                ? OpenTvColors.inkMuted
-                                : OpenTvColors.tally,
-                          ),
-                        ),
-                      const Spacer(),
-                      if (watched)
-                        Text(
-                          'WATCHED',
-                          style: OpenTvType.label.copyWith(
-                            color: OpenTvColors.onAir,
-                          ),
-                        )
-                      else if (duration != null)
-                        Text(
-                          '${duration!.inMinutes}m',
-                          style: OpenTvType.data,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // How far in they got, drawn on the picture's own bottom edge —
-            // the same place every video player puts it, so it needs no
-            // label to be understood.
+            // How far in they got, on the picture's own bottom edge, where
+            // every video player puts it — so it needs no label.
             if (progress case final double fraction when fraction > 0.01)
               Align(
                 alignment: Alignment.bottomCenter,

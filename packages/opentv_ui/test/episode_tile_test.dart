@@ -65,10 +65,11 @@ void main() {
     );
   });
 
-  testWidgets('leaves a row well under half the screen', (tester) async {
-    // The complaint that started this: the cards were extremely tall. A
-    // shelf of episodes plus its heading has to leave room for the thing
-    // above it and a hint of the thing below.
-    expect(EpisodeTile.preferredHeight, lessThan(1080 * 0.3));
+  testWidgets('is short enough that a shelf is a shelf', (tester) async {
+    // The complaint that started this, twice. Stacked over its caption the
+    // card was three hundred and forty-eight pixels tall and a row reserved
+    // another eighty-eight around it — a third of a television for one shelf
+    // of episodes. On its side the still sets the height alone.
+    expect(EpisodeTile.preferredHeight, lessThan(1080 * 0.15));
   });
 }
