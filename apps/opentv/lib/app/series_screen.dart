@@ -252,6 +252,11 @@ class _SeriesScreenState extends State<SeriesScreen> {
                   : FocusRow(
                       height: EpisodeTile.preferredHeight,
                       itemExtent: EpisodeTile.preferredWidth,
+                      // Tighter than the default. These cards carry a picture,
+                      // so the row is tall before any headroom is added, and
+                      // the generous default put a single shelf of episodes
+                      // over a third of the way up the screen.
+                      focusHeadroom: 18,
                       // Room at both ends for the focus ring, which grows the
                       // tile and casts a glow past its own bounds. With zero
                       // padding the viewport clipped exactly that overhang,

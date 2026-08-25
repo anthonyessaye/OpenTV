@@ -498,17 +498,25 @@ class EpisodeTile extends StatelessWidget {
   final bool autofocus;
 
   /// Width the tile is designed around.
-  static const preferredWidth = 384.0;
+  ///
+  /// A still sets the height, so the width is what decides how much of a
+  /// television one row of episodes takes. The first version was wide enough
+  /// that a row came to more than a third of the screen.
+  static const preferredWidth = 320.0;
 
   static const _imageHeight = preferredWidth * 9 / 16;
 
-  /// Height this tile needs to draw without clipping.
+  /// Height this tile lays out at, not counting its focus ring.
   ///
-  /// Published rather than left implicit: the still, a title line, two lines
-  /// of synopsis and the padding come to this, and a row given less silently
-  /// overflows. A component that only works at heights the caller has to
-  /// guess is a trap.
-  static const preferredHeight = _imageHeight + 132;
+  /// Measured rather than reasoned about: `episode_tile_test.dart` builds one
+  /// and fails if this and the real height disagree. The version arrived at
+  /// by adding up the parts was out by enough to matter, which a caller
+  /// sizing a row around it pays for in dead space or in clipping.
+  ///
+  /// The ring is excluded for the same reason [preferredWidth] excludes it:
+  /// these are the box the tile occupies in a row, and the ring is overhang
+  /// the row reserves separately.
+  static const preferredHeight = 249.0;
 
   @override
   Widget build(BuildContext context) {
@@ -518,15 +526,18 @@ class EpisodeTile extends StatelessWidget {
       semanticLabel: _spoken(),
       borderRadius: OpenTvRadius.tile,
       scaleOnFocus: 1.03,
+      // Sized by its content rather than to a fixed height. A card told to
+      // be taller than it needs is dead space in every row that holds one,
+      // and a row is sized from the constant above — which the test keeps
+      // honest.
       child: SizedBox(
         width: preferredWidth,
-        height: preferredHeight,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             _still(),
-            const SizedBox(height: OpenTvSpace.sm),
+            const SizedBox(height: OpenTvSpace.xs),
             Text(
               title,
               maxLines: 1,
@@ -535,15 +546,19 @@ class EpisodeTile extends StatelessWidget {
                 color: watched ? OpenTvColors.inkMuted : OpenTvColors.ink,
               ),
             ),
-            if (synopsis != null && synopsis!.trim().isNotEmpty) ...[
-              const SizedBox(height: 2),
+            if (synopsis != null && synopsis!.trim().isNotEmpty)
               Text(
                 synopsis!,
-                maxLines: 2,
+                // One line. Two told a viewer more and cost half again the
+                // height of the picture above it, which is the wrong trade
+                // for a row they are scanning rather than reading.
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: OpenTvType.bodyMuted.copyWith(fontSize: 20),
+                style: OpenTvType.bodyMuted.copyWith(
+                  fontSize: 18,
+                  height: 1.3,
+                ),
               ),
-            ],
           ],
         ),
       ),

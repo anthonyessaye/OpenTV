@@ -1,6 +1,7 @@
 package com.anthonyessaye.opentv
 
 import android.content.Context
+import android.graphics.Color
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
@@ -10,6 +11,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
@@ -17,6 +19,8 @@ import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.CaptionStyleCompat
+import androidx.media3.ui.SubtitleView
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -67,6 +71,19 @@ class PlayerPlatformView(
      */
     private val container = FrameLayout(context)
     private val surface = SurfaceView(context)
+
+    /**
+     * Where subtitles are drawn.
+     *
+     * Media3 decodes a text track and hands the cues to a listener; it does
+     * not put them on screen. `PlayerView` owns a `SubtitleView` and wires the
+     * two together, and this player deliberately does not use `PlayerView` —
+     * it needs a bare `SurfaceView` so that 4K and HDR reach the panel
+     * intact. The cost of that decision, unnoticed until now, is that nothing
+     * was drawing the cues: a viewer could pick a subtitle track, the engine
+     * would decode it, and not a word would appear.
+     */
+    private val subtitles = SubtitleView(context)
 
     private val channel = MethodChannel(messenger, "opentv/player/$viewId")
 
@@ -141,6 +158,27 @@ class PlayerPlatformView(
         surface.isFocusable = false
 
         container.addView(surface)
+
+        // Above the picture, and styled for a television rather than for a
+        // phone held at arm's length. White on a translucent black box is the
+        // one combination legible over both a snow scene and a night sky;
+        // embedded styles are ignored because a provider's own styling is
+        // frequently a colour chosen against a background it no longer has.
+        subtitles.setStyle(
+            CaptionStyleCompat(
+                Color.WHITE,
+                0xCC000000.toInt(),
+                Color.TRANSPARENT,
+                CaptionStyleCompat.EDGE_TYPE_NONE,
+                Color.WHITE,
+                null,
+            ),
+        )
+        subtitles.setApplyEmbeddedStyles(false)
+        subtitles.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION)
+        // Lifted clear of the bottom edge, where the transport controls sit.
+        subtitles.setBottomPaddingFraction(0.08f)
+        container.addView(subtitles)
         player.setVideoSurfaceView(surface)
 
         channel.setMethodCallHandler(::handle)
@@ -489,6 +527,16 @@ class PlayerPlatformView(
         // The chrome shows AUDIO and SUBTITLES only when there is a choice to
         // make, so it has to hear when that changes.
         channel.invokeMethod("state", snapshot())
+    }
+
+    /**
+     * Draws the cues the engine has decoded.
+     *
+     * The whole of subtitle rendering on this platform. Without it the track
+     * is selected, decoded and thrown away.
+     */
+    override fun onCues(cueGroup: CueGroup) {
+        subtitles.setCues(cueGroup.cues)
     }
 
     override fun onPlayerError(error: PlaybackException) {
