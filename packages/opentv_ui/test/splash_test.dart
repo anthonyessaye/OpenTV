@@ -18,28 +18,29 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
   }
 
-  testWidgets('shows no words at all', (tester) async {
+  testWidgets('shows the lockup and nothing else', (tester) async {
     await show(tester);
 
-    // A launch screen is the one place an app does not have to introduce
-    // itself: whoever is looking at it chose it a second ago and is waiting
-    // for it, not reading it. A name and a tagline held for two seconds every
-    // single time is an advertisement aimed at the person who least needs
-    // one.
-    expect(find.byType(Text), findsNothing);
+    // The name earns its place on a launch screen. The sentence that used to
+    // sit under it did not: a strapline held for two seconds every single
+    // time is an advertisement aimed at the person who least needs one, since
+    // they chose the app a second ago and are waiting for it.
+    expect(find.text('OPENTV'), findsOneWidget);
+    expect(find.byType(Text), findsOneWidget);
   });
 
-  testWidgets('draws the mark', (tester) async {
+  testWidgets('draws the lamp beside the name', (tester) async {
     await show(tester);
 
-    // Not an empty screen dressed up as a splash: something is on it, and it
-    // is the tally lamp at the proportions the launcher icon uses.
-    final marks = find.byWidgetPredicate(
-      (widget) =>
-          widget is Container &&
-          widget.constraints?.maxHeight == 240 &&
-          widget.constraints?.maxWidth == 44,
+    // Not a wordmark on its own: the lamp is the mark, and its proportions
+    // come from the generator that draws the wordmark file rather than from
+    // an eyeballed pair of numbers.
+    final lamp = find.byWidgetPredicate(
+      (widget) => widget is Container && widget.constraints != null,
     );
-    expect(marks, findsOneWidget);
+    expect(lamp, findsWidgets);
+
+    final size = tester.getSize(lamp.first);
+    expect(size.height / size.width, closeTo(1.16 / 0.20, 0.01));
   });
 }

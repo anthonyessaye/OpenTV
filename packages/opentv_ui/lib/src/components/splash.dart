@@ -18,6 +18,14 @@ import '../tokens/tokens.dart';
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
+  /// The lockup's proportions, taken from the generator that draws the
+  /// wordmark asset rather than chosen by eye — so the splash and the file
+  /// on disk are the same composition at different sizes.
+  static const _cap = 72.0;
+  static const _lampWidth = _cap * 0.20;
+  static const _lampHeight = _cap * 1.16;
+  static const _gap = _cap * 0.52;
+
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
@@ -45,16 +53,23 @@ class _SplashScreenState extends State<SplashScreen>
     return Container(
       color: OpenTvColors.ground,
       alignment: Alignment.center,
-      // The mark alone: no name, no line under it.
+      // The lockup: the lamp and the name, and nothing under them.
       //
-      // A launch screen is the one place an app does not have to introduce
-      // itself. Whoever is looking at it chose this app a second ago and is
-      // waiting for it, not reading it — and a name and a tagline held for
-      // two seconds every single time is an advertisement aimed at the person
-      // who least needs one.
+      // A launch screen does not need to explain the app — whoever is looking
+      // at it chose it a second ago and is waiting for it, not reading it. A
+      // strapline held for two seconds every single time is an advertisement
+      // aimed at the person who least needs one. The name earns its place;
+      // the sentence beneath it did not.
       child: FadeTransition(
         opacity: fade,
-        child: _Lamp(controller: _controller),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Lamp(controller: _controller),
+            const SizedBox(width: SplashScreen._gap),
+            const Text('OPENTV', style: OpenTvType.hero),
+          ],
+        ),
       ),
     );
   }
@@ -73,23 +88,20 @@ class _Lamp extends StatelessWidget {
       builder: (context, _) {
         final on = Curves.easeOutCubic.transform(controller.value);
         return Container(
-          // The proportions the generated mark is drawn at — a bar roughly
-          // five and a half times taller than it is wide — so the splash and
-          // the launcher icon are recognisably the same object.
-          width: 44,
-          height: 240,
+          width: SplashScreen._lampWidth,
+          height: SplashScreen._lampHeight,
           decoration: BoxDecoration(
             color: Color.lerp(
               OpenTvColors.tallyDim,
               OpenTvColors.tally,
               on,
             ),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(3),
             boxShadow: [
               BoxShadow(
                 color: OpenTvColors.tally.withValues(alpha: 0.55 * on),
-                blurRadius: 90 * on,
-                spreadRadius: 10 * on,
+                blurRadius: 44 * on,
+                spreadRadius: 5 * on,
               ),
             ],
           ),
