@@ -21,6 +21,10 @@ class PlayerScreen extends StatefulWidget {
     this.startAt,
     this.streamOptions = const {},
     this.isLive = true,
+    this.onProgress,
+    this.onEnded,
+    this.nextLabel,
+    this.onNext,
     this.channelName,
     this.channelNumber,
     this.nowTitle,
@@ -37,6 +41,22 @@ class PlayerScreen extends StatefulWidget {
   /// Stated by the caller, which read it from the catalogue. See the note on
   /// PlaybackStatus.isLive for why the engine cannot be asked.
   final bool isLive;
+
+  /// Reports where playback has got to, so it can be written down.
+  ///
+  /// Called while playing and once on leaving. Without it the catalogue
+  /// records only that something was opened, never how far it got — which is
+  /// why a half-watched film offered PLAY rather than RESUME however many
+  /// times it had been started.
+  final void Function(Duration position, Duration? duration)? onProgress;
+
+  /// Called once when the stream reaches its end.
+  final VoidCallback? onEnded;
+
+  /// What comes after this, when there is something. Shown on the end card
+  /// and on a transport button.
+  final String? nextLabel;
+  final VoidCallback? onNext;
 
   final String? channelName;
   final int? channelNumber;
@@ -146,8 +166,55 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _poll?.cancel();
     _idle?.cancel();
+    // The last thing recorded, and the one that matters most: a viewer who
+    // presses back at forty minutes expects to be offered forty minutes, not
+    // wherever the last periodic write happened to land.
+    _flushProgress();
     _shell.dispose();
     super.dispose();
+  }
+
+  /// When progress was last written down.
+  DateTime? _lastReport;
+
+  /// Whether the end has already been announced, so it is announced once.
+  bool _endNoticed = false;
+
+  /// Records where playback has got to, occasionally.
+  ///
+  /// Every ten seconds rather than every poll: the poll runs twice a second,
+  /// and a database write at that rate for the length of a film is a lot of
+  /// work to answer a question asked once.
+  void _reportProgress(PlaybackStatus status) {
+    if (widget.onProgress == null || status.isLive) return;
+    if (status.position <= Duration.zero) return;
+
+    final now = DateTime.now();
+    final last = _lastReport;
+    if (last != null && now.difference(last) < const Duration(seconds: 10)) {
+      return;
+    }
+    _lastReport = now;
+    widget.onProgress!(status.position, status.duration);
+  }
+
+  /// Writes the final position without waiting for the interval.
+  void _flushProgress() {
+    final status = _status;
+    if (widget.onProgress == null || status.isLive) return;
+    if (status.position <= Duration.zero) return;
+    widget.onProgress!(status.position, status.duration);
+  }
+
+  /// Notices the end of a stream, once.
+  void _noticeEnding(PlaybackStatus status) {
+    if (status.phase != PlaybackPhase.ended || _endNoticed) return;
+    _endNoticed = true;
+    _flushProgress();
+    widget.onEnded?.call();
+    // The controls come up with the end card, so whatever is offered there
+    // can be reached.
+    _showChrome();
   }
 
   void _restartIdleTimer() {
@@ -254,11 +321,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _poll = Timer.periodic(const Duration(milliseconds: 500), (_) async {
       final raw = await _channel?.invokeMapMethod<String, Object?>('state');
       if (raw == null || !mounted) return;
+      final status = _toStatus(raw);
       setState(() {
-        _status = _toStatus(raw);
+        _status = status;
         _dynamicRange = raw['dynamicRange'] as String?;
         _videoCodec = raw['videoCodec'] as String?;
       });
+      _reportProgress(status);
+      _noticeEnding(status);
     });
   }
 
@@ -474,6 +544,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
             key: ValueKey(_resetFocus),
             visible: _chromeVisible,
                 onAspect: () => setState(() => _sheet = _Sheet.aspect),
+                nextLabel: widget.nextLabel,
+                onNext: widget.onNext,
                 onSeek: (position) => _channel?.invokeMethod<void>('seek', {
                   'positionMs': position.inMilliseconds,
                 }),
@@ -486,6 +558,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 videoCodec: _videoCodec,
               ),
               if (_sheet != null) _chooser(),
+              if (_status.phase == PlaybackPhase.ended &&
+                  widget.onNext != null &&
+                  _sheet == null)
+                _EndCard(
+                  nextLabel: widget.nextLabel ?? 'the next episode',
+                  onNext: widget.onNext!,
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
             ],
           ),
         ),
@@ -496,3 +576,65 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
 /// Which chooser is open over the video.
 enum _Sheet { audio, subtitles, aspect }
+
+/// What is offered when an episode finishes.
+///
+/// Drawn over the last frame rather than replacing it, because an episode's
+/// closing shot is often the reason a viewer wants the next one. There is no
+/// countdown: a television that starts the next episode on its own has
+/// decided something the viewer did not, and the one time that is wrong it is
+/// wrong for the rest of the evening.
+class _EndCard extends StatelessWidget {
+  const _EndCard({
+    required this.nextLabel,
+    required this.onNext,
+    required this.onBack,
+  });
+
+  final String nextLabel;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: OpenTvColors.ground.withValues(alpha: 0.82),
+      child: Padding(
+        padding: OpenTvSpace.safe,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'THAT IS THE END OF THIS ONE',
+              style: OpenTvType.label.copyWith(color: OpenTvColors.tally),
+            ),
+            const SizedBox(height: OpenTvSpace.xs),
+            SizedBox(
+              width: 1200,
+              child: Text(
+                nextLabel,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: OpenTvType.hero,
+              ),
+            ),
+            const SizedBox(height: OpenTvSpace.lg),
+            Row(
+              children: [
+                PlayerButton(
+                  label: 'PLAY NEXT',
+                  emphasis: true,
+                  autofocus: true,
+                  onSelect: onNext,
+                ),
+                const SizedBox(width: OpenTvSpace.sm),
+                PlayerButton(label: 'BACK TO THE SERIES', onSelect: onBack),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -30,7 +30,12 @@ class SeriesScreen extends StatefulWidget {
   final StreamResolver resolver;
 
   /// Hands a chosen episode back to whoever owns navigation.
-  final void Function(Playable) onPlay;
+  /// Called with the chosen episode and the season in the order it is drawn.
+  ///
+  /// The order matters and only this screen has it: "the next episode" cannot
+  /// be reconstructed from season and episode numbers, which providers fill
+  /// in inconsistently and sometimes not at all.
+  final void Function(Playable, List<Playable>) onPlay;
 
   final Host host;
 
@@ -85,11 +90,26 @@ class _SeriesScreenState extends State<SeriesScreen> {
     };
     if (!mounted) return;
 
+    // Opens on the season the viewer was last in, rather than on the first.
+    // Somebody four seasons deep does not want to be put back at the start
+    // every time they come to carry on.
+    final lastWatched = episodes
+        .where((row) => progress.containsKey(row.remoteId))
+        .fold<Episode?>(null, (latest, row) {
+          final at = progress[row.remoteId]!.lastWatchedUtc;
+          final best = latest == null
+              ? null
+              : progress[latest.remoteId]!.lastWatchedUtc;
+          return best == null || at.isAfter(best) ? row : latest;
+        });
+
     setState(() {
       _progress = progress;
       _episodes = episodes;
       _seasons = seasons;
-      _season = seasons.isEmpty ? null : seasons.first;
+      _season = seasons.isEmpty
+          ? null
+          : (lastWatched?.season ?? seasons.first);
       _loading = false;
     });
   }
@@ -281,8 +301,13 @@ class _SeriesScreenState extends State<SeriesScreen> {
                           watched: state?.completed ?? false,
                           progress: _fractionOf(episode, state),
                           autofocus: _seasons.length == 1 && index == 0,
-                          onSelect: () =>
-                              widget.onPlay(Playable.episode(episode)),
+                          onSelect: () => widget.onPlay(
+                            Playable.episode(episode),
+                            [
+                              for (final row in inSeason)
+                                Playable.episode(row),
+                            ],
+                          ),
                         );
                       },
                     ),

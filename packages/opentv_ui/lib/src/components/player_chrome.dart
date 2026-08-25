@@ -114,6 +114,8 @@ class PlayerChrome extends StatefulWidget {
     this.onAspect,
     this.onSeek,
     this.onActivity,
+    this.nextLabel,
+    this.onNext,
     this.dynamicRange,
     this.videoCodec,
   });
@@ -148,6 +150,15 @@ class PlayerChrome extends StatefulWidget {
   /// Called when the viewer is working the controls, so the chrome does not
   /// fade out mid-scrub.
   final VoidCallback? onActivity;
+
+  /// What follows this — the next episode, named. Null when nothing does.
+  ///
+  /// A film has no next, and a live channel's next is a different channel,
+  /// which the transport already offers under its own glyph. This is for a
+  /// series, where "the next one" is the single most likely thing a viewer
+  /// wants when an episode finishes.
+  final String? nextLabel;
+  final VoidCallback? onNext;
 
   /// `HDR10`, `HLG`, or null for ordinary SDR.
   ///
@@ -363,6 +374,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
                       skipTraversal: true,
                       child: _Controls(
                         status: status,
+                        nextLabel: widget.nextLabel,
+                        onNext: widget.onNext,
                         onPlayPause: onPlayPause,
                         onPreviousChannel: onPreviousChannel,
                         onNextChannel: onNextChannel,
@@ -734,6 +747,8 @@ class _ProgressLineState extends State<_ProgressLine> {
 class _Controls extends StatelessWidget {
   const _Controls({
     required this.status,
+    this.nextLabel,
+    this.onNext,
     this.onPlayPause,
     this.onPreviousChannel,
     this.onNextChannel,
@@ -745,6 +760,12 @@ class _Controls extends StatelessWidget {
   });
 
   final PlaybackStatus status;
+
+  /// The following episode, named on the button so a viewer knows what they
+  /// are agreeing to before they press it.
+  final String? nextLabel;
+  final VoidCallback? onNext;
+
   final VoidCallback? onPlayPause;
   final VoidCallback? onPreviousChannel;
   final VoidCallback? onNextChannel;
@@ -814,6 +835,8 @@ class _Controls extends StatelessWidget {
             PlayerButton(label: 'AUDIO', onSelect: onAudioTracks),
           if (status.subtitleTrackCount > 0)
             PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
+          if (onNext != null)
+            PlayerButton(label: 'NEXT EPISODE', onSelect: onNext),
           if (onAspect != null)
             PlayerButton(label: 'PICTURE', onSelect: onAspect),
           if (onToggleFavourite != null)

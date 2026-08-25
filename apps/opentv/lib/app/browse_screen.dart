@@ -493,7 +493,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
             source: widget.source,
             series: entry,
             resolver: widget.resolver,
-            onPlay: (episode) => _play(episode),
+            onPlay: (episode, queue) => _play(episode, queue: queue),
           ),
         ),
       );
@@ -552,7 +552,29 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// cannot end up with a different set of controls depending on how it was
   /// reached. Zapping used to build its own and quietly lost the favourite
   /// button.
-  Future<void> _play(Playable playable, {Duration? startAt}) async {
+  /// What follows what, for a series being watched in order.
+  ///
+  /// Held while a season's player is open rather than looked up each time:
+  /// the series screen already has the list in the order it drew it, and
+  /// asking the database to work out "the next one" would have to reinvent
+  /// that order from season and episode numbers a provider fills in
+  /// inconsistently.
+  List<Playable> _queue = const [];
+
+  Future<void> _play(
+    Playable playable, {
+    Duration? startAt,
+    List<Playable> queue = const [],
+  }) async {
+    _queue = queue;
+
+    // A null startAt means "wherever this got to", which is what everything
+    // except the film screen passes — that screen asks the viewer first and
+    // sends an explicit zero when they choose to start again. Without this an
+    // episode always began at the beginning however far through it was, which
+    // is the same gap the position column had.
+    startAt ??= await _resumePointFor(playable);
+    if (!mounted) return;
     final url = await widget.resolver.urlFor(widget.source, playable);
     if (!mounted) return;
 
@@ -587,6 +609,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
     );
     if (!mounted) return;
 
+    final next = _after(playable);
+
     final route = _fade(
       (context) => _PlayerRoute(
         db: widget.db,
@@ -596,6 +620,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
         startAt: startAt,
         options: widget.resolver.optionsFor(playable),
         onZap: (step) => _zapTo(playable, step),
+        next: next,
+        onNext: next == null ? null : () => _playNext(next),
       ),
     );
 
@@ -604,6 +630,49 @@ class _BrowseScreenState extends State<BrowseScreen> {
     } else {
       await navigator.push(route);
     }
+  }
+
+  /// Where something half-watched should pick up, or null.
+  ///
+  /// Under a minute counts as not started: someone who opened the wrong thing
+  /// and backed out should be offered it fresh rather than dropped forty
+  /// seconds in. Something finished is offered from the start too, rather
+  /// than at its own credits.
+  Future<Duration?> _resumePointFor(Playable playable) async {
+    if (playable.isLive) return null;
+
+    final state = await widget.db.playbackStateFor(
+      sourceId: widget.source.id,
+      kind: playable.itemKind,
+      remoteId: playable.remoteId,
+    );
+    if (state == null || state.completed) return null;
+
+    final ms = state.positionMs ?? 0;
+    if (ms < const Duration(minutes: 1).inMilliseconds) return null;
+    return Duration(milliseconds: ms);
+  }
+
+  /// The episode after this one, or null at the end of the queue.
+  Playable? _after(Playable current) {
+    final at = _queue.indexWhere((item) => item.remoteId == current.remoteId);
+    if (at < 0 || at + 1 >= _queue.length) return null;
+    return _queue[at + 1];
+  }
+
+  /// Moves on to the next episode in place of this one.
+  ///
+  /// Replaces rather than stacks. Watching six episodes should not build a
+  /// back stack six deep that a viewer has to unwind one press at a time to
+  /// get back to the series.
+  Future<void> _playNext(Playable next) async {
+    final url = await widget.resolver.urlFor(widget.source, next);
+    if (!mounted || url == null) return;
+    // Half-watched episodes pick up where they were, even when reached by
+    // moving on from the one before.
+    final startAt = await _resumePointFor(next);
+    if (!mounted) return;
+    await _openPlayer(next, url, startAt: startAt, replace: true);
   }
 
   /// Moves to a neighbouring channel, or does nothing when there is no list.
@@ -1033,6 +1102,8 @@ class _PlayerRoute extends StatefulWidget {
     required this.options,
     required this.onZap,
     this.startAt,
+    this.next,
+    this.onNext,
   });
 
   final OpenTvDatabase db;
@@ -1046,6 +1117,13 @@ class _PlayerRoute extends StatefulWidget {
   final Future<void> Function(int) onZap;
 
   final Duration? startAt;
+
+  /// The episode that follows this one, when there is one.
+  ///
+  /// Held rather than looked up, so the player can name it on a button and
+  /// on the end card before the viewer commits to it.
+  final Playable? next;
+  final VoidCallback? onNext;
 
   @override
   State<_PlayerRoute> createState() => _PlayerRouteState();
@@ -1067,6 +1145,33 @@ class _PlayerRouteState extends State<_PlayerRoute> {
       remoteId: widget.playable.remoteId,
     );
     if (mounted) setState(() => _favourite = favourite);
+  }
+
+  /// Writes down where playback has got to.
+  ///
+  /// The reason a half-watched film can offer RESUME. Until this existed the
+  /// catalogue recorded only that something had been opened — never how far
+  /// it got — so every film offered PLAY however many times it had been
+  /// started, and the position column sat empty.
+  Future<void> _record(Duration position, Duration? duration) async {
+    // Near enough to the end is finished. Sitting through the credits is not
+    // required to have watched something, and a film that reappears in
+    // Continue with ninety seconds left is nagging rather than helping.
+    final done =
+        duration != null &&
+        duration > Duration.zero &&
+        position >= duration - const Duration(seconds: 90);
+
+    await widget.db.recordPlayback(
+      sourceId: widget.sourceId,
+      kind: widget.playable.itemKind,
+      remoteId: widget.playable.remoteId,
+      at: DateTime.now(),
+      positionMs: position.inMilliseconds,
+      durationMs: duration?.inMilliseconds,
+      completed: done,
+      parentRemoteId: widget.playable.parentRemoteId,
+    );
   }
 
   Future<void> _toggle() async {
@@ -1100,10 +1205,13 @@ class _PlayerRouteState extends State<_PlayerRoute> {
       startAt: widget.startAt,
       isFavourite: _favourite,
       onToggleFavourite: _toggle,
+      onProgress: _record,
       // Only live channels have neighbours. A film has no next channel, and
       // offering one would be a button that lies.
       onPreviousChannel: live ? () => widget.onZap(-1) : null,
       onNextChannel: live ? () => widget.onZap(1) : null,
+      nextLabel: widget.next?.title,
+      onNext: widget.next == null ? null : widget.onNext,
     );
   }
 }

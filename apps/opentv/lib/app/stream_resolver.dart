@@ -154,10 +154,12 @@ class Playable {
     this.directUrl,
     this.isLive = false,
     this.number,
+    this.parentRemoteId,
   });
 
   Playable.channel(Channel row)
-    : kind = XtreamStreamKind.live,
+    : parentRemoteId = null,
+      kind = XtreamStreamKind.live,
       remoteId = row.remoteId,
       title = row.name,
       // Live has no container in the catalogue; the portal serves MPEG-TS
@@ -169,7 +171,8 @@ class Playable {
       number = row.number;
 
   Playable.movie(Movie row)
-    : kind = XtreamStreamKind.movie,
+    : parentRemoteId = null,
+      kind = XtreamStreamKind.movie,
       remoteId = row.remoteId,
       title = row.name,
       containerExtension = row.containerExtension,
@@ -181,7 +184,8 @@ class Playable {
   /// An episode, which Xtream serves from the `series` path keyed on the
   /// episode's own id rather than the series'.
   Playable.episode(Episode row)
-    : kind = XtreamStreamKind.series,
+    : parentRemoteId = row.seriesRemoteId,
+      kind = XtreamStreamKind.series,
       remoteId = row.remoteId,
       title = row.title,
       containerExtension = row.containerExtension,
@@ -196,6 +200,13 @@ class Playable {
   final String? containerExtension;
   final String? streamOptions;
   final String? directUrl;
+
+  /// The series an episode belongs to, for anything that groups by it.
+  ///
+  /// Null for everything else. Continue watching uses it so a half-finished
+  /// episode can be traced back to its series rather than floating on its own
+  /// with a title like "Episode 4".
+  final String? parentRemoteId;
 
   /// Stated by the catalogue rather than inferred from a duration: a live HLS
   /// stream reports the length of its DVR window, which reads as an ordinary
