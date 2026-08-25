@@ -168,7 +168,36 @@ for Android and `bin/flutter-tvos` for Apple TV. See
 
 ```bash
 flutter build apk --release
-flutter test                 # in each package
+flutter build appbundle --release    # for Google Play
+flutter test                         # in each package
+```
+
+### Signing a release
+
+Without an upload key, release builds fall back to the debug key so that
+`flutter run --release` still works — and the build says so. Google Play
+refuses a debug-signed bundle, so that fallback is for local use only.
+
+To sign properly, put your keystore somewhere outside the repository and
+create `apps/opentv/android/key.properties`:
+
+```properties
+storeFile=/absolute/path/to/upload-keystore.jks
+storePassword=…
+keyAlias=upload
+keyPassword=…
+```
+
+That file and every `*.jks` and `*.keystore` are gitignored, and must stay
+that way: it carries the passwords to the key that signs everything you will
+ever publish. Losing it means never updating the app under the same listing
+again — back it up somewhere that is not this repository.
+
+If you have no key yet:
+
+```bash
+keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA \
+        -keysize 2048 -validity 10000 -alias upload
 ```
 
 Metadata needs a TMDB key, passed with `--dart-define=TMDB_KEY=…` or entered

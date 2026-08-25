@@ -1,3 +1,12 @@
+import java.util.Properties
+
+// Loaded before the android block so the signing config can ask whether an
+// upload key exists at all.
+val uploadProperties = Properties()
+val uploadKeystore: File? = rootProject.file("key.properties")
+    .takeIf { it.exists() }
+    ?.also { uploadProperties.load(it.inputStream()) }
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -29,11 +38,39 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // The upload key, when there is one.
+        //
+        // Read from android/key.properties, which is gitignored and must
+        // never be otherwise: it names a keystore and carries its passwords.
+        // Absent — which is the normal state for anyone who has just cloned
+        // this — the block simply does not exist and release builds fall back
+        // to the debug key below, so `flutter run --release` still works.
+        if (uploadKeystore != null) {
+            create("upload") {
+                storeFile = file(uploadProperties["storeFile"] as String)
+                storePassword = uploadProperties["storePassword"] as String
+                keyAlias = uploadProperties["keyAlias"] as String
+                keyPassword = uploadProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // A debug-signed release is not a mistake to leave silent: Google
+            // Play refuses the upload outright, and the failure arrives after
+            // a build, an upload and a wait rather than here.
+            signingConfig = if (uploadKeystore != null) {
+                signingConfigs.getByName("upload")
+            } else {
+                logger.warn(
+                    "OpenTV: no android/key.properties — signing this release " +
+                        "with the debug key. The result cannot be uploaded to " +
+                        "Google Play. See README."
+                )
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
