@@ -135,4 +135,33 @@ Endpoint = 192.0.2.1:51820
     await pending;
     expect(vpn.isAwaitingPermission, isFalse);
   });
+
+  test('asks for permission when told it may, and connects', () async {
+    hasPermission = false;
+    final vpn = service();
+    addTearDown(vpn.dispose);
+    await vpn.save(config);
+
+    // The setup path. Without this the dialog is never shown at all, so a
+    // tunnel configured during setup waits forever on a permission nothing
+    // ever offers to grant.
+    calls.clear();
+    hasPermission = true; // what the viewer taps in the dialog
+    expect(await vpn.connectIfConfigured(mayAsk: true), isTrue);
+
+    expect(calls, contains('prepare'));
+    expect(calls, contains('up'));
+  });
+
+  test('a refused dialog leaves the tunnel down rather than half up',
+      () async {
+    hasPermission = false;
+    final vpn = service();
+    addTearDown(vpn.dispose);
+    await vpn.save(config);
+
+    expect(await vpn.connectIfConfigured(mayAsk: true), isFalse);
+    expect(calls, isNot(contains('up')));
+    expect(vpn.state.value, VpnState.down);
+  });
 }

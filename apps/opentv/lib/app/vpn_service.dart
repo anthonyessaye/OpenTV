@@ -87,18 +87,30 @@ class VpnService {
   /// watch television on. The panel in settings is where the state is
   /// reported.
   ///
+  /// [mayAsk] allows the OS permission dialog to be shown.
+  ///
+  /// False on launch and on returning from the background: a television that
+  /// has just been turned on should not greet its viewer with a system prompt
+  /// they did not ask for, so the tunnel simply stays down until the
+  /// permission it needs already exists.
+  ///
+  /// True once — straight after a provider is registered, and after somebody
+  /// saves a configuration. Those are the moments a viewer is setting the
+  /// thing up and is expecting to be asked. Without that moment the dialog is
+  /// never shown at all, so a tunnel configured during setup sat there doing
+  /// nothing and the app never explained why.
+  ///
   /// Returns whether it connected.
-  Future<bool> connectIfConfigured() async {
+  Future<bool> connectIfConfigured({bool mayAsk = false}) async {
     if (!isSupported) return false;
     if (state.value != VpnState.down) return false;
 
     final text = await host.readSecret(configReference);
     if (text == null || text.isEmpty) return false;
 
-    // Permission is checked rather than requested. The one moment a viewer
-    // should be asked is when they set the tunnel up and are expecting it.
-    if (!await hasPermission()) return false;
+    if (!mayAsk && !await hasPermission()) return false;
 
+    // connect() asks for permission itself when it does not have it.
     return await connect() == null;
   }
 

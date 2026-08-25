@@ -946,6 +946,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // session.
       _tunnelDraft = '';
     });
+
+    // Straight on, rather than leaving a saved tunnel sitting there wanting
+    // one more press. Somebody who has just pasted a configuration wants it
+    // carrying traffic, and this is the moment the permission dialog is
+    // expected rather than a surprise.
+    await _connect();
   }
 
   Future<void> _connect() async {

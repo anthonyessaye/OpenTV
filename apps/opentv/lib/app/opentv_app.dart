@@ -214,6 +214,16 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       // rather than trying to watch something.
       _settingUp = sources.last;
     });
+
+    // And the tunnel comes up, asking for permission if it has to.
+    //
+    // This is the one moment that dialog belongs: somebody has just finished
+    // setting the television up and is standing in front of it. Every other
+    // path deliberately stays quiet, which meant a tunnel configured during
+    // setup was never connected and never explained itself — the permission
+    // it was waiting for could only be granted by a prompt nothing ever
+    // showed.
+    await _vpn.connectIfConfigured(mayAsk: true);
   }
 
   Future<void> _removeSource(Source source) async {

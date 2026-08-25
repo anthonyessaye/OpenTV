@@ -81,6 +81,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _chromeVisible = true;
   Timer? _idle;
 
+  /// Holds focus while the controls are hidden.
+  ///
+  /// Key events reach a handler by starting at whatever holds focus and
+  /// travelling up its ancestors. The controls are the only focusable things
+  /// in this screen, so when they are taken away focus is left with nothing
+  /// to sit on — and the handler below, which is what wakes them again, never
+  /// hears another press.
+  ///
+  /// That used to work by accident: the video surface was itself focusable,
+  /// so it caught the orphaned focus and the handler stayed in its ancestor
+  /// chain. Taking the picture out of the traversal — which it had to be,
+  /// since focus landing there was invisible and unescapable — removed the
+  /// accident and left a player that could not be woken at all.
+  ///
+  /// [skipTraversal] is what keeps this from being the same bug again: it can
+  /// hold focus when asked, and no arrow press can ever move focus onto it.
+  final _shell = FocusNode(debugLabel: 'player', skipTraversal: true);
+
   /// Flipped whenever the chrome hides, to rebuild the transport with its
   /// default control focused again.
   bool _resetFocus = false;
@@ -118,6 +136,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _poll?.cancel();
     _idle?.cancel();
+    _shell.dispose();
     super.dispose();
   }
 
@@ -135,6 +154,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         // which is what the next press almost always wants.
         _resetFocus = !_resetFocus;
       });
+      // Caught here rather than left to fall where it may, so the next press
+      // has somewhere to arrive from.
+      _shell.requestFocus();
     });
   }
 
@@ -379,15 +401,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
         Navigator.of(context).pop();
       },
       child: Focus(
+        focusNode: _shell,
         // Deliberately not autofocusing.
         //
-        // This node exists to watch keys, not to hold focus — it says so on
-        // the next line — and asking a node that cannot take focus to take it
-        // on arrival is at best meaningless. At worst it claims the scope's
-        // autofocus and the transport's own first button never gets it, which
-        // leaves a player nothing on screen is highlighted in and no press
-        // can reach.
-        canRequestFocus: false,
+        // On arrival the transport's own first button should take focus, not
+        // this. Asking for it here claimed the scope's autofocus and left a
+        // player with nothing highlighted and no press able to reach a
+        // control.
         skipTraversal: true,
         onKeyEvent: _onKey,
         child: Container(
