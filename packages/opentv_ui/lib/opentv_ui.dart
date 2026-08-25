@@ -17,6 +17,7 @@ export 'src/components/player_chrome.dart';
 export 'src/components/player_contract.dart';
 export 'src/components/player_surface.dart';
 export 'src/components/showcase_banner.dart';
+export 'src/components/splash.dart';
 export 'src/components/text_entry.dart';
 export 'src/components/track_sheet.dart';
 export 'src/components/tv_keyboard.dart';

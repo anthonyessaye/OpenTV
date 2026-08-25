@@ -109,11 +109,25 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   /// the background.
   bool _usingPhone = false;
 
+  /// Held until the splash has had its beat, whatever the app is ready to
+  /// show underneath.
+  ///
+  /// A minimum rather than a delay: opening the database and reading the
+  /// catalogue often takes longer than this, in which case nothing is spent
+  /// waiting. What it buys is a start that always looks the same — a splash
+  /// that flashes for eighty milliseconds on one boot and sits for two
+  /// seconds on the next reads as a fault rather than as the app opening.
+  static const _splashFor = Duration(seconds: 2);
+  bool _splashDone = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _open();
+    Future<void>.delayed(_splashFor, () {
+      if (mounted) setState(() => _splashDone = true);
+    });
     // On launch, if there is a tunnel and permission was granted when it was
     // set up, it comes up on its own. A tunnel somebody configured and then
     // has to switch on by hand every time is one they will forget to switch
@@ -285,6 +299,10 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   }
 
   Widget _content() {
+    // Before anything else, including the failure below: a television that
+    // cannot open its own store should still look like it started.
+    if (!_splashDone) return const SplashScreen();
+
     if (_failure != null) {
       return Container(
         color: OpenTvColors.ground,

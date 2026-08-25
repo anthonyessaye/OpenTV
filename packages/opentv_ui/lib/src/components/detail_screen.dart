@@ -502,11 +502,17 @@ class EpisodeTile extends StatelessWidget {
   static const _stillHeight = 118.0;
   static const _stillWidth = _stillHeight * 16 / 9;
 
-  /// Height this tile lays out at, not counting its focus ring.
+  /// The height a row must give this tile, focus ring included.
+  ///
+  /// The ring is counted because a horizontal row constrains its children's
+  /// height tightly: a tile whose ring does not fit is not overhanging, it is
+  /// squeezed, and the picture inside it loses six pixels the moment it takes
+  /// focus. Width is the opposite case — there the ring overhangs into the
+  /// gap between tiles, which is what that gap is for.
   ///
   /// Measured rather than reasoned about: `episode_tile_test.dart` builds one
-  /// and fails if this and the real height disagree.
-  static const preferredHeight = 118.0;
+  /// on its own and one inside a row, and fails if either disagrees.
+  static const preferredHeight = _stillHeight + OpenTvFocusStyle.ringWidth * 2;
 
   @override
   Widget build(BuildContext context) {
@@ -518,7 +524,7 @@ class EpisodeTile extends StatelessWidget {
       scaleOnFocus: 1.03,
       child: SizedBox(
         width: preferredWidth,
-        height: preferredHeight,
+        height: _stillHeight,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

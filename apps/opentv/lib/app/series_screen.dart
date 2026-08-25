@@ -107,9 +107,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
       _progress = progress;
       _episodes = episodes;
       _seasons = seasons;
-      _season = seasons.isEmpty
-          ? null
-          : (lastWatched?.season ?? seasons.first);
+      _season = seasons.isEmpty ? null : (lastWatched?.season ?? seasons.first);
       _loading = false;
     });
   }
@@ -123,7 +121,8 @@ class _SeriesScreenState extends State<SeriesScreen> {
     if (password == null) {
       if (mounted) {
         setState(() {
-          _problem = 'The account password could not be read back, so the '
+          _problem =
+              'The account password could not be read back, so the '
               'episode list cannot be fetched.';
         });
       }
@@ -162,8 +161,11 @@ class _SeriesScreenState extends State<SeriesScreen> {
       );
     } on TransportException catch (error) {
       if (mounted) {
-        setState(() => _problem = 'The episode list could not be fetched. '
-            '${error.message}');
+        setState(
+          () => _problem =
+              'The episode list could not be fetched. '
+              '${error.message}',
+        );
       }
       return null;
     } on FatalSyncException catch (error) {
@@ -263,54 +265,65 @@ class _SeriesScreenState extends State<SeriesScreen> {
               ),
               const SizedBox(height: OpenTvSpace.md),
             ],
+            // Aligned inside the Expanded rather than filling it.
+            //
+            // Expanded hands its child a tight height, and a tight height is
+            // not a suggestion: the row's own SizedBox cannot be shorter than
+            // it, the tiles inherit the same tight constraint through the
+            // list's cross axis, and every card is stretched to whatever is
+            // left of the screen. It only shows on the focused one, because
+            // that is the only card that paints a background — which is why
+            // this survived a test that measured a tile on its own and a
+            // constant that says the right number.
             Expanded(
-              child: inSeason.isEmpty
-                  ? const Text(
-                      'No episodes listed for this series.',
-                      style: OpenTvType.bodyMuted,
-                    )
-                  : FocusRow(
-                      height: EpisodeTile.preferredHeight,
-                      itemExtent: EpisodeTile.preferredWidth,
-                      // Tighter than the default. These cards carry a picture,
-                      // so the row is tall before any headroom is added, and
-                      // the generous default put a single shelf of episodes
-                      // over a third of the way up the screen.
-                      focusHeadroom: 18,
-                      // Room at both ends for the focus ring, which grows the
-                      // tile and casts a glow past its own bounds. With zero
-                      // padding the viewport clipped exactly that overhang,
-                      // so the first and last cards showed a highlight with
-                      // one side sliced off — the one cue that has to be
-                      // trustworthy, since it is how a viewer knows what a
-                      // press will do.
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: inSeason.length,
-                      itemBuilder: (context, index) {
-                        final episode = inSeason[index];
-                        final state = _progress[episode.remoteId];
-                        return EpisodeTile(
-                          title: episode.title,
-                          season: episode.season ?? 1,
-                          episodeNumber: episode.episodeNumber ?? index + 1,
-                          synopsis: episode.plot,
-                          imageUrl: episode.iconUrl,
-                          duration: episode.durationSeconds == null
-                              ? null
-                              : Duration(seconds: episode.durationSeconds!),
-                          watched: state?.completed ?? false,
-                          progress: _fractionOf(episode, state),
-                          autofocus: _seasons.length == 1 && index == 0,
-                          onSelect: () => widget.onPlay(
-                            Playable.episode(episode),
-                            [
-                              for (final row in inSeason)
-                                Playable.episode(row),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: inSeason.isEmpty
+                    ? const Text(
+                        'No episodes listed for this series.',
+                        style: OpenTvType.bodyMuted,
+                      )
+                    : FocusRow(
+                        height: EpisodeTile.preferredHeight,
+                        itemExtent: EpisodeTile.preferredWidth,
+                        // Tighter than the default. These cards carry a picture,
+                        // so the row is tall before any headroom is added, and
+                        // the generous default put a single shelf of episodes
+                        // over a third of the way up the screen.
+                        focusHeadroom: 18,
+                        // Room at both ends for the focus ring, which grows the
+                        // tile and casts a glow past its own bounds. With zero
+                        // padding the viewport clipped exactly that overhang,
+                        // so the first and last cards showed a highlight with
+                        // one side sliced off — the one cue that has to be
+                        // trustworthy, since it is how a viewer knows what a
+                        // press will do.
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: inSeason.length,
+                        itemBuilder: (context, index) {
+                          final episode = inSeason[index];
+                          final state = _progress[episode.remoteId];
+                          return EpisodeTile(
+                            title: episode.title,
+                            season: episode.season ?? 1,
+                            episodeNumber: episode.episodeNumber ?? index + 1,
+                            synopsis: episode.plot,
+                            imageUrl: episode.iconUrl,
+                            duration: episode.durationSeconds == null
+                                ? null
+                                : Duration(seconds: episode.durationSeconds!),
+                            watched: state?.completed ?? false,
+                            progress: _fractionOf(episode, state),
+                            autofocus: _seasons.length == 1 && index == 0,
+                            onSelect: () =>
+                                widget.onPlay(Playable.episode(episode), [
+                                  for (final row in inSeason)
+                                    Playable.episode(row),
+                                ]),
+                          );
+                        },
+                      ),
+              ),
             ),
           ],
         ),
