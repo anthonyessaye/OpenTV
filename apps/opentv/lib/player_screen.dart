@@ -109,13 +109,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// What a remote's centre button sends. tvOS uses `select`, which is
   /// distinct from enter and is the one a real Siri Remote produces.
-  static final _selectKeys = <LogicalKeyboardKey>{
-    LogicalKeyboardKey.select,
-    LogicalKeyboardKey.enter,
-    LogicalKeyboardKey.numpadEnter,
-    LogicalKeyboardKey.space,
+  /// Keys that mean "play or pause" on their own, without the controls
+  /// needing to be on screen first.
+  ///
+  /// Only the dedicated transport keys. Select is deliberately not among
+  /// them: on a television, pressing OK on a playing picture is how a viewer
+  /// asks to see the controls, and it is what every other app on the device
+  /// does. Treating it as a hidden pause shortcut meant the most obvious
+  /// button on the remote appeared to do nothing — it paused a stream the
+  /// viewer could not see was paused, because the thing that would have said
+  /// so is the overlay it declined to show.
+  ///
+  /// Not `const`: [LogicalKeyboardKey] overrides `==`, so a constant set of
+  /// them is rejected.
+  static final _transportKeys = <LogicalKeyboardKey>{
     LogicalKeyboardKey.mediaPlayPause,
-    LogicalKeyboardKey.gameButtonA,
+    LogicalKeyboardKey.mediaPlay,
+    LogicalKeyboardKey.mediaPause,
   };
   List<MediaTrack> _tracks = const [];
   AspectMode _aspect = AspectMode.fit;
@@ -175,25 +185,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // controls forever and never left the player.
     if (BackKeys.handles(event)) return KeyEventResult.ignored;
 
-    if (!_chromeVisible) {
-      // With nothing on screen, select means the thing a remote's centre
-      // button means on every other television: pause. Waking a hidden
-      // transport just to move a highlight to a button and press it again is
-      // three presses for the most common action there is.
-      if (_selectKeys.contains(event.logicalKey)) {
-        final paused = _status.phase == PlaybackPhase.paused;
-        _channel?.invokeMethod<void>(paused ? 'play' : 'pause');
-        // Pausing shows the controls; resuming leaves the picture clear.
-        if (!paused) _showChrome();
-        return KeyEventResult.handled;
-      }
+    // A remote's dedicated play key does its job wherever it is pressed. The
+    // controls come up with it so the viewer can see what it did.
+    if (_transportKeys.contains(event.logicalKey)) {
+      _togglePlayback();
+      _showChrome();
+      _restartIdleTimer();
+      return KeyEventResult.handled;
+    }
 
+    if (!_chromeVisible) {
+      // Every other key, select included, means "show me the controls". The
+      // press is consumed rather than passed on, so the first one moves no
+      // highlight the viewer cannot yet see.
       _showChrome();
       return KeyEventResult.handled;
     }
 
     _restartIdleTimer();
     return KeyEventResult.ignored;
+  }
+
+  /// 'pause', not 'stop'. Stopping tears the stream down, so the pause button
+  /// would end playback and the play button then have nothing to resume — on
+  /// a live channel that means reconnecting, which on a provider allowing one
+  /// connection can fail outright.
+  void _togglePlayback() {
+    final paused = _status.phase == PlaybackPhase.paused;
+    _channel?.invokeMethod<void>(paused ? 'play' : 'pause');
   }
 
   /// Brings the controls back.
@@ -443,13 +462,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               PlayerChrome(
                 status: _status,
                 now: DateTime.now(),
-                // 'pause', not 'stop'. Stopping tears the stream down, so the
-                // pause button was ending playback and the play button then had
-                // nothing to resume — on a live channel that means reconnecting,
-                // which on a provider allowing one connection can fail outright.
-                onPlayPause: () => _channel?.invokeMethod<void>(
-                  _status.phase == PlaybackPhase.paused ? 'play' : 'pause',
-                ),
+                onPlayPause: _togglePlayback,
                 onToggleFavourite: widget.onToggleFavourite,
                 isFavourite: widget.isFavourite,
                 onPreviousChannel: _zap(widget.onPreviousChannel),

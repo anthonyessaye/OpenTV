@@ -148,4 +148,30 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
   });
+
+  testWidgets('OK shows the controls rather than pausing behind them', (
+    tester,
+  ) async {
+    await show(tester);
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pump();
+    expect(find.text('PICTURE'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pump();
+    await tester.pump();
+
+    // The most obvious button on a remote used to be a hidden pause
+    // shortcut: it paused a stream the viewer could not see was paused,
+    // because the thing that would have said so is the overlay it declined
+    // to show. On a television, OK on a playing picture means "show me the
+    // controls", and every other app on the device agrees.
+    expect(
+      find.text('PICTURE'),
+      findsOneWidget,
+      reason: 'OK should bring the controls up',
+    );
+
+    debugDefaultTargetPlatformOverride = null;
+  });
 }
