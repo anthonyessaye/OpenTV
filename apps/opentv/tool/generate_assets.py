@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 # --- the palette, taken from OpenTvColors -----------------------------------
 
@@ -43,11 +43,15 @@ GROUND = (7, 9, 12, 255)
 SURFACE = (16, 20, 26, 255)
 RULE = (30, 37, 48, 255)
 INK = (238, 242, 247, 255)
+INK_MUTED = (154, 166, 182, 255)
 TALLY = (255, 176, 32, 255)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.dirname(HERE)
 OUT = os.path.join(APP, "assets", "brand")
+# The store's own artwork is not shipped inside the app, so it lands in
+# docs beside the listing copy it is submitted with.
+STORE = os.path.join(os.path.dirname(os.path.dirname(APP)), "docs", "store")
 
 
 # --- letterforms ------------------------------------------------------------
@@ -291,6 +295,104 @@ def splash(size):
     return img
 
 
+# --- adaptive and store compositions ----------------------------------------
+
+# Android composes an adaptive icon from two layers on a 108dp canvas and then
+# masks it to whatever shape the launcher wants — circle, squircle, teardrop.
+# Only the middle 72dp survives every mask, so anything outside that ratio is
+# drawn on the understanding that it may be cut.
+SAFE = 72 / 108
+
+
+def adaptive_foreground(size, glow=True, colour=TALLY):
+    """The lamp alone, sized to survive any launcher's mask.
+
+    Without this pair Android has only the legacy square to work with, and it
+    shims it onto a white plate before masking — which turns a black tile with
+    an amber bar into a pale blob with the corners cut off.
+
+    Sized against the safe zone rather than against the canvas. Carrying the
+    legacy tile's proportion over directly makes the bar a third of the
+    canvas, which is the right ratio of the wrong thing: a mask hides only the
+    corners, so almost the whole canvas is still on screen and the lamp
+    arrives looking lost in it. Filling most of the safe zone reads at the
+    48dp a launcher actually draws.
+    """
+    w, h = size
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    bar_h = round(h * SAFE * 0.72)
+    bar_w = max(4, round(bar_h * 0.185))
+    top = (h - bar_h) / 2
+    if glow:
+        draw_lamp(img, w / 2, top, bar_w, bar_h)
+    else:
+        # Themed icons are re-tinted by the launcher as a single flat colour,
+        # and a glow tinted grey reads as a smudge rather than as light.
+        ImageDraw.Draw(img).rectangle(
+            [w / 2 - bar_w / 2, top, w / 2 + bar_w / 2, top + bar_h], fill=colour
+        )
+    return img
+
+
+def play_icon(size=(512, 512)):
+    """The store icon.
+
+    No bezel. The bezel exists to give the mark an edge against a television's
+    own background; a store card already sits on a surface and draws its own
+    rounded corners over ours, which clips the stroke into four short arcs.
+    """
+    w, h = size
+    img = ground(size)
+    bar_h = round(h * 0.46)
+    draw_lamp(img, w / 2, (h - bar_h) / 2, max(6, round(w * 0.085)), bar_h)
+    # Flattened: Play accepts alpha and then composites it against an unknown
+    # colour, so a transparent pixel is a pixel whose colour is not ours.
+    return img.convert("RGB")
+
+
+def _tracked(d, text, font, cx, y, colour, tracking):
+    """Centred text with letter-spacing, which PIL will not do on its own."""
+    widths = [d.textlength(ch, font=font) for ch in text]
+    total = sum(widths) + tracking * (len(text) - 1)
+    x = cx - total / 2
+    for ch, cw in zip(text, widths):
+        d.text((x, y), ch, font=font, fill=colour)
+        x += cw + tracking
+
+
+def feature_graphic(size=(1024, 500), tagline="XTREAM CODES AND M3U, ON YOUR TELEVISION"):
+    """The 1024x500 banner, which a television listing cannot be submitted without.
+
+    Held well inside its own edges. Play crops this differently on a phone, on
+    the web and in a promotional slot, and treats the graphic as decoration it
+    is free to trim — so nothing that has to be read lives near a margin.
+    """
+    w, h = size
+    img = ground(size)
+    cap = round(h * 0.19)
+    bar_w = max(4, round(cap * 0.20))
+    bar_h = round(cap * 1.16)
+    word_w = wordmark_width(cap)
+    gap = cap * 0.52
+    total = bar_w + gap + word_w
+    left = (w - total) / 2
+    top = h * 0.40 - bar_h / 2
+    draw_lamp(img, left + bar_w / 2, top, bar_w, bar_h)
+    d = ImageDraw.Draw(img)
+    draw_wordmark(d, left + bar_w + gap, top + (bar_h - cap) / 2, cap)
+
+    # Set in Archivo, which the app itself now bundles. The six drawn
+    # letterforms above are the whole alphabet this file has, so a sentence
+    # needs a real face — and using the app's own keeps the graphic honest.
+    face = os.path.join(APP, "assets", "fonts", "Archivo-SemiBold.ttf")
+    try:
+        font = ImageFont.truetype(face, round(h * 0.048))
+    except OSError:
+        return img.convert("RGB")
+    _tracked(d, tagline, font, w / 2, h * 0.66, INK_MUTED, round(h * 0.014))
+    return img.convert("RGB")
+
+
 # --- writing ----------------------------------------------------------------
 
 
@@ -329,6 +431,25 @@ def main():
         written.append(
             save(splash((px, round(px * 9 / 16))), res, f"drawable-{density}", "splash.png")
         )
+
+    # The adaptive pair, plus the flat monochrome Android 13 tints for a
+    # themed home screen.
+    for density, px in [
+        ("mdpi", 108), ("hdpi", 162), ("xhdpi", 216),
+        ("xxhdpi", 324), ("xxxhdpi", 432),
+    ]:
+        written.append(
+            save(adaptive_foreground((px, px)), res, f"mipmap-{density}",
+                 "ic_launcher_foreground.png")
+        )
+        written.append(
+            save(adaptive_foreground((px, px), glow=False, colour=INK),
+                 res, f"mipmap-{density}", "ic_launcher_monochrome.png")
+        )
+
+    # Play's own artwork. Neither of these is shipped in the app.
+    written.append(save(play_icon(), STORE, "play-icon-512.png"))
+    written.append(save(feature_graphic(), STORE, "play-feature-1024x500.png"))
 
     # tvOS: layered icons and the top shelf.
     brand = os.path.join(

@@ -1,8 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Android TV: without the leanback launcher category the app never
-         appears on the home screen, and touchscreen must be declared optional
-         or the Play Store filters TV devices out. -->
-    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <!-- The two declarations that decide which devices this is offered to,
+         and they are not the same question.
+
+         Touchscreen is optional because a television has none, and an app
+         that requires one is filtered off every TV in the store.
+
+         Leanback is required because this is a television app and nothing
+         else. Every screen is laid out for a d-pad at three metres and there
+         is no touch target anywhere in it, so a phone install would be an
+         interface nobody can operate. Left at required="false" the store
+         reads that as "runs anywhere", lists it to phones and tablets, and
+         the reviews arrive from people it was never built for. -->
+    <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- IPTV portals overwhelmingly have no usable TLS — the one probed for
@@ -37,9 +46,17 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Leanback only. The ordinary LAUNCHER category is a phone and
+                 tablet home screen entry, and declaring it is the second half
+                 of telling the store this runs on handsets.
+
+                 Nothing here needs it: flutter run starts the activity by
+                 explicit component, and so does adb am start -n. What it does
+                 break is launching by category, so use
+                 "am start -n com.anthonyessaye.opentv/.MainActivity" rather
+                 than monkey -c android.intent.category.LAUNCHER. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
             </intent-filter>
         </activity>
