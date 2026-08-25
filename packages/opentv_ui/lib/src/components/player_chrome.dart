@@ -177,7 +177,44 @@ class _PlayerChromeState extends State<PlayerChrome> {
   );
 
   @override
+  void didUpdateWidget(PlayerChrome old) {
+    super.didUpdateWidget(old);
+    // Claims the highlight the moment the controls reappear.
+    //
+    // Left to autofocus this was unreliable, and reliably wrong inside a
+    // pushed route: a widget's autofocus is only honoured while its scope has
+    // no focused child, and the player parks focus on a hidden node while the
+    // controls are away — so they came back drawn but with nothing on them
+    // selected. Releasing that node first was not enough either, because the
+    // scope remembers which child it had. Naming the destination is the only
+    // version of this that does not depend on what the framework happens to
+    // be remembering.
+    if (widget.visible && !old.visible) {
+      // Twice, and the second is not superstition. The first attempt lands
+      // in the same turn as the route's own scope restoring whichever child
+      // it remembers, and which of the two settles last is not something to
+      // depend on. The check makes the retry free when the first one worked.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _claimControls());
+      _retry?.cancel();
+      _retry = Timer(OpenTvMotion.focus, _claimControls);
+    }
+  }
+
+  /// The second attempt at claiming the highlight. Held so it can be
+  /// cancelled: a widget that leaves a timer running after it has gone is a
+  /// callback firing into a disposed tree.
+  Timer? _retry;
+
+  /// Puts the highlight on the first control, unless it is already there.
+  void _claimControls() {
+    if (!mounted || !widget.visible) return;
+    if (_holds(_controls)) return;
+    focusFirstWithin(_controls);
+  }
+
+  @override
   void dispose() {
+    _retry?.cancel();
     _bar.dispose();
     _controls.dispose();
     super.dispose();

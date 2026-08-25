@@ -32,17 +32,44 @@ void main() {
         .setMockMethodCallHandler(SystemChannels.platform_views, null);
   });
 
+  /// Pushed as a route, over something else — which is the only way it is
+  /// ever reached.
+  ///
+  /// The first version of this test made the player the home widget, and that
+  /// is a different focus tree: a pushed route brings its own scope, and a
+  /// scope remembers which child it had focused. Every focus question in this
+  /// screen is answered differently in the two arrangements, so the simpler
+  /// one was testing something the app never does.
   Future<void> show(WidgetTester tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     tester.view.physicalSize = const Size(960, 540);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
+    final navigator = GlobalKey<NavigatorState>();
+
     await tester.pumpWidget(
       WidgetsApp(
+        navigatorKey: navigator,
         color: OpenTvColors.ground,
         textStyle: OpenTvType.body,
-        builder: (context, _) => const TvCanvas(
+        pageRouteBuilder: <T>(settings, builder) => PageRouteBuilder<T>(
+          settings: settings,
+          pageBuilder: (context, _, _) => builder(context),
+        ),
+        home: Builder(
+          builder: (context) => Focus(
+            autofocus: true,
+            child: const SizedBox(width: 100, height: 40),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    navigator.currentState!.push(
+      PageRouteBuilder<void>(
+        pageBuilder: (context, _, _) => const TvCanvas(
           child: PlayerScreen(
             streamUrl: 'http://example.invalid/stream.ts',
             channelName: 'A channel',
@@ -50,7 +77,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
   }
 
   testWidgets('a press brings the controls back after they hide', (
