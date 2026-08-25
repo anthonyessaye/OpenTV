@@ -4,9 +4,12 @@ Taken on an Android TV emulator at the same 960×540 logical size a real
 Android TV reports, which is the geometry the interface is actually laid out
 in. Captured at 1920×1080 and stored at that size.
 
+There is no splash screen shot here. It was taken before the name and the
+line under it came off, so it shows something the app no longer does, and a
+screenshot that is out of date is worse than one that is missing.
+
 | File | What it shows |
 | --- | --- |
-| `01-splash.png` | The launch screen: the tally lamp coming up to brightness |
 | `02-live.png` | Live channels, with the category rail |
 | `03-films.png` | Films, with the showcase banner and the Continue entry |
 | `04-series.png` | Series, with Continue and the top-rated shelf |
