@@ -184,20 +184,38 @@ class _PlayerScreenState extends State<PlayerScreen> {
         final paused = _status.phase == PlaybackPhase.paused;
         _channel?.invokeMethod<void>(paused ? 'play' : 'pause');
         // Pausing shows the controls; resuming leaves the picture clear.
-        if (!paused) {
-          setState(() => _chromeVisible = true);
-          _restartIdleTimer();
-        }
+        if (!paused) _showChrome();
         return KeyEventResult.handled;
       }
 
-      setState(() => _chromeVisible = true);
-      _restartIdleTimer();
+      _showChrome();
       return KeyEventResult.handled;
     }
 
     _restartIdleTimer();
     return KeyEventResult.ignored;
+  }
+
+  /// Brings the controls back, with something on them highlighted.
+  ///
+  /// The release of focus is the load-bearing half. A widget's autofocus is
+  /// only honoured while its scope has no focused child, and the shell that
+  /// holds focus for the hidden player is exactly such a child — so the
+  /// controls returned with the highlight still parked on an invisible node
+  /// and nothing on screen appearing selected. Standing aside lets the
+  /// transport's own first button claim it as it mounts.
+  ///
+  /// Nothing guards against the controls failing to take it, and that is
+  /// deliberate. The first attempt here put focus back on the shell if the
+  /// scope still held it after the next frame — which is precisely the state
+  /// [FocusNode.unfocus] leaves behind, so the guard fired every time and
+  /// took back the focus it was meant to be protecting. The transport always
+  /// renders a play button, so there is always something to claim it.
+  void _showChrome() {
+    if (_chromeVisible) return;
+    setState(() => _chromeVisible = true);
+    _shell.unfocus();
+    _restartIdleTimer();
   }
 
   /// Back, in the order a viewer means it.

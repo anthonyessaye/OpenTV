@@ -77,12 +77,32 @@ void main() {
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    // Two frames: the first mounts the controls, the second is when their
+    // autofocus is resolved.
+    await tester.pump();
     await tester.pump();
 
     expect(
       find.text('PICTURE'),
       findsOneWidget,
       reason: 'a press should wake the controls',
+    );
+
+    // Drawn is not the same as usable. A widget's autofocus is only honoured
+    // while its scope has no focused child, and the shell holding focus for
+    // the hidden player is exactly such a child — so the controls came back
+    // with the highlight parked on an invisible node and nothing on screen
+    // appearing selected.
+    final focused = FocusManager.instance.primaryFocus;
+    expect(
+      focused?.debugLabel,
+      isNot('player'),
+      reason: 'the highlight is still on the shell, so nothing looks selected',
+    );
+    expect(
+      focused?.context?.findAncestorWidgetOfExactType<PlayerChrome>(),
+      isNotNull,
+      reason: 'focus should be on one of the controls',
     );
 
     debugDefaultTargetPlatformOverride = null;
