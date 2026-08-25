@@ -5,7 +5,8 @@
 This file previously recorded a licence conflict that could not be resolved in
 code. [NextPlayer](https://github.com/anilbeesetti/nextplayer) by anilbeesetti
 was vendored into `core/*` and `feature/*` under GPL-3.0, while this
-repository's own `LICENSE` is Creative Commons Attribution-NonCommercial 4.0.
+repository's own `LICENSE` was Creative Commons Attribution-NonCommercial 4.0
+at the time.
 The two do not compose: the GPL does not permit adding restrictions beyond its
 own terms, and a non-commercial clause is exactly such a restriction.
 
@@ -42,30 +43,26 @@ BSD-family. None of them is copyleft.
 which is not yet displayed anywhere and needs to be before release. The API
 key is supplied at build time and is not in this repository.
 
-## The licence, and a better-drafted way to say the same thing
+## The licence
 
 The owner's intent is settled: **the source stays readable, and nobody may use
-it commercially.** CC BY-NC does express that, so nothing is broken. But it
-expresses it badly, because it was not written for software:
+it commercially.**
 
-- It says nothing about linking, binaries, or distributing a compiled app —
-  the three things that actually happen here.
-- Creative Commons themselves recommend against using it for software.
-- Its "NonCommercial" definition is vague enough to deter people who had no
-  intention of selling anything.
+This was CC BY-NC 4.0, which expresses that intent but expresses it badly,
+because Creative Commons was not written for software: it says nothing about
+linking, binaries, or distributing a compiled app — the three things that
+actually happen here — and Creative Commons themselves recommend against using
+it for code.
 
-**[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)**
-says the same thing and was drafted by lawyers for exactly this case:
-source available, any noncommercial use permitted, commercial use prohibited
-outright. It is short, plainly written, and unambiguous about binaries.
-
-Swapping is a one-file change and has not been made, because a licence is the
-owner's signature rather than a refactor.
+It is now
+**[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)**,
+drafted by lawyers for exactly this case: source available, any noncommercial
+use permitted, commercial use prohibited outright. Short, plainly written, and
+unambiguous about binaries.
 
 ### One consequence worth knowing either way
 
-Neither CC BY-NC nor PolyForm Noncommercial is **open source** in the OSI
-sense — that definition forbids restricting commercial use. The correct term
+PolyForm Noncommercial is not **open source** in the OSI sense — that definition forbids restricting commercial use. The correct term
 is *source available*. In practice:
 
 - GitHub will not show a recognised open-source licence badge.

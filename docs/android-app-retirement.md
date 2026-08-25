@@ -69,7 +69,8 @@ referenced by any build file. Nothing to port.
 ## The licence conflict this closes
 
 `NOTICE.md` recorded a conflict that could not be resolved in code: NextPlayer
-is GPL-3.0, this repository's own `LICENSE` is CC BY-NC 4.0, and the two do
+is GPL-3.0, this repository's own `LICENSE` was CC BY-NC 4.0 at the time
+(PolyForm Noncommercial 1.0.0 since), and the two do
 not compose — the GPL forbids adding restrictions beyond its own terms, and a
 non-commercial clause is exactly such a restriction. That notice named two
 ways out and said the first was scheduled: *remove the vendored modules when
@@ -82,12 +83,14 @@ That is worth knowing beyond tidiness, because it was listed as one of three
 blocking items for Apple TV: GPL-3.0 has no route to the App Store, which is
 why VLC was pulled from it years ago. That specific blocker is now gone.
 
-Two things remain for the owner to decide, and neither is a code change:
+One thing remains for the owner to decide, and it is not a code change:
 
-- **CC BY-NC is a poor fit for software.** It is written for creative works,
-  says nothing useful about linking or distribution of binaries, and its
-  non-commercial clause is famously ill-defined. Now that nothing forces
-  GPL-3.0, the licence can be chosen on its merits rather than inherited.
+- **CC BY-NC was a poor fit for software** — written for creative works,
+  silent on linking and binaries, and famously vague about what counts as
+  commercial. With nothing forcing GPL-3.0 any more, the licence could be
+  chosen on its merits rather than inherited, and it has been: PolyForm
+  Noncommercial 1.0.0, which says the same thing in language drafted for
+  software. **Settled.**
 - **TVVLCKit is LGPL-2.1+.** That is the licence VideoLAN moved to precisely
   so their code could ship on the App Store, and VLC ships there today. It is
   workable, but static linking under the LGPL has conditions worth reading
