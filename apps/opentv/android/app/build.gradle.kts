@@ -48,10 +48,16 @@ android {
         // to the debug key below, so `flutter run --release` still works.
         if (uploadKeystore != null) {
             create("upload") {
-                storeFile = file(uploadProperties["storeFile"] as String)
-                storePassword = uploadProperties["storePassword"] as String
-                keyAlias = uploadProperties["keyAlias"] as String
-                keyPassword = uploadProperties["keyPassword"] as String
+                // Trimmed, every one of them. A properties file keeps
+                // whatever whitespace follows a value, an editor shows none
+                // of it, and a single trailing space on the path produces
+                // "keystore file not found" naming a path that looks exactly
+                // right. A password with one is worse: it fails as a wrong
+                // password.
+                storeFile = file(uploadProperties.getProperty("storeFile").trim())
+                storePassword = uploadProperties.getProperty("storePassword").trim()
+                keyAlias = uploadProperties.getProperty("keyAlias").trim()
+                keyPassword = uploadProperties.getProperty("keyPassword").trim()
             }
         }
     }

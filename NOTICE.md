@@ -43,6 +43,24 @@ BSD-family. None of them is copyleft.
 which is not yet displayed anywhere and needs to be before release. The API
 key is supplied at build time and is not in this repository.
 
+## Fonts
+
+Both families are bundled in the app and redistributed with it, which the SIL
+Open Font License 1.1 permits. Each licence travels with the files in
+`apps/opentv/assets/fonts/`.
+
+- **Archivo** — Copyright 2020 The Archivo Project Authors,
+  <https://github.com/Omnibus-Type/Archivo>. OFL 1.1.
+- **IBM Plex Mono** — Copyright 2017 IBM Corp. OFL 1.1.
+
+Only the weights the design uses are shipped — three of Archivo, two of Plex
+Mono. A family has nine, and the rest is a megabyte and a half of glyphs
+nothing asks for.
+
+The OFL's one real prohibition is worth naming: the fonts may not be sold on
+their own. Bundling them inside an application is exactly what the licence is
+for.
+
 ## The licence
 
 The owner's intent is settled: **the source stays readable, and nobody may use

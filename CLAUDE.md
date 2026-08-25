@@ -175,6 +175,12 @@ no content itself. That is the voice.
 `docs/metadata-provider.md` are current. **`docs/feature-gap.md` is stale** —
 it lists parental control and multiple providers as missing; both shipped.
 
-Not done: Apple TV has never been run on hardware; the fonts named in
-`OpenTvType` are not bundled; no external player, recording or multi-screen;
-the tunnel is Android-only.
+Not done: Apple TV has never been run on hardware; no external player,
+recording or multi-screen; the tunnel is Android-only.
+
+The fonts are bundled now — Archivo and IBM Plex Mono, OFL, only the weights
+the tokens use. They are declared in the **app's** pubspec while the tokens
+that name them live in `opentv_ui`, which is correct: Flutter resolves font
+families globally from the app's manifest, so no `package:` prefix belongs on
+`fontFamily`. Package tests render in the test font regardless, so a missing
+font cannot be caught there — it has to be looked at.

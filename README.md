@@ -208,8 +208,6 @@ in settings. It is never committed.
 - **Apple TV has never been run.** Every tvOS line was written from
   documentation and checked only by the contract test. See
   [docs/tvos-status.md](docs/tvos-status.md).
-- **The fonts are not bundled.** The type system names Archivo and IBM Plex
-  Mono; nothing is shipped, so everything renders in the platform default.
 - No external player, no recording, no multi-screen.
 - The tunnel is Android-only. Apple TV needs a Network Extension, which needs
   a paid developer account.

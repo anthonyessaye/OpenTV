@@ -89,6 +89,42 @@ flutter:
   # "family" key with the font family name, and a "fonts" key with a
   # list giving the asset and other descriptors for the font. For
   # example:
+  # The two families the design is actually drawn in.
+  #
+  # Named in OpenTvType since the redesign and shipped by nothing until now,
+  # so every screen rendered in whichever sans the platform happened to
+  # default to — Roboto on Android TV, San Francisco on tvOS. The interface
+  # was never seen as specified on either.
+  #
+  # Only the weights the tokens use. A family has nine and this ships five;
+  # the rest are a megabyte and a half of glyphs nothing asks for.
+  #
+  # Both are SIL Open Font License 1.1, which permits bundling them in an
+  # application. The licences travel with them in assets/fonts.
+  fonts:
+    - family: Archivo
+      fonts:
+        - asset: assets/fonts/Archivo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Archivo-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Archivo-Bold.ttf
+          weight: 700
+    - family: IBM Plex Mono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexMono-SemiBold.ttf
+          weight: 600
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
   # fonts:
   #   - family: Schyler
   #     fonts:
