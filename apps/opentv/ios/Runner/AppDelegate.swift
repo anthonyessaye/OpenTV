@@ -24,6 +24,14 @@ import UIKit
     // what carries a messenger. The television takes the same route.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "OpenTVHost") {
       HostChannel.attach(messenger: registrar.messenger())
+
+      // The same view type the television registers, backed by the same
+      // Swift file. Dart asks for "opentv/player" on every platform and never
+      // learns which engine answered.
+      registrar.register(
+        VlcPlayerFactory(messenger: registrar.messenger()),
+        withId: "opentv/player"
+      )
     }
   }
 }

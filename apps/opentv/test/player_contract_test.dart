@@ -16,7 +16,11 @@ void main() {
     'android/app/src/main/kotlin/com/anthonyessaye/opentv/'
     'PlayerPlatformView.kt',
   );
-  final apple = File('tvos/Runner/AppDelegate.swift');
+  // One file, both Apple platforms. VlcPlayerView is compiled into the tvOS
+  // and iOS targets from here, with only the framework import differing, so
+  // checking it once vouches for both — which a test reading a per-target
+  // copy could never do.
+  final apple = File('apple/VlcPlayerView.swift');
 
   setUpAll(() {
     // A moved or renamed file must fail loudly rather than vacuously pass.
@@ -41,7 +45,7 @@ void main() {
           apple.readAsStringSync(),
           contains('"$method"'),
           reason:
-              'tvOS does not handle "$method". This is exactly how pause '
+              'Apple does not handle "$method". This is exactly how pause '
               'shipped doing nothing on Apple TV.',
         );
       });

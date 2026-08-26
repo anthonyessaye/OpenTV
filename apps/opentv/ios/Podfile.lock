@@ -1,0 +1,23 @@
+PODS:
+  - Flutter (1.0.0)
+  - MobileVLCKit (3.6.0)
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - MobileVLCKit (= 3.6.0)
+
+SPEC REPOS:
+  trunk:
+    - MobileVLCKit
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+
+SPEC CHECKSUMS:
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
+  MobileVLCKit: 8fe98ae53b7464f32e4bdf527cc7d53053e4d3a5
+
+PODFILE CHECKSUM: 51bd6a3245de908e05509af379181f8ee8337884
+
+COCOAPODS: 1.17.0

@@ -1,1 +1,6 @@
+// The Pods config comes first, and it is #include? rather than #include: the
+// optional form so a clean checkout that has not run pod install yet still
+// opens, and first so Flutter's own Generated.xcconfig wins where the two
+// name the same setting.
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
