@@ -125,9 +125,21 @@ class HandoverService {
     final client = HandoverClient(
       compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
     );
-    final bundle = await client.fetch(pairing, onProgress: onProgress);
-    await _apply(bundle);
-    return bundle.manifest;
+    // Straight to disk beside the live catalogue, so nothing has to hold it.
+    // Sealing and unsealing the whole payload in memory is what put a
+    // television box out of heap; a phone with a large catalogue produced an
+    // ANR from the same pressure.
+    final staged = File('${databaseFile.path}.incoming');
+    if (staged.existsSync()) await staged.delete();
+
+    final received = await client.fetchInto(
+      pairing,
+      staged,
+      onProgress: onProgress,
+    );
+
+    await _applyStaged(staged, received.secrets);
+    return received.manifest;
   }
 
   /// Sends this device's setup to the one that displayed the code.
@@ -159,15 +171,20 @@ class HandoverService {
   /// is a test that fails the keystore write and requires the catalogue to
   /// survive.
   Future<void> _apply(HandoverBundle bundle) async {
-    for (final secret in bundle.secrets) {
-      await host.writeSecret(secret.reference, secret.secret);
-    }
-
-    // Written beside the live file and moved into place, so a transfer
-    // interrupted while writing does not leave a half-written catalogue where
-    // the working one used to be.
     final staged = File('${databaseFile.path}.incoming');
     await staged.writeAsBytes(bundle.database, flush: true);
+    await _applyStaged(staged, bundle.secrets);
+  }
+
+  /// Puts an already-written staging file into place.
+  ///
+  /// The file has arrived; what remains is the order, and it is the same
+  /// order as before — secrets first, so a failure leaves the old catalogue
+  /// intact rather than a new one nobody has passwords for.
+  Future<void> _applyStaged(File staged, List<HandoverSecret> secrets) async {
+    for (final secret in secrets) {
+      await host.writeSecret(secret.reference, secret.secret);
+    }
 
     await db.close();
     // The journal belongs to the database being replaced. Left behind, SQLite

@@ -116,7 +116,15 @@ class HandoverBundle {
     required this.manifest,
     required this.database,
     required this.secrets,
+    this.databaseFile,
   });
+
+  /// Where the catalogue is on disk, when it is.
+  ///
+  /// Set by [fromFile], so the server can read it a chunk at a time rather
+  /// than from [database] — which is what let a 64MB catalogue peak at 464MB
+  /// of resident memory and put a television box out of heap.
+  final File? databaseFile;
 
   final HandoverManifest manifest;
 
@@ -134,17 +142,20 @@ class HandoverBundle {
     required int sourceCount,
     DateTime? now,
   }) async {
-    final bytes = await database.readAsBytes();
+    final length = await database.length();
     return HandoverBundle(
+      databaseFile: database,
       manifest: HandoverManifest(
         schemaVersion: schemaVersion,
         appVersion: appVersion,
-        databaseBytes: bytes.length,
+        databaseBytes: length,
         sourceCount: sourceCount,
         secretCount: secrets.length,
         createdAt: now ?? DateTime.now(),
       ),
-      database: Uint8List.fromList(bytes),
+      // Empty: the file is the source, and reading it here is exactly the
+      // allocation this avoids.
+      database: Uint8List(0),
       secrets: secrets,
     );
   }

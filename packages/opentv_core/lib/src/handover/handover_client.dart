@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'handover_bundle.dart';
+import 'handover_frames.dart';
 import 'handover_pairing.dart';
 import 'handover_transfer.dart';
 
@@ -63,26 +64,148 @@ class HandoverClient {
     return manifest;
   }
 
-  /// Fetches, decrypts and reassembles.
+  /// Fetches, writing the catalogue straight to [into] as it arrives.
   ///
-  /// [onProgress] is called with bytes received and the total the manifest
-  /// promised. A transfer with no visible progress is one people assume has
-  /// hung and cancel, and cancelling halfway is the one way to end up with
-  /// nothing after waiting.
-  Future<HandoverBundle> fetch(
-    HandoverPairing pairing, {
+  /// The secrets come back; the database does not, because holding it was the
+  /// problem. Frames are opened one at a time and appended to the file, so
+  /// what is in memory is a chunk rather than a catalogue.
+  Future<({HandoverManifest manifest, List<HandoverSecret> secrets})>
+      fetchInto(
+    HandoverPairing pairing,
+    File into, {
     HandoverManifest? manifest,
     void Function(int received, int total)? onProgress,
   }) async {
     final head = manifest ?? await this.manifest(pairing);
-    final sealed = await _get(
-      pairing,
-      '/bundle',
-      onProgress: onProgress,
-      expected: head.databaseBytes,
+
+    final known = _reachable[pairing];
+    final candidates = known == null
+        ? pairing.hosts
+        : [known, ...pairing.hosts.where((h) => h != known)];
+
+    Object? lastFailure;
+    for (final host in candidates) {
+      try {
+        return await _fetchIntoFrom(host, pairing, head, into, onProgress);
+      } on HandoverException catch (error) {
+        lastFailure = error;
+      }
+    }
+    throw lastFailure ?? HandoverException(
+      HandoverRefusal.malformed,
+      'could not reach the other device at ${pairing.hosts.join(', ')}',
     );
-    final payload = await cipher.open(sealed, pairing);
-    return HandoverBundle.fromPayload(head, payload);
+  }
+
+  Future<({HandoverManifest manifest, List<HandoverSecret> secrets})>
+      _fetchIntoFrom(
+    String host,
+    HandoverPairing pairing,
+    HandoverManifest head,
+    File into,
+    void Function(int received, int total)? onProgress,
+  ) async {
+    final client = HttpClient()..connectionTimeout = timeout;
+    IOSink? sink;
+    try {
+      final request = await client.getUrl(
+        Uri(scheme: 'http', host: host, port: pairing.port, path: '/bundle'),
+      );
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) {
+        throw HandoverException(
+          HandoverRefusal.malformed,
+          'the other device answered ${response.statusCode}',
+        );
+      }
+      _reachable[pairing] = host;
+
+      final reader = HandoverFrameReader(pairing.key);
+      sink = into.openWrite();
+
+      List<HandoverSecret>? secrets;
+      var written = 0;
+
+      await for (final chunk in response) {
+        await for (final frame in reader.add(chunk)) {
+          if (secrets == null) {
+            // The first frame is the secrets block, ahead of the catalogue so
+            // a receiver has them before the long part begins.
+            secrets = _readSecrets(frame);
+            continue;
+          }
+          sink.add(frame);
+          written += frame.length;
+          onProgress?.call(written, head.databaseBytes);
+        }
+      }
+
+      await sink.flush();
+      await sink.close();
+      sink = null;
+
+      if (secrets == null) {
+        throw const HandoverException(
+          HandoverRefusal.malformed,
+          'the transfer carried no secrets block',
+        );
+      }
+      // Truncation is what the frame tags cannot catch on their own: every
+      // frame that arrived was genuine, there were simply not enough of them.
+      if (written != head.databaseBytes) {
+        throw HandoverException(
+          HandoverRefusal.malformed,
+          'the catalogue was cut short: $written bytes of '
+          '${head.databaseBytes}',
+        );
+      }
+      if (!reader.isComplete) {
+        throw const HandoverException(
+          HandoverRefusal.malformed,
+          'the transfer ended in the middle of a frame',
+        );
+      }
+
+      return (manifest: head, secrets: secrets);
+    } on SocketException catch (error) {
+      throw HandoverException(
+        HandoverRefusal.malformed,
+        'could not reach the other device: ${error.message}',
+      );
+    } finally {
+      await sink?.close();
+      client.close(force: true);
+    }
+  }
+
+  static List<HandoverSecret> _readSecrets(Uint8List block) {
+    if (block.length < 4) {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the secrets block is too short',
+      );
+    }
+    final length = ByteData.sublistView(block, 0, 4).getUint32(0, Endian.big);
+    if (block.length < 4 + length) {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the secrets block is shorter than it claims',
+      );
+    }
+    try {
+      final raw = jsonDecode(
+        utf8.decode(Uint8List.sublistView(block, 4, 4 + length)),
+      ) as List<Object?>;
+      return [
+        for (final entry in raw)
+          HandoverSecret.fromJson(entry! as Map<String, Object?>),
+      ];
+    } on Object {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the secrets block could not be read',
+      );
+    }
   }
 
   /// Pushes this device's bundle to the one that displayed the code.

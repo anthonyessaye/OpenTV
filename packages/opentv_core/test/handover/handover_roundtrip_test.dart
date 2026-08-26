@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:opentv_core/opentv_core.dart';
@@ -54,7 +55,16 @@ void main() {
     );
   }
 
-  setUp(() => received = null);
+  late Directory temp;
+  setUp(() {
+    received = null;
+    temp = Directory.systemTemp.createTempSync('handover-rt');
+  });
+  tearDown(() => temp.deleteSync(recursive: true));
+
+  /// Where a streamed catalogue lands.
+  File staging([String name = 'incoming.sqlite']) =>
+      File('${temp.path}/$name');
   tearDown(() async => server.stop());
 
   test('a bundle crosses a socket unchanged', () async {
@@ -64,11 +74,12 @@ void main() {
     final client = const HandoverClient(
       compatibility: HandoverCompatibility(schemaVersion: 3),
     );
-    final received = await client.fetch(pairing);
+    final into = staging();
+    final result = await client.fetchInto(pairing, into);
 
-    expect(received.database, original.database);
-    expect(received.secrets.single.secret, 'hunter2');
-    expect(received.manifest.sourceCount, 1);
+    expect(into.readAsBytesSync(), original.database);
+    expect(result.secrets.single.secret, 'hunter2');
+    expect(result.manifest.sourceCount, 1);
   });
 
   test('progress is reported and ends at the total', () async {
@@ -79,8 +90,9 @@ void main() {
 
     var last = 0;
     var total = 0;
-    await client.fetch(
+    await client.fetchInto(
       pairing,
+      staging(),
       onProgress: (received, expected) {
         last = received;
         total = expected;
@@ -101,7 +113,11 @@ void main() {
     // the payload moved.
     var payloadBytes = 0;
     await expectLater(
-      client.fetch(pairing, onProgress: (r, _) => payloadBytes = r),
+      client.fetchInto(
+        pairing,
+        staging(),
+        onProgress: (r, _) => payloadBytes = r,
+      ),
       throwsA(isA<HandoverException>().having(
         (e) => e.refusal, 'refusal', HandoverRefusal.schemaMismatch)),
     );
@@ -121,7 +137,7 @@ void main() {
     );
 
     await expectLater(
-      client.fetch(wrong),
+      client.fetchInto(wrong, staging()),
       throwsA(isA<HandoverException>().having(
         (e) => e.refusal, 'refusal', HandoverRefusal.notAuthentic)),
     );
@@ -229,12 +245,13 @@ void main() {
         key: pairing.key,
       );
 
-      final received = await const HandoverClient(
+      final into = staging();
+      await const HandoverClient(
         compatibility: HandoverCompatibility(schemaVersion: 3),
         timeout: Duration(milliseconds: 400),
-      ).fetch(spread);
+      ).fetchInto(spread, into);
 
-      expect(received.database, original.database);
+      expect(into.readAsBytesSync(), original.database);
     });
 
     test('a push finds it too', () async {

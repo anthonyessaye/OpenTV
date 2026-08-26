@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 import 'handover_bundle.dart';
+import 'handover_frames.dart';
 import 'handover_pairing.dart';
 
 /// Sealing and opening a bundle.
@@ -173,11 +174,7 @@ class HandoverServer {
             ..write(jsonEncode(bundle.manifest.toJson()));
 
         case ('GET', '/bundle'):
-          final sealed = await cipher.seal(bundle.payload(), pairing);
-          request.response
-            ..headers.contentType = ContentType.binary
-            ..headers.contentLength = sealed.length
-            ..add(sealed);
+          await _streamTo(request.response);
 
         // The other direction. The manifest rides in a header rather than a
         // second request, because a push is one exchange and splitting it
@@ -196,6 +193,55 @@ class HandoverServer {
         ..write(error.message);
     }
     await request.response.close();
+  }
+
+  /// Writes the payload out as sealed frames, reading the catalogue from disk
+  /// a chunk at a time.
+  ///
+  /// Never holds more than one chunk. Sealing the payload whole meant the
+  /// database, a copy of it, and a sealed copy of that all in memory at once
+  /// — 464MB of resident memory for a 64MB catalogue, which a television box
+  /// does not have.
+  ///
+  /// The length is not declared, because it is not known until the last frame
+  /// is sealed and computing it in advance would mean sealing everything
+  /// first. The receiver reads to the end of the response instead, and checks
+  /// what arrived against the manifest.
+  Future<void> _streamTo(HttpResponse response) async {
+    response.headers.contentType = ContentType.binary;
+
+    var index = 0;
+    Future<void> write(Uint8List chunk) async {
+      response.add(
+        HandoverFrames.framed(
+          await HandoverFrames.seal(chunk, index++, pairing.key),
+        ),
+      );
+      await response.flush();
+    }
+
+    await write(HandoverFrames.secretsBlock(bundle.secrets));
+
+    final source = bundle.databaseFile;
+    if (source == null) {
+      // Held in memory rather than on disk, which is how the tests build one.
+      for (var at = 0; at < bundle.database.length; at += HandoverFrames.chunkSize) {
+        final end = (at + HandoverFrames.chunkSize).clamp(0, bundle.database.length);
+        await write(Uint8List.sublistView(bundle.database, at, end));
+      }
+      return;
+    }
+
+    final handle = await source.open();
+    try {
+      while (true) {
+        final chunk = await handle.read(HandoverFrames.chunkSize);
+        if (chunk.isEmpty) break;
+        await write(Uint8List.fromList(chunk));
+      }
+    } finally {
+      await handle.close();
+    }
   }
 
   Future<void> _accept(HttpRequest request) async {
