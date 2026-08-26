@@ -348,6 +348,21 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   void _onSystemBack() {
     if (BackKeysRegistry.dispatch()) return;
 
+    // A phone gets the touch sheet. ConfirmPanel is drawn at television type
+    // on a 1920x1080 canvas and answers a remote rather than a finger, so on
+    // a handset it filled the screen and could not be dismissed at all.
+    if (!widget.device.isTelevision) {
+      TouchConfirm.ask(
+        context,
+        title: 'Leave OpenTV?',
+        detail: 'Nothing is playing that will be lost.',
+        confirmLabel: 'Quit',
+      ).then((quit) {
+        if (quit) SystemNavigator.pop();
+      });
+      return;
+    }
+
     final navigator = Navigator.of(context);
     navigator.push(
       PageRouteBuilder<void>(
@@ -471,6 +486,11 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       if (!widget.device.isTelevision) {
         return MobileOnboarding(
           progress: service.progress,
+          // Offered here, where somebody with a second device already set up
+          // is otherwise about to type its provider address by hand.
+          onTakeFromDevice: _databaseFile == null
+              ? null
+              : () => setState(() => _offering = true),
           onCancel: _addingSource
               ? () => setState(() => _addingSource = false)
               : null,

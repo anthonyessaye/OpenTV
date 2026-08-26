@@ -50,14 +50,21 @@ class CleanedTitle {
 class TitleCleaner {
   const TitleCleaner._();
 
-  /// `UK|`, `US:`, `[FR]`, `AR -`, `4K:` at the start.
+  /// `UK|`, `US:`, `[FR]`, `AR -`, `4K:`, `EX-YU |` at the start.
   ///
   /// A bracketed code needs no separator after it; a bare one does, which is
   /// what stops a title like "MAD Detective" losing its first word.
+  ///
+  /// The optional hyphenated second part is there for `EX-YU`, which is one of
+  /// the most common groupings a provider uses and which read as `EX` before
+  /// it: the pattern took the hyphen as its separator and stopped. Harmless
+  /// while the region was only used to strip a prefix off a title, and wrong
+  /// the moment it became a label somebody chooses from.
   static final _region = RegExp(
     r'^\s*(?:'
-    r'[\[\(]\s*([A-Z0-9]{2,5})\s*[\]\)]'
-    r'|([A-Z0-9]{2,5})\s*[|:\-–]'
+    r'[\[\(]\s*([A-Z0-9]{2,5}(?:-[A-Z0-9]{2,5})?)\s*[\]\)]'
+    r'|([A-Z0-9]{2,5}(?:-[A-Z0-9]{2,5})?)\s*[|:–]'
+    r'|([A-Z0-9]{2,5})\s*-\s+'
     r')\s*',
   );
 
@@ -144,7 +151,8 @@ class TitleCleaner {
 
     final regionMatch = _region.firstMatch(working);
     if (regionMatch != null) {
-      region = regionMatch.group(1) ?? regionMatch.group(2);
+      region =
+          regionMatch.group(1) ?? regionMatch.group(2) ?? regionMatch.group(3);
       working = working.substring(regionMatch.end);
     }
 

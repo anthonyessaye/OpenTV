@@ -114,6 +114,11 @@ class _MobilePlayerState extends State<MobilePlayer> {
   void _onCreated(int id) {
     _channel = MethodChannel('opentv/player/$id');
     _poll = Timer.periodic(const Duration(milliseconds: 500), (_) => _read());
+    // Once the stream has had a moment to open. Asked immediately the engine
+    // reports nothing, because it has not parsed the container yet.
+    Timer(const Duration(seconds: 2), () {
+      if (mounted) _readTracks();
+    });
   }
 
   Future<void> _read() async {
@@ -160,6 +165,26 @@ class _MobilePlayerState extends State<MobilePlayer> {
     widget.onProgress?.call(_position, _length);
   }
 
+  /// Reads the track list once the stream is open.
+  ///
+  /// Not polled — tracks change when the stream does, which is rare. Read on
+  /// waking the chrome rather than only when a sheet is opened, because the
+  /// buttons need to know whether they have anything behind them before they
+  /// are drawn.
+  Future<void> _readTracks() async {
+    final raw = await _channel?.invokeListMethod<Object?>('tracks');
+    if (!mounted || raw == null) return;
+    setState(() {
+      _tracks = [
+        for (final entry in raw)
+          if (entry is Map) MediaTrack.fromMap(entry.cast<Object?, Object?>()),
+      ];
+      _readTracksOnce = true;
+    });
+  }
+
+  bool _readTracksOnce = false;
+
   void _restartHide() {
     _hide?.cancel();
     if (!_chrome) return;
@@ -170,6 +195,7 @@ class _MobilePlayerState extends State<MobilePlayer> {
 
   void _toggleChrome() {
     setState(() => _chrome = !_chrome);
+    if (_chrome && !_readTracksOnce) _readTracks();
     _restartHide();
   }
 
@@ -281,8 +307,16 @@ class _MobilePlayerState extends State<MobilePlayer> {
                           setState(() => _scrubbing = null);
                           _seekTo(at);
                         },
-                  onAudio: () => _openSheet(_Sheet.audio),
-                  onSubtitles: () => _openSheet(_Sheet.subtitles),
+                  // Absent rather than present and empty. A live channel
+                  // routinely carries neither, and three controls that open a
+                  // sheet saying "none" is three controls that waste a press
+                  // and make the row look like it is not working.
+                  onAudio: _tracks.any((t) => t.kindMatches('audio'))
+                      ? () => _openSheet(_Sheet.audio)
+                      : null,
+                  onSubtitles: _tracks.any((t) => t.kindMatches('text'))
+                      ? () => _openSheet(_Sheet.subtitles)
+                      : null,
                   onPicture: () => _openSheet(_Sheet.picture),
                   nextLabel: widget.nextLabel,
                   onNext: widget.onNext,
@@ -344,8 +378,9 @@ class _Chrome extends StatelessWidget {
   final ValueChanged<Duration>? onScrubStart;
   final ValueChanged<Duration>? onScrubUpdate;
   final ValueChanged<Duration>? onScrubEnd;
-  final VoidCallback onAudio;
-  final VoidCallback onSubtitles;
+  /// Null when the stream carries none of that kind.
+  final VoidCallback? onAudio;
+  final VoidCallback? onSubtitles;
   final VoidCallback onPicture;
   final String? nextLabel;
   final VoidCallback? onNext;
@@ -472,8 +507,10 @@ class _Chrome extends StatelessWidget {
             ),
             child: Row(
               children: [
-                _Control(label: 'AUDIO', onTap: onAudio),
-                _Control(label: 'SUBTITLES', onTap: onSubtitles),
+                if (onAudio != null)
+                  _Control(label: 'AUDIO', onTap: onAudio!),
+                if (onSubtitles != null)
+                  _Control(label: 'SUBTITLES', onTap: onSubtitles!),
                 _Control(label: 'PICTURE', onTap: onPicture),
                 const Spacer(),
                 if (onNext != null)

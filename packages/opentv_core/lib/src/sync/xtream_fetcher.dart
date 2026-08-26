@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 
 import '../epg/xmltv_parser.dart';
 import '../store/database.dart';
+import '../metadata/title_cleaner.dart';
 import '../store/search_text.dart';
 import '../store/tables.dart';
 import '../xtream/xtream_credentials.dart';
@@ -131,6 +132,11 @@ class XtreamCatalogueFetcher implements CatalogueFetcher {
           remoteId: '${channel.streamId}',
           name: channel.name,
           searchName: normaliseForSearch(channel.name),
+          // Lifted here, at the one point every row passes through.
+          // The column existed and only the migration ever filled it, so a
+          // fresh install had no regions at all and the picker came up
+          // empty over a catalogue full of prefixed titles.
+          region: Value(TitleCleaner.clean(channel.name).region),
           iconUrl: Value(channel.iconUrl),
           categoryRemoteId: Value(channel.categoryId),
           epgChannelId: Value(channel.epgChannelId),
@@ -155,6 +161,11 @@ class XtreamCatalogueFetcher implements CatalogueFetcher {
           remoteId: '${movie.streamId}',
           name: movie.name,
           searchName: normaliseForSearch(movie.name),
+          // Lifted here, at the one point every row passes through.
+          // The column existed and only the migration ever filled it, so a
+          // fresh install had no regions at all and the picker came up
+          // empty over a catalogue full of prefixed titles.
+          region: Value(TitleCleaner.clean(movie.name).region),
           iconUrl: Value(movie.iconUrl),
           categoryRemoteId: Value(movie.categoryId),
           containerExtension: Value(movie.containerExtension),
@@ -178,6 +189,11 @@ class XtreamCatalogueFetcher implements CatalogueFetcher {
           remoteId: '${show.seriesId}',
           name: show.name,
           searchName: normaliseForSearch(show.name),
+          // Lifted here, at the one point every row passes through.
+          // The column existed and only the migration ever filled it, so a
+          // fresh install had no regions at all and the picker came up
+          // empty over a catalogue full of prefixed titles.
+          region: Value(TitleCleaner.clean(show.name).region),
           coverUrl: Value(show.coverUrl),
           categoryRemoteId: Value(show.categoryId),
           plot: Value(show.plot),

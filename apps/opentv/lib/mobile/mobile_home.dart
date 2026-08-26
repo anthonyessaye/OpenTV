@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show MethodChannel;
+
 import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
@@ -516,6 +518,8 @@ class _MobileHomeState extends State<MobileHome> {
           hiddenRegions: _regions.forKind(ItemKind.live),
           locked: _locked,
           onPlay: (item, channels) => _play(item, channels: channels),
+          resolve: (item) => widget.resolver.urlFor(widget.source, item),
+          optionsFor: widget.resolver.optionsFor,
         ),
       1 => MobileGuide(
           key: ValueKey('guide:${_regions.forKind(ItemKind.live).join(',')}'),
@@ -684,6 +688,8 @@ class _LiveTab extends StatefulWidget {
     required this.hiddenRegions,
     required this.locked,
     required this.onPlay,
+    required this.resolve,
+    required this.optionsFor,
   });
 
   final OpenTvDatabase db;
@@ -692,6 +698,10 @@ class _LiveTab extends StatefulWidget {
   final Set<String> locked;
   final void Function(Playable, List<Channel>) onPlay;
 
+  /// Builds the address for the preview, and the directives it needs.
+  final Future<String?> Function(Playable) resolve;
+  final Map<String, String> Function(Playable) optionsFor;
+
   @override
   State<_LiveTab> createState() => _LiveTabState();
 }
@@ -699,9 +709,24 @@ class _LiveTab extends StatefulWidget {
 class _LiveTabState extends State<_LiveTab> {
   List<Channel>? _channels;
 
+  /// The last channel watched, playing at the top of the list.
+  ///
+  /// The television has one for a reason that holds here too: a still frame of
+  /// a channel says almost nothing, because provider artwork is a logo on a
+  /// flat colour and a list of those is the wall of logos this shelf exists to
+  /// replace. A channel that is actually playing answers the only question a
+  /// live screen is really being asked.
+  ///
+  /// One caveat is designed around rather than ignored. Providers commonly
+  /// allow a single connection, and a preview holds one — so it stops itself
+  /// the moment the viewer commits, before the full player asks for its own.
+  Channel? _resume;
+  String? _resumeUrl;
+
   @override
   void initState() {
     super.initState();
+    _loadResume();
     widget.db
         .channelsIn(
           widget.source.id,
@@ -719,21 +744,196 @@ class _LiveTabState extends State<_LiveTab> {
     });
   }
 
+  Future<void> _loadResume() async {
+    final states = await widget.db.continueWatching(
+      sourceId: widget.source.id,
+      limit: 20,
+    );
+    final id = states
+        .where((s) => s.itemKind == ItemKind.live)
+        .map((s) => s.itemRemoteId)
+        .firstOrNull;
+    if (id == null) return;
+
+    final rows = await widget.db.channelsByRemoteIds(widget.source.id, [id]);
+    final channel = rows.firstOrNull;
+    if (channel == null ||
+        widget.locked.contains(channel.categoryRemoteId)) {
+      return;
+    }
+
+    final url = await widget.resolve(Playable.channel(channel));
+    if (!mounted) return;
+    setState(() {
+      _resume = channel;
+      _resumeUrl = url;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final channels = _channels;
     if (channels == null) return const _Loading();
     if (channels.isEmpty) return const _Empty('No channels in this provider.');
 
+    final resume = _resume;
+    final resumeUrl = _resumeUrl;
+
     return ListView.builder(
-      itemCount: channels.length,
-      itemBuilder: (context, i) => ChannelRow(
+      // One extra row for the preview, when there is one.
+      itemCount: channels.length + (resumeUrl == null ? 0 : 1),
+      itemBuilder: (context, index) {
+        if (resumeUrl != null && index == 0) {
+          return _MiniPlayer(
+            url: resumeUrl,
+            title: resume!.name,
+            streamOptions: widget.optionsFor(Playable.channel(resume)),
+            onSelect: () => widget.onPlay(
+              Playable.channel(resume),
+              channels,
+            ),
+          );
+        }
+        final i = resumeUrl == null ? index : index - 1;
+        return ChannelRow(
         name: channels[i].name,
         number: channels[i].number?.toString(),
         logoUrl: channels[i].iconUrl,
         // The whole visible list travels with it, so a flick in the player
         // moves to the next channel of what was being browsed.
-        onTap: () => widget.onPlay(Playable.channel(channels[i]), channels),
+          onTap: () => widget.onPlay(Playable.channel(channels[i]), channels),
+        );
+      },
+    );
+  }
+}
+
+/// The preview at the top of the live list.
+class _MiniPlayer extends StatefulWidget {
+  const _MiniPlayer({
+    required this.url,
+    required this.title,
+    required this.streamOptions,
+    required this.onSelect,
+  });
+
+  final String url;
+  final String title;
+  final Map<String, String> streamOptions;
+  final VoidCallback onSelect;
+
+  @override
+  State<_MiniPlayer> createState() => _MiniPlayerState();
+}
+
+class _MiniPlayerState extends State<_MiniPlayer> {
+  MethodChannel? _channel;
+
+  void _onCreated(int id) => _channel = MethodChannel('opentv/player/$id');
+
+  @override
+  void dispose() {
+    // Leaving must free the connection now rather than wait for the platform
+    // view's own teardown a frame or two later — on a one-connection account
+    // that is long enough for the next stream to be refused.
+    _channel?.invokeMethod<void>('stop');
+    super.dispose();
+  }
+
+  Future<void> _commit() async {
+    await _channel?.invokeMethod<void>('stop');
+    widget.onSelect();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        OpenTvTouchSpace.gutter,
+        OpenTvTouchSpace.sm,
+        OpenTvTouchSpace.gutter,
+        OpenTvTouchSpace.md,
+      ),
+      child: TouchTile(
+        onTap: _commit,
+        semanticLabel: 'Resume ${widget.title}',
+        minHeight: 0,
+        borderRadius: OpenTvRadius.panel,
+        child: ClipRRect(
+          borderRadius: OpenTvRadius.panel,
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Black beneath, because a platform view paints nothing until
+                // its first frame and that hole is genuinely transparent.
+                const ColoredBox(color: OpenTvColors.sunken),
+                PlayerSurface(
+                  url: widget.url,
+                  streamOptions: widget.streamOptions,
+                  // A preview does not hold the phone awake. Somebody on the
+                  // channel list has not asked for a lit screen indefinitely
+                  // because something is running in a box.
+                  keepAwake: false,
+                  onCreated: _onCreated,
+                ),
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [Color(0xF007090C), Color(0x0007090C)],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        OpenTvTouchSpace.md,
+                        OpenTvTouchSpace.xl,
+                        OpenTvTouchSpace.md,
+                        OpenTvTouchSpace.sm,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: OpenTvColors.onAir,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: OpenTvTouchSpace.xs),
+                              Text(
+                                'CONTINUE WATCHING',
+                                style: OpenTvTouchType.label.copyWith(
+                                  color: OpenTvColors.onAir,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: OpenTvTouchType.section,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show TextInputAction, TextInputType;
 import 'package:flutter/widgets.dart';
 import 'package:opentv_ui/opentv_ui.dart';
+
+import 'touch_field.dart';
 
 /// Adding a provider, on a device with a keyboard.
 ///
@@ -15,6 +18,7 @@ class MobileOnboarding extends StatefulWidget {
     super.key,
     required this.onSubmit,
     this.onCancel,
+    this.onTakeFromDevice,
     this.progress,
   });
 
@@ -22,6 +26,13 @@ class MobileOnboarding extends StatefulWidget {
   final Future<String?> Function(OnboardingDraft) onSubmit;
 
   final VoidCallback? onCancel;
+
+  /// Starts a handover instead of typing anything.
+  ///
+  /// Offered here rather than only in settings, because this is the screen
+  /// where somebody has a second device already set up and is about to type
+  /// its provider address by hand for no reason.
+  final VoidCallback? onTakeFromDevice;
   final ValueListenable<String>? progress;
 
   @override
@@ -39,9 +50,25 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
   String? _problem;
 
   @override
+  void initState() {
+    super.initState();
+    // The button's enabled state is computed from these, so the screen has to
+    // rebuild when they change. Without this it was evaluated once against
+    // empty fields and never again — every field could be filled and "Add
+    // provider" stayed dead.
+    for (final c in [_name, _url, _username, _password]) {
+      c.addListener(_onEdited);
+    }
+  }
+
+  void _onEdited() => setState(() {});
+
+  @override
   void dispose() {
     for (final c in [_name, _url, _username, _password]) {
-      c.dispose();
+      c
+        ..removeListener(_onEdited)
+        ..dispose();
     }
     super.dispose();
   }
@@ -97,6 +124,42 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
             'enter.',
             style: OpenTvTouchType.bodyMuted,
           ),
+          if (widget.onTakeFromDevice != null) ...[
+            const SizedBox(height: OpenTvTouchSpace.xl),
+            TouchTile(
+              onTap: widget.onTakeFromDevice,
+              minHeight: 72,
+              child: Container(
+                padding: const EdgeInsets.all(OpenTvTouchSpace.lg),
+                decoration: BoxDecoration(
+                  color: OpenTvColors.surface,
+                  borderRadius: OpenTvRadius.tile,
+                  border: const Border(
+                    bottom: BorderSide(color: OpenTvColors.tally, width: 2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Text(
+                      'Already set up on another device?',
+                      style: OpenTvTouchType.section,
+                    ),
+                    SizedBox(height: OpenTvTouchSpace.xs),
+                    Text(
+                      'Point this phone at the code on it and take the whole '
+                      'thing — providers, passwords, catalogue and history. '
+                      'Nothing to type.',
+                      style: OpenTvTouchType.caption,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: OpenTvTouchSpace.xl),
+            const Text('OR ADD ONE BY HAND', style: OpenTvTouchType.label),
+          ],
           const SizedBox(height: OpenTvTouchSpace.xl),
           _Segmented(
             selected: xtream ? 0 : 1,
@@ -108,20 +171,31 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
             }),
           ),
           const SizedBox(height: OpenTvTouchSpace.xl),
-          _Field(
+          TouchField(
             label: xtream ? 'Portal address' : 'Playlist address',
             hint: 'http://example.com:8080',
             controller: _url,
             keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.next,
           ),
           if (xtream) ...[
-            _Field(label: 'Username', controller: _username),
-            _Field(label: 'Password', controller: _password, obscure: true),
+            TouchField(
+              label: 'Username',
+              controller: _username,
+              textInputAction: TextInputAction.next,
+            ),
+            TouchField(
+              label: 'Password',
+              controller: _password,
+              obscure: true,
+              textInputAction: TextInputAction.next,
+            ),
           ],
-          _Field(
+          TouchField(
             label: 'Name',
             hint: 'What you call this provider',
             controller: _name,
+            onSubmitted: (_) => _submit(),
           ),
           if (_problem != null) ...[
             const SizedBox(height: OpenTvTouchSpace.md),
@@ -145,78 +219,6 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
               label: _busy ? 'Working…' : 'Add provider',
               onTap: _ready && !_busy ? _submit : null,
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Field extends StatelessWidget {
-  const _Field({
-    required this.label,
-    required this.controller,
-    this.hint,
-    this.obscure = false,
-    this.keyboardType,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final String? hint;
-  final bool obscure;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: OpenTvTouchSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label.toUpperCase(), style: OpenTvTouchType.label),
-          const SizedBox(height: OpenTvTouchSpace.xs),
-          Container(
-            height: OpenTvTouchSpace.tapTarget,
-            padding: const EdgeInsets.symmetric(
-              horizontal: OpenTvTouchSpace.md,
-            ),
-            alignment: AlignmentDirectional.centerStart,
-            decoration: BoxDecoration(
-              color: OpenTvColors.surface,
-              borderRadius: OpenTvRadius.tile,
-              border: const Border(
-                bottom: BorderSide(color: OpenTvColors.rule),
-              ),
-            ),
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, _) => Stack(
-                alignment: AlignmentDirectional.centerStart,
-                children: [
-                  if (value.text.isEmpty && hint != null)
-                    Text(
-                      hint!,
-                      style: OpenTvTouchType.body.copyWith(
-                        color: OpenTvColors.inkFaint,
-                      ),
-                    ),
-                  EditableText(
-                    controller: controller,
-                    focusNode: FocusNode(),
-                    style: OpenTvTouchType.body,
-                    cursorColor: OpenTvColors.tally,
-                    backgroundCursorColor: OpenTvColors.inkFaint,
-                    obscureText: obscure,
-                    keyboardType: keyboardType,
-                    // An address is not a sentence: autocorrect capitalises a
-                    // hostname and quietly breaks it.
-                    autocorrect: false,
-                    enableSuggestions: false,
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
