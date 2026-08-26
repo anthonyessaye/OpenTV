@@ -20,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
     required this.onSwitch,
     required this.onAddSource,
     required this.onRemoveSource,
+    this.onStartHandover,
     required this.service,
     required this.vpn,
     this.host = const Host(),
@@ -32,6 +33,10 @@ class SettingsScreen extends StatefulWidget {
   final ValueChanged<Source> onSwitch;
   final VoidCallback onAddSource;
   final ValueChanged<Source> onRemoveSource;
+
+  /// Puts the pairing code on screen. Null where there is nothing to hand
+  /// over from — the app has no provider yet.
+  final VoidCallback? onStartHandover;
 
   /// Used to ask the portal about the account and to re-read the catalogue.
   final SourceService service;
@@ -58,7 +63,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-enum _Panel { sources, account, hidden, regions, metadata, vpn, parental, about }
+enum _Panel { sources, account, hidden, regions, metadata, vpn, parental, handover, about }
 
 class _SettingsScreenState extends State<SettingsScreen> {
   _Panel _panel = _Panel.sources;
@@ -208,6 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Panel.metadata => 'Metadata',
                       _Panel.vpn => 'Private tunnel',
                       _Panel.parental => 'Parental lock',
+                      _Panel.handover => 'Another device',
                       _Panel.about => 'About',
                     },
                     selected: panel == _panel,
@@ -250,6 +256,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _Panel.metadata => _metadata(),
               _Panel.vpn => _vpn(),
               _Panel.parental => _parental(),
+              _Panel.handover => _handover(),
               _Panel.about => _about(),
             },
           ),
@@ -783,6 +790,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final next = _regionFilter.withRegion(_regionKind, region, hide: hide);
     setState(() => _regionFilter = next);
     await widget.db.setPreference(RegionFilter.preferenceKey, next.encode());
+  }
+
+
+  /// Handing this television's setup to a phone, or taking one from it.
+  ///
+  /// The television is always the one that displays. That is decided by the
+  /// hardware and not by which way the data is going: a phone has a camera and
+  /// a television does not, so the code goes on the big screen whichever
+  /// direction it is about to travel in. The phone chooses.
+  Widget _handover() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Show a code on this television and point a phone at it. The phone '
+          'can then take this setup, or send you its own — providers, their '
+          'stored passwords, the catalogue and your history.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Text(
+          'Nothing leaves your network, and the transfer is encrypted with a '
+          'key that only ever exists on this screen and that camera.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.lg),
+        PlayerButton(
+          label: 'SHOW THE CODE',
+          emphasis: true,
+          autofocus: true,
+          onSelect: widget.onStartHandover,
+        ),
+      ],
+    );
   }
 
   Future<void> _setAllHidden(bool hidden) async {

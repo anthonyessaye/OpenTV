@@ -76,6 +76,74 @@ class HandoverClient {
     return HandoverBundle.fromPayload(head, payload);
   }
 
+  /// Pushes this device's bundle to the one that displayed the code.
+  ///
+  /// The other direction of [fetch], over the same pairing. A television can
+  /// display a code and never read one, so without this the data could only
+  /// ever travel away from the television — and handing a television the
+  /// setup you have just finished on your phone is the direction people
+  /// actually want.
+  Future<void> send(
+    HandoverPairing pairing,
+    HandoverBundle bundle, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final sealed = await cipher.seal(bundle.payload(), pairing);
+    final client = HttpClient()..connectionTimeout = timeout;
+
+    try {
+      final request = await client.postUrl(
+        Uri(
+          scheme: 'http',
+          host: pairing.host,
+          port: pairing.port,
+          path: '/bundle',
+        ),
+      );
+      // The manifest rides in a header so the receiver can refuse a schema it
+      // cannot open before reading the body, rather than after a catalogue
+      // has crossed the room.
+      request.headers.set(
+        HandoverServer.manifestHeader,
+        base64.encode(utf8.encode(jsonEncode(bundle.manifest.toJson()))),
+      );
+      request.headers.contentType = ContentType.binary;
+      request.contentLength = sealed.length;
+
+      // Written in chunks so progress can be reported. One add() of fifty
+      // megabytes reports nothing until it is over, and a transfer that looks
+      // frozen is one people cancel.
+      const chunk = 64 * 1024;
+      for (var offset = 0; offset < sealed.length; offset += chunk) {
+        final end = (offset + chunk).clamp(0, sealed.length);
+        request.add(Uint8List.sublistView(sealed, offset, end));
+        await request.flush();
+        onProgress?.call(end, sealed.length);
+      }
+
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) {
+        final reason = await utf8.decoder.bind(response).join();
+        throw HandoverException(
+          response.statusCode == HttpStatus.badRequest
+              ? HandoverRefusal.schemaMismatch
+              : HandoverRefusal.malformed,
+          reason.isEmpty
+              ? 'the other device refused the transfer '
+                  '(${response.statusCode})'
+              : reason,
+        );
+      }
+    } on SocketException catch (error) {
+      throw HandoverException(
+        HandoverRefusal.malformed,
+        'could not reach the other device: ${error.message}',
+      );
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   Future<Uint8List> _get(
     HandoverPairing pairing,
     String path, {

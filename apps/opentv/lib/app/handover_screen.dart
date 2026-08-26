@@ -24,9 +24,14 @@ class HandoverOfferScreen extends StatefulWidget {
     super.key,
     required this.service,
     required this.touch,
+    this.onReceived,
   });
 
   final HandoverService service;
+
+  /// Called when the other device pushed its setup here instead of taking
+  /// this one. The catalogue on disk has been replaced by the time this runs.
+  final Future<void> Function()? onReceived;
 
   /// Which set of type and spacing tokens to draw with.
   final bool touch;
@@ -62,7 +67,10 @@ class _HandoverOfferScreenState extends State<HandoverOfferScreen> {
             'This device is not on a network that another device can reach.');
         return;
       }
-      final pairing = await widget.service.offer(host: address);
+      final pairing = await widget.service.offer(
+        host: address,
+        onReceived: widget.onReceived,
+      );
       if (mounted) setState(() => _pairing = pairing);
     } on Object catch (error) {
       if (mounted) setState(() => _failure = '$error');
@@ -105,9 +113,9 @@ class _HandoverOfferScreenState extends State<HandoverOfferScreen> {
           SizedBox(height: widget.touch ? OpenTvTouchSpace.md : 24),
           Text(
             failure ??
-                'Point the other device’s camera at this code. It will carry '
-                    'your providers, their passwords, your catalogue and your '
-                    'history — everything except what is playing right now.',
+                'Point the other device’s camera at this code. It can then '
+                    'take this setup, or send you its own — providers, their '
+                    'passwords, the catalogue and your history.',
             style: body,
             textAlign: TextAlign.center,
           ),
@@ -137,19 +145,36 @@ class _HandoverOfferScreenState extends State<HandoverOfferScreen> {
 }
 
 /// Taking a setup from the device that displayed the code.
+/// Which way the setup should travel.
+enum HandoverDirection {
+  /// Take the other device's setup and replace this one's.
+  take,
+
+  /// Send this device's setup to the other one.
+  send,
+}
+
 class HandoverReceiveScreen extends StatefulWidget {
   const HandoverReceiveScreen({
     super.key,
     required this.service,
     required this.pairing,
     required this.onDone,
+    required this.hasSetup,
   });
 
   final HandoverService service;
   final HandoverPairing pairing;
 
-  /// Called once the catalogue has been replaced, so the app can reopen it.
+  /// Called once this device's catalogue has been replaced.
   final VoidCallback onDone;
+
+  /// Whether this device has anything of its own to send.
+  ///
+  /// A phone that has just been installed has nothing, so it is not offered
+  /// the choice — which is also the common case, and asking a question with
+  /// one usable answer is not a choice.
+  final bool hasSetup;
 
   @override
   State<HandoverReceiveScreen> createState() => _HandoverReceiveScreenState();
@@ -159,26 +184,49 @@ class _HandoverReceiveScreenState extends State<HandoverReceiveScreen> {
   double _progress = 0;
   String? _failure;
   bool _done = false;
+  HandoverDirection? _direction;
 
   @override
   void initState() {
     super.initState();
-    _run();
+    // Nothing here to send means there is no question to ask.
+    if (!widget.hasSetup) _start(HandoverDirection.take);
   }
 
-  Future<void> _run() async {
+  void _start(HandoverDirection direction) {
+    setState(() => _direction = direction);
+    _run(direction);
+  }
+
+  Future<void> _run(HandoverDirection direction) async {
     try {
-      await widget.service.receive(
-        widget.pairing,
-        onProgress: (received, total) {
-          if (mounted && total > 0) {
-            setState(() => _progress = received / total);
-          }
-        },
-      );
-      if (!mounted) return;
-      setState(() => _done = true);
-      widget.onDone();
+      if (direction == HandoverDirection.take) {
+        await widget.service.receive(
+          widget.pairing,
+          onProgress: (received, total) {
+            if (mounted && total > 0) {
+              setState(() => _progress = received / total);
+            }
+          },
+        );
+        if (!mounted) return;
+        setState(() => _done = true);
+        widget.onDone();
+      } else {
+        await widget.service.sendTo(
+          widget.pairing,
+          onProgress: (sent, total) {
+            if (mounted && total > 0) {
+              setState(() => _progress = sent / total);
+            }
+          },
+        );
+        if (!mounted) return;
+        // Nothing on this device changed, so onDone is deliberately not
+        // called: reopening a database that was never replaced would drop the
+        // viewer back to the top of the app for no reason.
+        setState(() => _done = true);
+      }
     } on HandoverException catch (error) {
       // The message is written for the viewer, not the log: a schema mismatch
       // says which versions and what to do about it.
@@ -190,8 +238,13 @@ class _HandoverReceiveScreenState extends State<HandoverReceiveScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final direction = _direction;
+    if (direction == null) return _chooser();
+
     return TouchScaffold(
-      title: 'Taking a setup',
+      title: direction == HandoverDirection.take
+          ? 'Taking a setup'
+          : 'Sending this setup',
       onBack: _done ? null : () => Navigator.of(context).maybePop(),
       body: Padding(
         padding: OpenTvTouchSpace.page,
@@ -206,14 +259,19 @@ class _HandoverReceiveScreenState extends State<HandoverReceiveScreen> {
             ] else if (_done) ...[
               Text('Done', style: OpenTvTouchType.title),
               const SizedBox(height: OpenTvTouchSpace.sm),
-              const Text(
-                'This device now has the same providers, catalogue and '
-                'history as the one you took it from.',
+              Text(
+                direction == HandoverDirection.take
+                    ? 'This device now has the same providers, catalogue and '
+                        'history as the one you took it from.'
+                    : 'The other device now has the same providers, catalogue '
+                        'and history as this one.',
                 style: OpenTvTouchType.bodyMuted,
               ),
             ] else ...[
               Text(
-                'Copying from ${widget.pairing.host}',
+                direction == HandoverDirection.take
+                    ? 'Copying from ${widget.pairing.host}'
+                    : 'Copying to ${widget.pairing.host}',
                 style: OpenTvTouchType.title,
               ),
               const SizedBox(height: OpenTvTouchSpace.lg),
@@ -243,6 +301,75 @@ class _HandoverReceiveScreenState extends State<HandoverReceiveScreen> {
                 style: OpenTvTouchType.data,
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+extension on _HandoverReceiveScreenState {
+  /// Which way, asked only when both answers are real.
+  ///
+  /// Worded as what happens to each device rather than as "send" and
+  /// "receive", which are the same word from two ends and get picked wrong.
+  Widget _chooser() {
+    return TouchScaffold(
+      title: 'Which way?',
+      onBack: () => Navigator.of(context).maybePop(),
+      body: Padding(
+        padding: OpenTvTouchSpace.page,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Choice(
+              title: 'Take the other device’s setup',
+              detail: 'Replaces the providers and catalogue on this device.',
+              onTap: () => _start(HandoverDirection.take),
+            ),
+            const SizedBox(height: OpenTvTouchSpace.md),
+            _Choice(
+              title: 'Send this device’s setup',
+              detail: 'Replaces the providers and catalogue on the other one.',
+              onTap: () => _start(HandoverDirection.send),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Choice extends StatelessWidget {
+  const _Choice({
+    required this.title,
+    required this.detail,
+    required this.onTap,
+  });
+
+  final String title;
+  final String detail;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TouchTile(
+      onTap: onTap,
+      minHeight: 76,
+      child: Container(
+        padding: const EdgeInsets.all(OpenTvTouchSpace.lg),
+        decoration: BoxDecoration(
+          color: OpenTvColors.surface,
+          borderRadius: OpenTvRadius.tile,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: OpenTvTouchType.section),
+            const SizedBox(height: OpenTvTouchSpace.xs),
+            Text(detail, style: OpenTvTouchType.caption),
           ],
         ),
       ),

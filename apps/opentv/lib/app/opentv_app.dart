@@ -429,6 +429,8 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       return HandoverReceiveScreen(
         service: _handoverService(db),
         pairing: incoming,
+        // A fresh install has nothing to send, so it is not asked which way.
+        hasSetup: _sources.isNotEmpty,
         onDone: () async {
           setState(() => _incoming = null);
           // The file on disk is not the one this app has open any more.
@@ -441,6 +443,12 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       return HandoverOfferScreen(
         service: _handoverService(db),
         touch: !widget.device.isTelevision,
+        // The other device may push instead of pull, which is the only way a
+        // television receives anything: it can show a code and never read one.
+        onReceived: () async {
+          setState(() => _offering = false);
+          await _open();
+        },
       );
     }
 
@@ -519,6 +527,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     }
 
     return BrowseScreen(
+      onStartHandover: () => setState(() => _offering = true),
       db: db,
       vpn: _vpn,
       source: source,

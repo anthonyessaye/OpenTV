@@ -110,11 +110,35 @@ class HandoverCompatibility {
 /// megabytes crosses the room, and there is nothing in a schema number worth
 /// hiding.
 class HandoverServer {
-  HandoverServer({required this.pairing, required this.bundle, this.cipher = const HandoverCipher()});
+  HandoverServer({
+    required this.pairing,
+    required this.bundle,
+    this.cipher = const HandoverCipher(),
+    this.compatibility,
+    this.onReceived,
+  });
 
   final HandoverPairing pairing;
   final HandoverBundle bundle;
   final HandoverCipher cipher;
+
+  /// Checked against an incoming bundle before it is handed on.
+  ///
+  /// Null on a device that only offers.
+  final HandoverCompatibility? compatibility;
+
+  /// Called with a bundle pushed by the device that scanned the code.
+  ///
+  /// This is what makes one pairing work in both directions, and it exists
+  /// because of a hardware asymmetry rather than a design one: a television
+  /// can display a code and never read one. Without an upload, a phone could
+  /// only ever take — and handing a television the setup you just finished on
+  /// your phone is the direction people actually want.
+  ///
+  /// Accepting a push is exactly as safe as serving a pull. Both are
+  /// authenticated by the same key, and that key only ever existed on a
+  /// screen and a camera in the same room.
+  final Future<void> Function(HandoverBundle)? onReceived;
 
   HttpServer? _server;
 
@@ -141,22 +165,81 @@ class HandoverServer {
   }
 
   Future<void> _handle(HttpRequest request) async {
-    switch (request.uri.path) {
-      case '/manifest':
-        request.response
-          ..headers.contentType = ContentType.json
-          ..write(jsonEncode(bundle.manifest.toJson()));
+    try {
+      switch ((request.method, request.uri.path)) {
+        case ('GET', '/manifest'):
+          request.response
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode(bundle.manifest.toJson()));
 
-      case '/bundle':
-        final sealed = await cipher.seal(bundle.payload(), pairing);
-        request.response
-          ..headers.contentType = ContentType.binary
-          ..headers.contentLength = sealed.length
-          ..add(sealed);
+        case ('GET', '/bundle'):
+          final sealed = await cipher.seal(bundle.payload(), pairing);
+          request.response
+            ..headers.contentType = ContentType.binary
+            ..headers.contentLength = sealed.length
+            ..add(sealed);
 
-      default:
-        request.response.statusCode = HttpStatus.notFound;
+        // The other direction. The manifest rides in a header rather than a
+        // second request, because a push is one exchange and splitting it
+        // would let the two halves disagree about what arrived.
+        case ('POST', '/bundle'):
+          await _accept(request);
+
+        default:
+          request.response.statusCode = HttpStatus.notFound;
+      }
+    } on HandoverException catch (error) {
+      // Answered rather than swallowed. The sender is a screen somebody is
+      // watching, and "it stopped" is a worse answer than the reason.
+      request.response
+        ..statusCode = HttpStatus.badRequest
+        ..write(error.message);
     }
     await request.response.close();
   }
+
+  Future<void> _accept(HttpRequest request) async {
+    final receive = onReceived;
+    if (receive == null) {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    final header = request.headers.value(manifestHeader);
+    if (header == null) {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the push carried no manifest',
+      );
+    }
+
+    late final HandoverManifest manifest;
+    try {
+      manifest = HandoverManifest.fromJson(
+        jsonDecode(utf8.decode(base64.decode(header))) as Map<String, Object?>,
+      );
+    } on Object {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the manifest on the push could not be read',
+      );
+    }
+
+    // Refused before the body is read, so a device on the wrong schema is
+    // told immediately rather than after a catalogue has crossed the room.
+    compatibility?.check(manifest);
+
+    final sealed = BytesBuilder(copy: false);
+    await for (final chunk in request) {
+      sealed.add(chunk);
+    }
+
+    final payload = await cipher.open(sealed.toBytes(), pairing);
+    await receive(HandoverBundle.fromPayload(manifest, payload));
+
+    request.response.statusCode = HttpStatus.ok;
+  }
+
+  /// Where a pushed manifest travels.
+  static const manifestHeader = 'x-opentv-manifest';
 }

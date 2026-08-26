@@ -32,11 +32,20 @@ void main() {
   late HandoverServer server;
   late HandoverPairing pairing;
 
-  Future<void> serve(HandoverBundle bundle) async {
+  HandoverBundle? received;
+
+  Future<void> serve(HandoverBundle bundle, {bool accepting = false}) async {
     // Port 0 lets the OS pick, so a test run does not collide with a real
     // handover or with another test.
     pairing = HandoverPairing.generate(host: '127.0.0.1', port: 0);
-    server = HandoverServer(pairing: pairing, bundle: bundle);
+    server = HandoverServer(
+      pairing: pairing,
+      bundle: bundle,
+      compatibility: accepting
+          ? HandoverCompatibility(schemaVersion: bundle.manifest.schemaVersion)
+          : null,
+      onReceived: accepting ? (b) async => received = b : null,
+    );
     await server.start();
     pairing = HandoverPairing(
       host: '127.0.0.1',
@@ -45,6 +54,7 @@ void main() {
     );
   }
 
+  setUp(() => received = null);
   tearDown(() async => server.stop());
 
   test('a bundle crosses a socket unchanged', () async {
@@ -115,6 +125,87 @@ void main() {
       throwsA(isA<HandoverException>().having(
         (e) => e.refusal, 'refusal', HandoverRefusal.notAuthentic)),
     );
+  });
+
+  group('pushing, which is how a television receives at all', () {
+    test('a pushed bundle arrives intact', () async {
+      // A television can display a code and never read one, so without this
+      // the data could only travel away from the television.
+      await serve(_bundle(), accepting: true);
+
+      final outgoing = _bundle(databaseBytes: 32 * 1024);
+      await const HandoverClient(
+        compatibility: HandoverCompatibility(schemaVersion: 3),
+      ).send(pairing, outgoing);
+
+      expect(received, isNotNull);
+      expect(received!.database, outgoing.database);
+      expect(received!.secrets.single.secret, 'hunter2');
+    });
+
+    test('progress is reported while sending', () async {
+      await serve(_bundle(), accepting: true);
+
+      var last = 0;
+      var total = 0;
+      await const HandoverClient(
+        compatibility: HandoverCompatibility(schemaVersion: 3),
+      ).send(
+        pairing,
+        _bundle(),
+        onProgress: (sent, expected) {
+          last = sent;
+          total = expected;
+        },
+      );
+
+      expect(total, greaterThan(0));
+      expect(last, total);
+    });
+
+    test('a schema the receiver cannot open is refused', () async {
+      await serve(_bundle(schemaVersion: 3), accepting: true);
+
+      await expectLater(
+        const HandoverClient(
+          compatibility: HandoverCompatibility(schemaVersion: 9),
+        ).send(pairing, _bundle(schemaVersion: 9)),
+        throwsA(isA<HandoverException>()),
+      );
+      expect(received, isNull, reason: 'a refused push was applied anyway');
+    });
+
+    test('a device that only offers refuses a push', () async {
+      // The offer screen on a phone serves without accepting; pushing at it
+      // should be told so rather than silently doing nothing.
+      await serve(_bundle());
+
+      await expectLater(
+        const HandoverClient(
+          compatibility: HandoverCompatibility(schemaVersion: 3),
+        ).send(pairing, _bundle()),
+        throwsA(isA<HandoverException>()),
+      );
+      expect(received, isNull);
+    });
+
+    test('a push sealed with the wrong key is refused', () async {
+      await serve(_bundle(), accepting: true);
+
+      final wrong = HandoverPairing(
+        host: pairing.host,
+        port: pairing.port,
+        key: HandoverPairing.generate(host: 'x', port: 1).key,
+      );
+
+      await expectLater(
+        const HandoverClient(
+          compatibility: HandoverCompatibility(schemaVersion: 3),
+        ).send(wrong, _bundle()),
+        throwsA(isA<HandoverException>()),
+      );
+      expect(received, isNull, reason: 'an unauthenticated push was applied');
+    });
   });
 
   test('nothing listening is reported rather than hung', () async {

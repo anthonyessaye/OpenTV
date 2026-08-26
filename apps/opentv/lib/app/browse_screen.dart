@@ -37,6 +37,7 @@ class BrowseScreen extends StatefulWidget {
     this.onSwitchSource,
     this.onAddSource,
     this.onRemoveSource,
+    this.onStartHandover,
     required this.service,
     required this.vpn,
   });
@@ -51,6 +52,9 @@ class BrowseScreen extends StatefulWidget {
   final ValueChanged<Source>? onSwitchSource;
   final VoidCallback? onAddSource;
   final ValueChanged<Source>? onRemoveSource;
+
+  /// Puts the handover code on screen, from the settings panel.
+  final VoidCallback? onStartHandover;
 
   /// Shared with settings, so a refresh reports through the same progress.
   final SourceService service;
@@ -863,6 +867,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
           onSwitch: (source) => widget.onSwitchSource?.call(source),
           onAddSource: () => widget.onAddSource?.call(),
           onRemoveSource: (source) => widget.onRemoveSource?.call(source),
+          onStartHandover: widget.onStartHandover,
         );
 
       case TvSection.search:
