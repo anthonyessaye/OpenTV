@@ -8,6 +8,12 @@ import 'package:opentv_ui/opentv_ui.dart';
 /// lays tiles on a fixed 1920x1080 canvas, so a constant is a real measurement
 /// there. A phone is 360 or 440 logical pixels wide depending on which phone,
 /// so the only honest width is whatever three columns of this screen leaves.
+///
+/// The height, though, is not something a caller should guess. [heightFor] is
+/// the arithmetic done once, here, next to the widget that has to fit in it —
+/// because guessing it is exactly what went wrong: a grid built on a ratio and
+/// a strip built on a round number both overflowed the moment a title needed
+/// its second line.
 class PosterCard extends StatelessWidget {
   const PosterCard({
     super.key,
@@ -16,6 +22,7 @@ class PosterCard extends StatelessWidget {
     this.imageUrl,
     this.onTap,
     this.progress,
+    this.titleLines = 2,
   });
 
   final String title;
@@ -25,6 +32,37 @@ class PosterCard extends StatelessWidget {
 
   /// How far through, 0..1, or null when it has not been started.
   final double? progress;
+
+  /// How many lines the title may take.
+  ///
+  /// One in a fixed-height strip, two in a grid that has room. It is a
+  /// parameter because the height a card needs depends on it, and the caller
+  /// is the one that has to reserve that height.
+  final int titleLines;
+
+  /// The height a card of [width] needs, titles included.
+  ///
+  /// The poster is 2:3, then a gap, then the title lines and an optional
+  /// subtitle. Derived from the same tokens the widget draws with, so the two
+  /// cannot drift the way a hard-coded 190 did.
+  static double heightFor(
+    double width, {
+    int titleLines = 2,
+    bool subtitle = false,
+  }) {
+    final poster = width * 3 / 2;
+    final titleLine =
+        OpenTvTouchType.section.fontSize! * OpenTvTouchType.section.height!;
+    final captionLine =
+        OpenTvTouchType.caption.fontSize! * OpenTvTouchType.caption.height!;
+    return poster +
+        OpenTvTouchSpace.sm +
+        titleLine * titleLines +
+        (subtitle ? captionLine : 0) +
+        // A pixel of slack. The line heights are fractional and a grid that
+        // is exactly full rounds the wrong way on some densities.
+        2;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +106,7 @@ class PosterCard extends StatelessWidget {
           const SizedBox(height: OpenTvTouchSpace.sm),
           Text(
             title,
-            maxLines: 2,
+            maxLines: titleLines,
             overflow: TextOverflow.ellipsis,
             style: OpenTvTouchType.section,
           ),

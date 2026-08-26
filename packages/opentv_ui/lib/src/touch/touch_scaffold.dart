@@ -188,7 +188,7 @@ class _BottomBar extends StatelessWidget {
                           destinations[i].label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: OpenTvTouchType.label.copyWith(
+                          style: OpenTvTouchType.navLabel.copyWith(
                             color: i == selected
                                 ? OpenTvColors.tally
                                 : OpenTvColors.inkFaint,

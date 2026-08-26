@@ -81,6 +81,21 @@ class OpenTvTouchType {
     color: OpenTvColors.inkMuted,
   );
 
+  /// The bottom bar's label, which has less room than any other.
+  ///
+  /// Six destinations across a 320-pixel phone is 53 pixels each, and the
+  /// tracking that makes [label] legible as an eyebrow is what pushes
+  /// SETTINGS past that. Narrower and tighter, and only here — the eyebrow
+  /// elsewhere has a whole row to itself and should keep its air.
+  static const navLabel = TextStyle(
+    fontFamily: mono,
+    fontSize: 9,
+    height: 1.2,
+    letterSpacing: 0.2,
+    fontWeight: FontWeight.w600,
+    color: OpenTvColors.inkMuted,
+  );
+
   static const data = TextStyle(
     fontFamily: mono,
     fontSize: 13,

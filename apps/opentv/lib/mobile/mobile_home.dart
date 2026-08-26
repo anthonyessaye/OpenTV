@@ -667,14 +667,21 @@ class _GridTabState extends State<_GridTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = (constraints.maxWidth / 130).floor().clamp(3, 8);
+        // The width one card actually gets, and from it the height it needs.
+        // mainAxisExtent rather than childAspectRatio: a ratio is a guess at
+        // how much room two lines of title take, and it was wrong — titles
+        // overflowed the cell on the first catalogue with long ones in it.
+        final cardWidth = (constraints.maxWidth -
+                OpenTvTouchSpace.gutter * 2 -
+                OpenTvTouchSpace.md * (columns - 1)) /
+            columns;
         return GridView.builder(
           padding: const EdgeInsets.all(OpenTvTouchSpace.gutter),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: OpenTvTouchSpace.md,
             mainAxisSpacing: OpenTvTouchSpace.lg,
-            // Two-thirds poster plus room for two lines of title beneath it.
-            childAspectRatio: 0.52,
+            mainAxisExtent: PosterCard.heightFor(cardWidth),
           ),
           itemCount: items.length,
           itemBuilder: (context, i) => PosterCard(
@@ -1053,6 +1060,8 @@ class _WithContinue extends StatefulWidget {
 }
 
 class _WithContinueState extends State<_WithContinue> {
+  static const _stripCardWidth = 104.0;
+
   List<_ContinueItem> _items = const [];
 
   @override
@@ -1080,7 +1089,9 @@ class _WithContinueState extends State<_WithContinue> {
           child: Text('CONTINUE WATCHING', style: OpenTvTouchType.label),
         ),
         SizedBox(
-          height: 190,
+          // Measured from the card rather than picked. 190 was picked, and it
+          // was 16 pixels short the first time a title wrapped.
+          height: PosterCard.heightFor(_stripCardWidth, titleLines: 1),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: OpenTvTouchSpace.page,
@@ -1088,11 +1099,12 @@ class _WithContinueState extends State<_WithContinue> {
             separatorBuilder: (_, _) =>
                 const SizedBox(width: OpenTvTouchSpace.md),
             itemBuilder: (context, i) => SizedBox(
-              width: 104,
+              width: _stripCardWidth,
               child: PosterCard(
                 title: _items[i].title,
                 imageUrl: _items[i].imageUrl,
                 progress: _items[i].progress,
+                titleLines: 1,
                 onTap: _items[i].onTap,
               ),
             ),

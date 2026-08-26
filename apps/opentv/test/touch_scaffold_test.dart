@@ -1,23 +1,32 @@
-import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
-/// The bottom bar has to hold six destinations on the narrowest phone.
+/// The bottom bar, and an honest account of what a widget test can say about
+/// it.
 ///
-/// Six across 320 logical pixels is 53 each, and the longest label is
-/// SETTINGS — eight monospaced characters with tracking.
+/// It cannot say whether the labels fit. Widget tests render in Ahem, where
+/// every glyph is a full em square, so eight characters of SETTINGS measure
+/// around twice what IBM Plex Mono actually draws. A fit assertion here fails
+/// on a layout that is fine and would pass on one that is not, depending only
+/// on which way the two errors happened to land. This is the same wall the
+/// bundled fonts already hit: a package test renders in the test font
+/// whatever is declared, so type has to be looked at.
 ///
-/// Checked by asking whether the labels were truncated, not by looking for an
-/// overflow. The first version of this test looked for a thrown exception and
-/// passed happily with nine absurd labels: the destinations ellipsize, so a
-/// bar that is far too crowded produces "SETT…" and no error at all. Silent
-/// truncation is the actual failure, so that is what is asserted.
+/// It was looked at. Six destinations at [OpenTvTouchType.label] clipped the
+/// final S of SETTINGS off the right edge of a Pixel 5 and pushed its glyph
+/// off centre; at [OpenTvTouchType.navLabel] all six fit with margin. Both
+/// were screenshots, not assertions.
+///
+/// What a test can hold on to is below: that the bar lays out at phone widths
+/// without throwing, that every destination stays a fingertip tall, and that
+/// the bar uses the narrow style rather than the roomy one — which is the
+/// regression that would silently bring the clipping back.
 void main() {
-  Widget bar({required Size size}) => Directionality(
+  Widget bar() => Directionality(
         textDirection: TextDirection.ltr,
         child: MediaQuery(
-          data: MediaQueryData(size: size),
+          data: const MediaQueryData(),
           child: TouchScaffold(
             title: 'Live',
             destinations: const [
@@ -33,51 +42,71 @@ void main() {
         ),
       );
 
+  /// Lays the bar out at a real width.
+  ///
+  /// setSurfaceSize rather than a MediaQueryData size, and the distinction
+  /// matters: a MediaQueryData carries padding and text scale and does not
+  /// constrain layout. An earlier version of this file passed sizes that way
+  /// and laid every case out on the 800-pixel default surface, so three
+  /// "widths" were one width and none of them was a phone.
+  Future<void> layOutAt(WidgetTester tester, Size size) async {
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(bar());
+  }
+
   for (final (name, size) in [
-    // An iPhone SE, which is the narrowest thing this will meet.
     ('small phone', Size(320, 568)),
     ('ordinary phone', Size(390, 844)),
     ('tablet', Size(834, 1194)),
   ]) {
-    testWidgets('six destinations fit on a $name', (tester) async {
-      await tester.pumpWidget(bar(size: size));
+    testWidgets('the bar lays out on a $name', (tester) async {
+      await layOutAt(tester, size);
       expect(tester.takeException(), isNull);
-
-      final truncated = <String>[];
-      for (final element in find.byType(Text).evaluate()) {
-        final text = (element.widget as Text).data;
-        if (text == null || text != text.toUpperCase()) continue;
-        final paragraph = element.renderObject! as RenderParagraph;
-        if (paragraph.didExceedMaxLines) truncated.add(text);
-      }
-
-      expect(
-        truncated,
-        isEmpty,
-        reason: 'these labels were cut short rather than fitting',
-      );
     });
   }
 
   testWidgets('every destination is at least a fingertip tall',
       (tester) async {
     // 48 is Android's minimum and 44 is Apple's; the larger satisfies both,
-    // and a bar people miss is a bar that gets pressed twice.
-    await tester.pumpWidget(bar(size: const Size(390, 844)));
+    // and a target people miss is one that gets pressed twice.
+    await layOutAt(tester, const Size(390, 844));
 
-    final tiles = tester
-        .widgetList<TouchTile>(find.byType(TouchTile))
-        .where((t) => t.borderRadius == BorderRadius.zero);
-    expect(tiles, isNotEmpty, reason: 'no bar destinations were found');
-
-    for (final finder in find.byType(TouchTile).evaluate()) {
-      final size = finder.size;
-      if (size == null || size.height > 200) continue;
+    for (final element in find.byType(TouchTile).evaluate()) {
+      final height = element.size?.height;
+      if (height == null || height > 200) continue;
       expect(
-        size.height,
+        height,
         greaterThanOrEqualTo(OpenTvTouchSpace.tapTarget),
-        reason: 'a touch target was ${size.height} tall',
+        reason: 'a touch target was $height tall',
       );
     }
+  });
+
+  testWidgets('the destinations share the width evenly', (tester) async {
+    await layOutAt(tester, const Size(390, 844));
+
+    final widths = <double>{
+      for (final element in find.byType(TouchTile).evaluate())
+        if (element.size case final size?
+            when size.height > 0 && size.height < 100 && size.width < 200)
+          size.width.roundToDouble(),
+    };
+
+    expect(widths, hasLength(1), reason: 'destinations were unequal: $widths');
+  });
+
+  test('the bar uses the narrow label, not the roomy one', () {
+    // The regression that would bring the clipping back without anything
+    // failing. navLabel exists only because label's tracking is what pushed
+    // SETTINGS off a phone, so the two must not converge by accident.
+    expect(
+      OpenTvTouchType.navLabel.fontSize,
+      lessThan(OpenTvTouchType.label.fontSize!),
+    );
+    expect(
+      OpenTvTouchType.navLabel.letterSpacing,
+      lessThan(OpenTvTouchType.label.letterSpacing!),
+    );
   });
 }
