@@ -11,6 +11,7 @@ import 'channel_row.dart';
 import 'mobile_detail.dart';
 import 'mobile_player.dart';
 import 'poster_card.dart';
+import 'mobile_settings_screens.dart';
 import 'region_screen.dart';
 
 /// The phone's equivalent of `BrowseScreen`.
@@ -63,7 +64,11 @@ class _MobileHomeState extends State<MobileHome> {
   /// stream URL is ever persisted, on this device or the television, because
   /// the username and password are in its path — the same rule, enforced in
   /// the same place, because it is the same resolver.
-  Future<void> _play(Playable item, {Duration? startAt}) async {
+  Future<void> _play(
+    Playable item, {
+    Duration? startAt,
+    List<Playable> queue = const [],
+  }) async {
     final url = await widget.resolver.urlFor(widget.source, item);
     if (!mounted) return;
     if (url == null) {
@@ -89,6 +94,15 @@ class _MobileHomeState extends State<MobileHome> {
             streamOptions: widget.resolver.optionsFor(item),
             isLive: item.isLive,
             startAt: startAt,
+            nextLabel: _nextIn(queue, item) == null ? null : 'NEXT EPISODE',
+            onNext: _nextIn(queue, item) == null
+                ? null
+                : () {
+                    // Replaces rather than stacks. Six episodes in, a back
+                    // stack is six presses to escape.
+                    Navigator.of(context).pop();
+                    _play(_nextIn(queue, item)!, queue: queue);
+                  },
             onProgress: (position, duration) => widget.db.recordPlayback(
               sourceId: widget.source.id,
               kind: item.kind == XtreamStreamKind.series
@@ -190,12 +204,20 @@ class _MobileHomeState extends State<MobileHome> {
           ),
           cast: _castOf(series),
           episodes: episodes,
-          onEpisode: (episode) => _play(Playable.episode(episode)),
+          onEpisode: (episode) => _play(
+            Playable.episode(episode),
+            queue: [for (final row in episodes) Playable.episode(row)],
+          ),
           // A series has no stream of its own; the button plays the first
           // episode rather than pretending there is something behind it.
           onPlay: episodes.isEmpty
               ? () => _say('This series has no episodes in the catalogue.')
-              : () => _play(Playable.episode(episodes.first)),
+              : () => _play(
+                    Playable.episode(episodes.first),
+                    queue: [
+                      for (final row in episodes) Playable.episode(row),
+                    ],
+                  ),
         ),
       ),
     );
@@ -229,6 +251,10 @@ class _MobileHomeState extends State<MobileHome> {
     ];
   }
 
+  Future<void> _push(Widget screen) => Navigator.of(context).push(
+        PageRouteBuilder<void>(pageBuilder: (context, _, _) => screen),
+      );
+
   Future<void> _openRegions() async {
     await Navigator.of(context).push(
       PageRouteBuilder<void>(
@@ -261,6 +287,17 @@ class _MobileHomeState extends State<MobileHome> {
         at: DateTime.now(),
       );
     }
+  }
+
+  /// The episode after this one in the list it was opened from.
+  ///
+  /// From the queue rather than a fresh query, so "next" means next in what
+  /// the viewer is looking at — the same season they picked, in the order it
+  /// was shown to them.
+  static Playable? _nextIn(List<Playable> queue, Playable current) {
+    final index = queue.indexWhere((p) => p.remoteId == current.remoteId);
+    if (index < 0 || index + 1 >= queue.length) return null;
+    return queue[index + 1];
   }
 
   /// How far through, or null when the duration is unknown.
@@ -442,6 +479,34 @@ class _MobileHomeState extends State<MobileHome> {
           vpn: widget.vpn,
           onOfferHandover: widget.onOfferHandover,
           onOpenRegions: _openRegions,
+          onOpenCategories: () => _push(
+            MobileCategoriesScreen(
+              db: widget.db,
+              sourceId: widget.source.id,
+            ),
+          ),
+          onOpenPin: () => _push(
+            const MobileSecretScreen(
+              title: 'Parental lock',
+              reference: MobileSecretReferences.pin,
+              digitsOnly: true,
+              explanation:
+                  'Categories you lock are removed from browsing entirely '
+                  'rather than greyed out, so nothing advertises what is '
+                  'behind the PIN. Four digits or more.',
+            ),
+          ),
+          onOpenTmdb: () => _push(
+            const MobileSecretScreen(
+              title: 'TMDB key',
+              reference: MobileSecretReferences.tmdb,
+              explanation:
+                  'Where synopses, cast and artwork come from. TMDB issues '
+                  'one per person, free, at themoviedb.org. Either credential '
+                  'they give you works. Kept in this device’s keystore beside '
+                  'your provider passwords, never in the catalogue.',
+            ),
+          ),
         ),
     };
   }
@@ -719,6 +784,9 @@ class _SettingsTab extends StatelessWidget {
     required this.vpn,
     required this.onOfferHandover,
     required this.onOpenRegions,
+    required this.onOpenCategories,
+    required this.onOpenPin,
+    required this.onOpenTmdb,
   });
 
   final Source source;
@@ -729,6 +797,9 @@ class _SettingsTab extends StatelessWidget {
   final VpnService vpn;
   final VoidCallback onOfferHandover;
   final VoidCallback onOpenRegions;
+  final VoidCallback onOpenCategories;
+  final VoidCallback onOpenPin;
+  final VoidCallback onOpenTmdb;
 
   @override
   Widget build(BuildContext context) {
@@ -755,6 +826,22 @@ class _SettingsTab extends StatelessWidget {
           name: 'Regions',
           now: 'Hide what you do not watch',
           onTap: onOpenRegions,
+        ),
+        ChannelRow(
+          name: 'Categories',
+          now: 'Hide whole sections of the catalogue',
+          onTap: onOpenCategories,
+        ),
+        ChannelRow(
+          name: 'Parental lock',
+          now: 'A PIN, and what it hides',
+          onTap: onOpenPin,
+        ),
+        const _Heading('Metadata'),
+        ChannelRow(
+          name: 'TMDB key',
+          now: 'Synopses, cast and artwork',
+          onTap: onOpenTmdb,
         ),
         const _Heading('Another device'),
         ChannelRow(

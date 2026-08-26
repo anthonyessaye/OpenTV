@@ -26,6 +26,8 @@ class MobilePlayer extends StatefulWidget {
     this.isLive = true,
     this.startAt,
     this.onProgress,
+    this.nextLabel,
+    this.onNext,
   });
 
   final String url;
@@ -38,6 +40,13 @@ class MobilePlayer extends StatefulWidget {
   /// Reported periodically so a film can be resumed. The same contract the
   /// television's player answers, because the row it writes is the same row.
   final void Function(Duration position, Duration? duration)? onProgress;
+
+  /// What the next episode is called, and how to get to it.
+  ///
+  /// Both null for a film and a live channel. A series has neighbours; a film
+  /// does not, and offering one would be a button that lies.
+  final String? nextLabel;
+  final VoidCallback? onNext;
 
   @override
   State<MobilePlayer> createState() => _MobilePlayerState();
@@ -56,6 +65,14 @@ class _MobilePlayerState extends State<MobilePlayer> {
   /// Set while a finger is on the bar, so the poll does not drag the thumb
   /// back to where the engine still thinks it is.
   Duration? _scrubbing;
+
+  /// Read on demand rather than polled. Tracks change when the stream does,
+  /// which is rare, and asking twice a second is a question nobody hears.
+  List<MediaTrack> _tracks = const [];
+  AspectMode _aspect = AspectMode.fit;
+  _Sheet? _sheet;
+  int _width = 0;
+  int _height = 0;
 
   DateTime _lastReport = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -97,6 +114,10 @@ class _MobilePlayerState extends State<MobilePlayer> {
       _length = lengthMs is int && lengthMs > 0
           ? Duration(milliseconds: lengthMs)
           : null;
+      final w = state['width'];
+      final h = state['height'];
+      if (w is int) _width = w;
+      if (h is int) _height = h;
     });
 
     // Every ten seconds rather than every poll: this is a database write, and
@@ -131,6 +152,40 @@ class _MobilePlayerState extends State<MobilePlayer> {
     await _channel?.invokeMethod<void>(_playing ? 'pause' : 'play');
     if (mounted) setState(() => _playing = !_playing);
     _restartHide();
+  }
+
+  Future<void> _openSheet(_Sheet sheet) async {
+    final raw = await _channel?.invokeListMethod<Object?>('tracks');
+    if (!mounted) return;
+    setState(() {
+      _tracks = [
+        for (final entry in raw ?? const [])
+          if (entry is Map) MediaTrack.fromMap(entry.cast<Object?, Object?>()),
+      ];
+      _sheet = sheet;
+    });
+    _hide?.cancel();
+  }
+
+  void _closeSheet() {
+    setState(() => _sheet = null);
+    _restartHide();
+  }
+
+  Future<void> _selectTrack(String type, String? id) async {
+    // 'type' and 'audio'/'text', exactly as the television sends them. The
+    // engines answer one contract and neither knows which interface asked.
+    await _channel?.invokeMethod<void>('selectTrack', {
+      'type': type,
+      'id': id,
+    });
+    _closeSheet();
+  }
+
+  Future<void> _setAspect(AspectMode mode) async {
+    await _channel?.invokeMethod<void>('setAspect', {'mode': mode.name});
+    if (mounted) setState(() => _aspect = mode);
+    _closeSheet();
   }
 
   Future<void> _seekTo(Duration position) async {
@@ -189,9 +244,25 @@ class _MobilePlayerState extends State<MobilePlayer> {
                           setState(() => _scrubbing = null);
                           _seekTo(at);
                         },
+                  onAudio: () => _openSheet(_Sheet.audio),
+                  onSubtitles: () => _openSheet(_Sheet.subtitles),
+                  onPicture: () => _openSheet(_Sheet.picture),
+                  nextLabel: widget.nextLabel,
+                  onNext: widget.onNext,
                 ),
               ),
             ),
+            if (_sheet != null)
+              _SheetPanel(
+                sheet: _sheet!,
+                tracks: _tracks,
+                aspect: _aspect,
+                width: _width,
+                height: _height,
+                onSelectTrack: _selectTrack,
+                onSelectAspect: _setAspect,
+                onDismiss: _closeSheet,
+              ),
           ],
         ),
       ),
@@ -212,6 +283,11 @@ class _Chrome extends StatelessWidget {
     required this.onScrubStart,
     required this.onScrubUpdate,
     required this.onScrubEnd,
+    required this.onAudio,
+    required this.onSubtitles,
+    required this.onPicture,
+    this.nextLabel,
+    this.onNext,
   });
 
   final String title;
@@ -225,6 +301,11 @@ class _Chrome extends StatelessWidget {
   final ValueChanged<Duration>? onScrubStart;
   final ValueChanged<Duration>? onScrubUpdate;
   final ValueChanged<Duration>? onScrubEnd;
+  final VoidCallback onAudio;
+  final VoidCallback onSubtitles;
+  final VoidCallback onPicture;
+  final String? nextLabel;
+  final VoidCallback? onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -337,6 +418,29 @@ class _Chrome extends StatelessWidget {
             ),
           ),
           const Spacer(),
+          // A row of words rather than glyphs. There is no universally known
+          // shape for "subtitles" or "aspect ratio", and this project spells
+          // those out on the television for the same reason.
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: OpenTvTouchSpace.gutter,
+              vertical: OpenTvTouchSpace.xs,
+            ),
+            child: Row(
+              children: [
+                _Control(label: 'AUDIO', onTap: onAudio),
+                _Control(label: 'SUBTITLES', onTap: onSubtitles),
+                _Control(label: 'PICTURE', onTap: onPicture),
+                const Spacer(),
+                if (onNext != null)
+                  _Control(
+                    label: nextLabel ?? 'NEXT',
+                    onTap: onNext!,
+                    emphasis: true,
+                  ),
+              ],
+            ),
+          ),
           if (!isLive && length != null)
             _ScrubBar(
               position: position,
@@ -451,6 +555,244 @@ class _ScrubBar extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Which chooser is open.
+enum _Sheet { audio, subtitles, picture }
+
+class _Control extends StatelessWidget {
+  const _Control({
+    required this.label,
+    required this.onTap,
+    this.emphasis = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool emphasis;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(end: OpenTvTouchSpace.sm),
+      child: TouchTile(
+        onTap: onTap,
+        semanticLabel: label,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(
+            horizontal: OpenTvTouchSpace.md,
+          ),
+          decoration: BoxDecoration(
+            color: emphasis ? OpenTvColors.tally : OpenTvColors.surface,
+            borderRadius: OpenTvRadius.tile,
+          ),
+          child: Text(
+            label,
+            style: OpenTvTouchType.label.copyWith(
+              color: emphasis ? OpenTvColors.ground : OpenTvColors.ink,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The chooser itself, over the video.
+///
+/// A sheet from the bottom rather than the television's panel on the right.
+/// The reason is the same in both cases and produces opposite answers: put it
+/// where the thumb is and where it hides least of the picture, and on a phone
+/// held upright that is the bottom third.
+///
+/// The video keeps playing behind it, because choosing an audio track means
+/// hearing the difference.
+class _SheetPanel extends StatelessWidget {
+  const _SheetPanel({
+    required this.sheet,
+    required this.tracks,
+    required this.aspect,
+    required this.width,
+    required this.height,
+    required this.onSelectTrack,
+    required this.onSelectAspect,
+    required this.onDismiss,
+  });
+
+  final _Sheet sheet;
+  final List<MediaTrack> tracks;
+  final AspectMode aspect;
+  final int width;
+  final int height;
+  final void Function(String type, String? id) onSelectTrack;
+  final ValueChanged<AspectMode> onSelectAspect;
+  final VoidCallback onDismiss;
+
+  /// Whether the four picture modes will actually look different.
+  ///
+  /// Three of them are the same picture when the source and the panel share a
+  /// shape, which for 16:9 material is almost always. Choosing FILL and seeing
+  /// nothing change reads as a broken control unless something says why — so
+  /// it says why, rather than removing modes that are correct and
+  /// occasionally needed.
+  String? get _pictureNote {
+    if (width <= 0 || height <= 0) return null;
+    final ratio = width / height;
+    if ((ratio - 16 / 9).abs() < 0.02) {
+      return 'This stream is already 16:9, so fit, fill and stretch will look '
+          'identical on this screen.';
+    }
+    return '$width x $height';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = switch (sheet) {
+      _Sheet.audio => 'audio',
+      _Sheet.subtitles => 'text',
+      _Sheet.picture => null,
+    };
+
+    final rows = <Widget>[];
+    if (sheet == _Sheet.picture) {
+      for (final mode in AspectMode.values) {
+        rows.add(_Row(
+          title: mode.label,
+          detail: mode.detail,
+          selected: mode == aspect,
+          onTap: () => onSelectAspect(mode),
+        ));
+      }
+    } else {
+      final mine = [for (final t in tracks) if (t.kindMatches(type!)) t];
+      if (sheet == _Sheet.subtitles) {
+        rows.add(_Row(
+          title: 'OFF',
+          detail: 'No subtitles',
+          selected: !mine.any((t) => t.selected),
+          onTap: () => onSelectTrack(type!, null),
+        ));
+      }
+      for (final track in mine) {
+        rows.add(_Row(
+          title: track.label,
+          detail: track.language ?? '',
+          selected: track.selected,
+          onTap: () => onSelectTrack(type!, track.id),
+        ));
+      }
+      if (mine.isEmpty) {
+        rows.add(const _Row(
+          title: 'NONE',
+          detail: 'This stream carries none',
+          selected: false,
+        ));
+      }
+    }
+
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onDismiss,
+        child: ColoredBox(
+          color: const Color(0x99000000),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.only(
+                left: OpenTvTouchSpace.gutter,
+                right: OpenTvTouchSpace.gutter,
+                top: OpenTvTouchSpace.lg,
+                bottom: MediaQuery.of(context).padding.bottom +
+                    OpenTvTouchSpace.lg,
+              ),
+              decoration: const BoxDecoration(
+                color: OpenTvColors.surface,
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    switch (sheet) {
+                      _Sheet.audio => 'Audio',
+                      _Sheet.subtitles => 'Subtitles',
+                      _Sheet.picture => 'Picture',
+                    },
+                    style: OpenTvTouchType.title,
+                  ),
+                  if (sheet == _Sheet.picture && _pictureNote != null) ...[
+                    const SizedBox(height: OpenTvTouchSpace.xs),
+                    Text(_pictureNote!, style: OpenTvTouchType.caption),
+                  ],
+                  const SizedBox(height: OpenTvTouchSpace.md),
+                  ...rows,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.title,
+    required this.detail,
+    required this.selected,
+    this.onTap,
+  });
+
+  final String title;
+  final String detail;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TouchTile(
+      onTap: onTap,
+      minHeight: 52,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: OpenTvTouchSpace.sm),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              child: selected
+                  ? const Text('•', style: OpenTvTouchType.section)
+                  : null,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: OpenTvTouchType.section.copyWith(
+                      color: selected
+                          ? OpenTvColors.tally
+                          : OpenTvColors.ink,
+                    ),
+                  ),
+                  if (detail.isNotEmpty)
+                    Text(detail, style: OpenTvTouchType.caption),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
