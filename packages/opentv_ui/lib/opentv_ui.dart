@@ -29,3 +29,5 @@ export 'src/focus/focus_row.dart';
 export 'src/focus/focusable_tile.dart';
 export 'src/tokens/tokens.dart';
 export 'src/tokens/tv_canvas.dart';
+export 'src/platform/device_class.dart';
+export 'src/tokens/touch_tokens.dart';

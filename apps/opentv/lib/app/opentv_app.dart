@@ -15,13 +15,20 @@ import 'source_service.dart';
 import 'stream_resolver.dart';
 import 'vpn_service.dart';
 
-/// The application.
+/// The application, in one of two shapes.
 ///
 /// No MaterialApp anywhere: the point of the redesign is that nothing
-/// inherits Google's design language, on either television. WidgetsApp gives
-/// routing and text direction and stops there.
+/// inherits Google's design language, on any of the four platforms.
+/// WidgetsApp gives routing and text direction and stops there.
+///
+/// [device] decides which interface exists, and it is passed in rather than
+/// looked up, because it is settled before the first frame in `main`. It is
+/// not a breakpoint: nothing here reacts to a window resizing, because a
+/// television does not become a phone.
 class OpenTvApp extends StatelessWidget {
-  OpenTvApp({super.key});
+  OpenTvApp({super.key, required this.device});
+
+  final DeviceClass device;
 
   /// Needed because the back handler is installed above the navigator, in
   /// [WidgetsApp.builder], where the context cannot see it.
@@ -47,34 +54,62 @@ class OpenTvApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       // WidgetsApp has no default text style; without this a Text with no
       // style of its own renders as the debug red-on-yellow.
-      textStyle: OpenTvType.body,
-      // Every screen is authored on a 1920x1080 canvas and scaled, because
-      // Apple TV and Android TV disagree about how many logical pixels
-      // describe the same panel — 1920x1080 against 960x540.
-      builder: (context, child) => BackKeys(
-        onBack: _back,
-        child: TvCanvas(child: child ?? const SizedBox()),
-      ),
+      textStyle: device.isTelevision ? OpenTvType.body : OpenTvTouchType.body,
+      builder: (context, child) {
+        final content = child ?? const SizedBox();
+        if (!device.isTelevision) {
+          // No canvas and no key handling. A phone reports its own pixels
+          // honestly, and its back gesture is the system's to deliver
+          // through the navigator rather than something to intercept.
+          return content;
+        }
+        // Every television screen is authored on a 1920x1080 canvas and
+        // scaled, because Apple TV and Android TV disagree about how many
+        // logical pixels describe the same panel — 1920x1080 against 960x540.
+        return BackKeys(onBack: _back, child: TvCanvas(child: content));
+      },
       pageRouteBuilder: <T>(RouteSettings settings, WidgetBuilder builder) {
-        // Without Material there is no default transition. A fade suits a
-        // ten-foot interface; sliding pages read as phone gestures on a
-        // screen nobody touches.
+        // Without Material there is no default transition, and the right one
+        // differs by device rather than by taste. A fade suits a ten-foot
+        // interface, where a page sliding in reads as a gesture on a screen
+        // nobody is touching. On a handset the opposite holds: a push that
+        // does not travel leaves no sense of depth, and the back gesture then
+        // has nothing to undo.
+        if (device.isTelevision) {
+          return PageRouteBuilder<T>(
+            settings: settings,
+            transitionDuration: OpenTvMotion.fade,
+            pageBuilder: (context, animation, _) => builder(context),
+            transitionsBuilder: (context, animation, _, child) =>
+                FadeTransition(opacity: animation, child: child),
+          );
+        }
         return PageRouteBuilder<T>(
           settings: settings,
-          transitionDuration: OpenTvMotion.fade,
+          transitionDuration: const Duration(milliseconds: 260),
           pageBuilder: (context, animation, _) => builder(context),
-          transitionsBuilder: (context, animation, _, child) =>
-              FadeTransition(opacity: animation, child: child),
+          transitionsBuilder: (context, animation, _, child) {
+            final slide = Tween<Offset>(
+              begin: const Offset(1, 0),
+              end: Offset.zero,
+            ).chain(CurveTween(curve: Curves.easeOutCubic));
+            return SlideTransition(
+              position: animation.drive(slide),
+              child: child,
+            );
+          },
         );
       },
-      home: const _Root(),
+      home: _Root(device: device),
     );
   }
 }
 
 /// Decides what the viewer sees first: onboarding, or their catalogue.
 class _Root extends StatefulWidget {
-  const _Root();
+  const _Root({required this.device});
+
+  final DeviceClass device;
 
   @override
   State<_Root> createState() => _RootState();

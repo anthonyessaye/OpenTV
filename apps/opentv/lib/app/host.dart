@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:opentv_ui/opentv_ui.dart';
 
 /// The two things the app needs from the operating system that Flutter does
 /// not provide: somewhere to put the catalogue, and somewhere safe to put a
@@ -63,4 +64,18 @@ class Host {
 
   Future<void> deleteSecret(String reference) =>
       _channel.invokeMethod<void>('deleteSecret', {'reference': reference});
+
+  /// Which interface to draw.
+  ///
+  /// Asked of the operating system, because Dart cannot tell: `Platform.isIOS`
+  /// is true on tvOS, so an Apple TV and an iPhone look identical from here.
+  /// Android is asked through `UiModeManager`, Apple through
+  /// `UIUserInterfaceIdiom`; neither is guessing from the screen, which would
+  /// get a tablet in landscape wrong.
+  ///
+  /// Falls back to a handset when the host says nothing — an older build of
+  /// the native half, which is exactly the case the contract test exists to
+  /// prevent, but not one worth crashing over in front of a viewer.
+  Future<DeviceClass> deviceClass() async =>
+      DeviceClass.parse(await _channel.invokeMethod<String>('deviceClass'));
 }

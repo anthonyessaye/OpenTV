@@ -1,7 +1,9 @@
 package com.anthonyessaye.opentv
 
+import android.app.UiModeManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.res.Configuration
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import io.flutter.plugin.common.BinaryMessenger
@@ -48,6 +50,29 @@ class HostChannel(private val context: Context) {
             // uninstalled. Android has no equivalent of the tvOS purge, so
             // the catalogue can simply live here.
             "dataDirectory" -> result.success(context.filesDir.absolutePath)
+
+            // Asked of UiModeManager rather than measured. An Android TV
+            // reports 960x540 logical pixels and a tablet in landscape can
+            // report the same shape, so no amount of looking at the screen
+            // separates them — but the system already knows, because it is
+            // what decided to launch the leanback home screen.
+            //
+            // The tablet threshold is Android's own: 600dp of smallest width
+            // is the breakpoint every resource qualifier uses, so agreeing
+            // with it means the layout and the resources cannot disagree.
+            "deviceClass" -> {
+                val modes = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+                val television =
+                    modes?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+                val smallestWidth = context.resources.configuration.smallestScreenWidthDp
+                result.success(
+                    when {
+                        television -> "television"
+                        smallestWidth >= 600 -> "tablet"
+                        else -> "phone"
+                    }
+                )
+            }
 
             "writeSecret" -> {
                 val reference = call.argument<String>("reference")

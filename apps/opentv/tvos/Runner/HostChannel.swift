@@ -1,6 +1,7 @@
 import Flutter
 import Foundation
 import Security
+import UIKit
 
 /// The tvOS half of the host channel: a data directory and the Keychain.
 ///
@@ -16,6 +17,21 @@ final class HostChannel {
 
     private static func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
         switch call.method {
+
+        // UIKit's own idiom, shared verbatim with the iOS target.
+        //
+        // This file is compiled into both, which is the point: tvOS reports
+        // itself to Dart as iOS, so nothing above this line can tell an Apple
+        // TV from an iPhone. UIUserInterfaceIdiom can, and it is the same
+        // answer on both platforms rather than two implementations that have
+        // to be kept agreeing.
+        case "deviceClass":
+            switch UIDevice.current.userInterfaceIdiom {
+            case .tv: result("television")
+            case .pad: result("tablet")
+            default: result("phone")
+            }
+            return
 
         // The caches directory, and not by preference.
         //
