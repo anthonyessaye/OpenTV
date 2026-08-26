@@ -11,6 +11,7 @@ import 'channel_row.dart';
 import 'mobile_detail.dart';
 import 'mobile_player.dart';
 import 'poster_card.dart';
+import 'mobile_guide.dart';
 import 'mobile_settings_screens.dart';
 import 'region_screen.dart';
 
@@ -289,6 +290,48 @@ class _MobileHomeState extends State<MobileHome> {
     }
   }
 
+  /// Plays something that already aired, out of the provider's archive.
+  ///
+  /// A separate address from the live one — Xtream serves the archive from
+  /// its own path — so this cannot go through the ordinary play route.
+  Future<void> _playCatchUp(Channel channel, EpgProgrammeRow programme) async {
+    final stop = programme.stopUtc;
+    final url = await widget.resolver.catchUpUrlFor(
+      widget.source,
+      channel,
+      programme.startUtc,
+      stop == null
+          ? const Duration(hours: 1)
+          : stop.difference(programme.startUtc),
+    );
+    if (!mounted) return;
+    if (url == null) {
+      _say('This provider keeps no archive for that programme.');
+      return;
+    }
+
+    await Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        transitionDuration: OpenTvMotion.fade,
+        pageBuilder: (context, animation, _) => FadeTransition(
+          opacity: animation,
+          child: MobilePlayer(
+            url: url,
+            title: programme.title ?? channel.name,
+            subtitle: channel.name,
+            streamOptions: widget.resolver.optionsFor(
+              Playable.channel(channel),
+            ),
+            // A recording is not live, whatever channel it came from: it has a
+            // real beginning and end, and the chrome should offer a position
+            // rather than an ON AIR badge.
+            isLive: false,
+          ),
+        ),
+      ),
+    );
+  }
+
   /// The episode after this one in the list it was opened from.
   ///
   /// From the queue rather than a fresh query, so "next" means next in what
@@ -335,6 +378,7 @@ class _MobileHomeState extends State<MobileHome> {
 
   static const _destinations = [
     TouchDestination(label: 'LIVE', glyph: Glyph.live),
+    TouchDestination(label: 'GUIDE', glyph: Glyph.guide),
     TouchDestination(label: 'FILMS', glyph: Glyph.film),
     TouchDestination(label: 'SERIES', glyph: Glyph.series),
     TouchDestination(label: 'SEARCH', glyph: Glyph.search),
@@ -346,9 +390,10 @@ class _MobileHomeState extends State<MobileHome> {
     return TouchScaffold(
       title: switch (_tab) {
         0 => 'Live',
-        1 => 'Films',
-        2 => 'Series',
-        3 => 'Search',
+        1 => 'Guide',
+        2 => 'Films',
+        3 => 'Series',
+        4 => 'Search',
         _ => 'Settings',
       },
       destinations: _destinations,
@@ -388,7 +433,20 @@ class _MobileHomeState extends State<MobileHome> {
           hiddenRegions: _regions.forKind(ItemKind.live),
           onPlay: (item) => _play(item),
         ),
-      1 => _WithContinue(
+      1 => MobileGuide(
+          key: ValueKey('guide:${_regions.forKind(ItemKind.live).join(',')}'),
+          db: widget.db,
+          sourceId: widget.source.id,
+          hiddenRegions: _regions.forKind(ItemKind.live),
+          onPlay: (channel) => _play(Playable.channel(channel)),
+          canCatchUp: (channel, start) => StreamResolver.isWithinArchive(
+            channel,
+            start,
+            DateTime.now(),
+          ),
+          onCatchUp: _playCatchUp,
+        ),
+      2 => _WithContinue(
           key: ValueKey('films-c:${_regions.forKind(ItemKind.movie).join(',')}'),
           load: () async {
             final states = await widget.db.continueWatching(
@@ -429,7 +487,7 @@ class _MobileHomeState extends State<MobileHome> {
           onOpen: (m) => _openFilm(m as Movie),
           ),
         ),
-      2 => _WithContinue(
+      3 => _WithContinue(
           key: ValueKey('series-c:${_regions.forKind(ItemKind.series).join(',')}'),
           load: () async {
             // The series shelf, which keeps a show while it still has
@@ -463,7 +521,7 @@ class _MobileHomeState extends State<MobileHome> {
           onOpen: (s) => _openSeries(s as SeriesEntry),
           ),
         ),
-      3 => _SearchTab(
+      4 => _SearchTab(
           db: widget.db,
           source: widget.source,
           onChannel: (c) => _play(Playable.channel(c)),
