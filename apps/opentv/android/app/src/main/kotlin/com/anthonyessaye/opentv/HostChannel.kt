@@ -31,9 +31,20 @@ class HostChannel(private val context: Context) {
      * up, and cleared after reading so a rotation does not replay it.
      */
     var pendingLink: String? = null
+        set(value) {
+            field = value
+            // Pushed as well as held. Dart reads the pending value once, when
+            // its tree comes up; a link arriving after that would sit here
+            // unread, which is what left the handover screen with no address.
+            if (value != null) channel?.invokeMethod("link", value)
+        }
+
+    private var channel: MethodChannel? = null
 
     fun attach(messenger: BinaryMessenger) {
-        MethodChannel(messenger, "opentv/host").setMethodCallHandler(::handle)
+        channel = MethodChannel(messenger, "opentv/host").also {
+            it.setMethodCallHandler(::handle)
+        }
     }
 
     /**

@@ -15,11 +15,26 @@ final class HostChannel {
     /// happened before any Dart exists to hear about it. Cleared when read.
     static var pendingLink: String?
 
+    /// The live channel, so a link arriving while the app is running can be
+    /// pushed rather than waiting to be asked for.
+    private static var channel: FlutterMethodChannel?
+
+    /// Tells Dart about a link that arrived after the tree was already up.
+    ///
+    /// Pulling alone is not enough. `initialLink` is read once, when the tree
+    /// comes up, which covers a cold launch and nothing else — a code scanned
+    /// with the app already open set a pending link that nobody ever
+    /// collected.
+    static func announce(_ link: String) {
+        channel?.invokeMethod("link", arguments: link)
+    }
+
     static func attach(messenger: FlutterBinaryMessenger) {
         let channel = FlutterMethodChannel(name: "opentv/host", binaryMessenger: messenger)
         channel.setMethodCallHandler { call, result in
             handle(call, result)
         }
+        self.channel = channel
     }
 
     private static func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {

@@ -89,4 +89,25 @@ class Host {
     final raw = await _channel.invokeMethod<String>('initialLink');
     return raw == null ? null : Uri.tryParse(raw);
   }
+
+  /// Links that arrive while the app is already running.
+  ///
+  /// Pulling once is not enough, and that was the whole of the bug. A cold
+  /// launch is covered by [initialLink]; a code scanned with OpenTV already
+  /// open sets a pending link that nobody ever collects, so the handover
+  /// screen came up with no address and sat at nought per cent.
+  ///
+  /// The native halves push here instead. Nothing is missed either way: the
+  /// pending value is still read at startup, and this carries whatever
+  /// arrives afterwards.
+  void onLink(ValueChanged<Uri> listener) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method != 'link') return null;
+      final raw = call.arguments;
+      if (raw is! String) return null;
+      final uri = Uri.tryParse(raw);
+      if (uri != null) listener(uri);
+      return null;
+    });
+  }
 }

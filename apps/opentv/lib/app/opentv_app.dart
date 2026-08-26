@@ -201,6 +201,14 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     // on, and the point of it is that it is carrying the traffic.
     _vpn.connectIfConfigured();
     _checkLink();
+    // And anything that arrives afterwards.
+    _host.onLink(_takeLink);
+  }
+
+  /// Acts on a pairing link however it arrived.
+  void _takeLink(Uri uri) {
+    final pairing = HandoverPairing.decode(uri.toString());
+    if (pairing != null && mounted) setState(() => _incoming = pairing);
   }
 
   /// Acts on the opentv:// link this launch was opened by, if any.
@@ -228,11 +236,10 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   Future<void> _checkLink() async {
     final uri = await _host.initialLink();
     if (uri == null || !mounted) return;
-    final pairing = HandoverPairing.decode(uri.toString());
     // A link that is not a pairing is not an error worth reporting: a camera
     // pointed at the world produces a great many strings, and the app can be
     // opened by any of them.
-    if (pairing != null) setState(() => _incoming = pairing);
+    _takeLink(uri);
   }
 
   @override
@@ -463,6 +470,11 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     final incoming = _incoming;
     if (incoming != null && _databaseFile != null) {
       return HandoverReceiveScreen(
+        // Keyed on the pairing, so scanning again after a failure starts a
+        // fresh attempt. Without it the screen kept the widget it already had
+        // — and with it, its failure — so a second scan changed the address
+        // and showed the first error for ever.
+        key: ValueKey(incoming.encode()),
         service: _handoverService(db),
         pairing: incoming,
         // A fresh install has nothing to send, so it is not asked which way.

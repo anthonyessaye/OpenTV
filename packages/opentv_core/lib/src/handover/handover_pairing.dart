@@ -77,7 +77,11 @@ class HandoverPairing {
         scheme: 'opentv',
         host: 'handover',
         queryParameters: {
-          'h': host,
+          // Comma-separated, and still `h`, so a code from an older build
+          // reads correctly here and one from this build reads as a single
+          // host on an older receiver — the first address is what it used to
+          // be.
+          'h': hosts.join(','),
           'p': '$port',
           'k': base64Url.encode(key),
         },

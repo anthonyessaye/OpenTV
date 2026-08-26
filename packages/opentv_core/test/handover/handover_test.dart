@@ -28,6 +28,24 @@ HandoverBundle _bundle({int schemaVersion = 3, int databaseBytes = 2048}) {
 
 void main() {
   group('pairing', () {
+    test('every address survives the round trip through the QR text', () {
+      // The one that was missing, and the reason a half-applied fix shipped:
+      // the decoder accepted a list and the client tried a list, while the
+      // encoder still wrote a single host. Every test built a pairing
+      // directly, so nothing ever put more than one address through the text
+      // the camera actually reads.
+      final pairing = HandoverPairing.generate(
+        hosts: const ['192.168.2.14', '10.0.0.5', '127.0.0.1'],
+        port: 8100,
+      );
+      final decoded = HandoverPairing.decode(pairing.encode())!;
+
+      expect(decoded.hosts, ['192.168.2.14', '10.0.0.5', '127.0.0.1']);
+      expect(decoded.host, '192.168.2.14');
+      expect(decoded.port, 8100);
+      expect(decoded.key, pairing.key);
+    });
+
     test('survives a round trip through the QR text', () {
       final pairing = HandoverPairing.generate(hosts: ['192.168.1.40'], port: 8100);
       final decoded = HandoverPairing.decode(pairing.encode())!;

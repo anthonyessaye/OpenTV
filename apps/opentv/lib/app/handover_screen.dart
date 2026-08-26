@@ -283,6 +283,40 @@ class _HandoverReceiveScreenState extends State<HandoverReceiveScreen> {
               Text('It did not arrive', style: OpenTvTouchType.title),
               const SizedBox(height: OpenTvTouchSpace.sm),
               Text(_failure!, style: OpenTvTouchType.bodyMuted),
+              const SizedBox(height: OpenTvTouchSpace.md),
+              Text(
+                'It was looked for at ${widget.pairing.hosts.join(', ')} '
+                'on port ${widget.pairing.port}. Both devices have to be on '
+                'the same network, and the other one has to still be showing '
+                'the code.',
+                style: OpenTvTouchType.caption,
+              ),
+              const SizedBox(height: OpenTvTouchSpace.xl),
+              // A failure with no way forward is a dead end. The commonest
+              // cause is a code that had already expired, and trying again is
+              // free.
+              TouchTile(
+                onTap: () {
+                  setState(() {
+                    _failure = null;
+                    _progress = 0;
+                  });
+                  _run(direction);
+                },
+                minHeight: 50,
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: OpenTvColors.tally,
+                    borderRadius: OpenTvRadius.tile,
+                  ),
+                  child: Text(
+                    'Try again',
+                    style: OpenTvTouchType.section
+                        .copyWith(color: OpenTvColors.ground),
+                  ),
+                ),
+              ),
             ] else if (_done) ...[
               Text('Done', style: OpenTvTouchType.title),
               const SizedBox(height: OpenTvTouchSpace.sm),
