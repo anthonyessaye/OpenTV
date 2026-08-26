@@ -59,6 +59,23 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
             </intent-filter>
+            <!-- The handover arrives as a link, not through a camera.
+                 The other device shows a QR holding an opentv:// address, and
+                 whatever camera app is already on this phone opens it. That
+                 is why no scanner is bundled: every scanner package's podspec
+                 declares iOS and none declare tvOS, and a television app that
+                 cannot be built for one of its two televisions is not a
+                 saving — the same wall that put the data directory and the
+                 keystore on a hand rolled channel.
+
+                 It also means the lens is never ours. No camera permission is
+                 requested, and nothing in this app can see through one. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="opentv" android:host="handover"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

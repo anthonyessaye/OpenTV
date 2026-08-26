@@ -32,3 +32,4 @@ export 'src/xtream/xtream_urls.dart';
 export 'src/handover/handover_transfer.dart';
 export 'src/handover/handover_bundle.dart';
 export 'src/handover/handover_pairing.dart';
+export 'src/handover/handover_client.dart';

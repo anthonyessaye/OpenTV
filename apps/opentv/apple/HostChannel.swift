@@ -8,6 +8,13 @@ import UIKit
 /// Both answers differ from Android's in ways that matter to the app above.
 final class HostChannel {
 
+    /// The opentv:// link this launch was opened by, if any.
+    ///
+    /// Held rather than delivered as an event, for the reason the Android
+    /// half holds one too: the link is what opened the app, so it has already
+    /// happened before any Dart exists to hear about it. Cleared when read.
+    static var pendingLink: String?
+
     static func attach(messenger: FlutterBinaryMessenger) {
         let channel = FlutterMethodChannel(name: "opentv/host", binaryMessenger: messenger)
         channel.setMethodCallHandler { call, result in
@@ -25,6 +32,11 @@ final class HostChannel {
         // TV from an iPhone. UIUserInterfaceIdiom can, and it is the same
         // answer on both platforms rather than two implementations that have
         // to be kept agreeing.
+        case "initialLink":
+            result(pendingLink)
+            pendingLink = nil
+            return
+
         case "deviceClass":
             switch UIDevice.current.userInterfaceIdiom {
             case .tv: result("television")

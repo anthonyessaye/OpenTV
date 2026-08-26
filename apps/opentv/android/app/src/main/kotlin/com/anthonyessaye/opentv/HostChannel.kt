@@ -22,6 +22,16 @@ import io.flutter.plugin.common.MethodChannel
  */
 class HostChannel(private val context: Context) {
 
+    /**
+     * The opentv:// link this launch was started by, set by MainActivity.
+     *
+     * Held rather than delivered as an event. The link is what opened the
+     * app, so it has already happened by the time any Dart exists to listen
+     * for it — an event would fire into nothing. Dart asks once the tree is
+     * up, and cleared after reading so a rotation does not replay it.
+     */
+    var pendingLink: String? = null
+
     fun attach(messenger: BinaryMessenger) {
         MethodChannel(messenger, "opentv/host").setMethodCallHandler(::handle)
     }
@@ -96,6 +106,11 @@ class HostChannel(private val context: Context) {
                     secrets.edit().remove(it).apply()
                 }
                 result.success(null)
+            }
+
+            "initialLink" -> {
+                result.success(pendingLink)
+                pendingLink = null
             }
 
             else -> result.notImplemented()

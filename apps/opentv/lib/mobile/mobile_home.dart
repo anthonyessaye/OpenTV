@@ -35,6 +35,7 @@ class MobileHome extends StatefulWidget {
     required this.onSwitchSource,
     required this.onAddSource,
     required this.onRemoveSource,
+    required this.onOfferHandover,
   });
 
   final OpenTvDatabase db;
@@ -46,6 +47,7 @@ class MobileHome extends StatefulWidget {
   final ValueChanged<Source> onSwitchSource;
   final VoidCallback onAddSource;
   final Future<void> Function(Source) onRemoveSource;
+  final VoidCallback onOfferHandover;
 
   @override
   State<MobileHome> createState() => _MobileHomeState();
@@ -282,6 +284,7 @@ class _MobileHomeState extends State<MobileHome> {
           onAddSource: widget.onAddSource,
           onRemoveSource: widget.onRemoveSource,
           vpn: widget.vpn,
+          onOfferHandover: widget.onOfferHandover,
         ),
     };
   }
@@ -548,6 +551,7 @@ class _SettingsTab extends StatelessWidget {
     required this.onAddSource,
     required this.onRemoveSource,
     required this.vpn,
+    required this.onOfferHandover,
   });
 
   final Source source;
@@ -556,6 +560,7 @@ class _SettingsTab extends StatelessWidget {
   final VoidCallback onAddSource;
   final Future<void> Function(Source) onRemoveSource;
   final VpnService vpn;
+  final VoidCallback onOfferHandover;
 
   @override
   Widget build(BuildContext context) {
@@ -577,6 +582,12 @@ class _SettingsTab extends StatelessWidget {
                 : null,
           ),
         ChannelRow(name: 'Add a provider', onTap: onAddSource),
+        const _Heading('Another device'),
+        ChannelRow(
+          name: 'Hand this setup to another device',
+          now: 'Providers, passwords, catalogue and history',
+          onTap: onOfferHandover,
+        ),
         if (vpn.isSupported) ...[
           const _Heading('Tunnel'),
           ChannelRow(

@@ -451,6 +451,31 @@ def main():
     written.append(save(play_icon(), STORE, "play-icon-512.png"))
     written.append(save(feature_graphic(), STORE, "play-feature-1024x500.png"))
 
+    # iOS: the launcher icon at every size the asset catalogue names.
+    #
+    # Read from Contents.json rather than listed here, because the catalogue
+    # is the thing Xcode actually consults — a size written twice is a size
+    # that can disagree, and the failure is a silently missing icon.
+    appicon = os.path.join(
+        APP, "ios", "Runner", "Assets.xcassets", "AppIcon.appiconset"
+    )
+    contents = os.path.join(appicon, "Contents.json")
+    if os.path.exists(contents):
+        with open(contents) as handle:
+            catalogue = json.load(handle)
+        for entry in catalogue.get("images", []):
+            filename = entry.get("filename")
+            if not filename:
+                continue
+            base = float(entry["size"].split("x")[0])
+            scale = int(entry["scale"].rstrip("x"))
+            px = round(base * scale)
+            # No bezel and no transparency: iOS masks the icon itself and
+            # composites whatever is behind an alpha pixel, so a transparent
+            # one is a pixel whose colour is not ours.
+            icon = lockup((px, px), with_word=False)
+            written.append(save(icon.convert("RGB"), appicon, filename))
+
     # tvOS: layered icons and the top shelf.
     brand = os.path.join(
         APP, "tvos", "Runner", "Assets.xcassets", "AppIcon.brandassets"

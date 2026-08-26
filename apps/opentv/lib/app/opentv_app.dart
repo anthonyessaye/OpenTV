@@ -10,6 +10,8 @@ import 'package:opentv_ui/opentv_ui.dart';
 import '../mobile/mobile_home.dart';
 import '../mobile/mobile_onboarding.dart';
 import 'browse_screen.dart';
+import 'handover_screen.dart';
+import 'handover_service.dart';
 import 'host.dart';
 import 'phone_setup_screen.dart';
 import 'setup_screen.dart';
@@ -139,6 +141,18 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   /// one-time questions are asked about it.
   Source? _settingUp;
 
+  /// Where the catalogue lives, kept so a handover can copy the file itself
+  /// rather than reconstruct it from queries.
+  File? _databaseFile;
+
+  HandoverService? _handover;
+
+  /// A pairing scanned on another device, waiting to be acted on.
+  HandoverPairing? _incoming;
+
+  /// True while this device is offering its setup to another.
+  bool _offering = false;
+
   /// True while the local setup page is being served.
   ///
   /// Only ever true because somebody asked for it on this screen, and false
@@ -170,6 +184,21 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     // has to switch on by hand every time is one they will forget to switch
     // on, and the point of it is that it is carrying the traffic.
     _vpn.connectIfConfigured();
+    _checkLink();
+  }
+
+  /// Acts on the opentv:// link this launch was opened by, if any.
+  ///
+  /// Asked for rather than listened to. The link is what opened the app, so
+  /// an event would have fired before any of this existed to hear it.
+  Future<void> _checkLink() async {
+    final uri = await _host.initialLink();
+    if (uri == null || !mounted) return;
+    final pairing = HandoverPairing.decode(uri.toString());
+    // A link that is not a pairing is not an error worth reporting: a camera
+    // pointed at the world produces a great many strings, and the app can be
+    // opened by any of them.
+    if (pairing != null) setState(() => _incoming = pairing);
   }
 
   @override
@@ -216,6 +245,11 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     try {
       final directory = await _host.dataDirectory();
       final file = File('$directory/catalogue.sqlite');
+      _databaseFile = file;
+      // Dropped so it is rebuilt against whatever database is open now. A
+      // handover replaces the file underneath, and a service still holding
+      // the previous one would offer a catalogue that no longer exists.
+      _handover = null;
 
       final db = OpenTvDatabase(
         NativeDatabase(
@@ -335,6 +369,13 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     return _content();
   }
 
+  HandoverService _handoverService(OpenTvDatabase db) =>
+      _handover ??= HandoverService(
+        db: db,
+        databaseFile: _databaseFile!,
+        appVersion: '1.0.1',
+      );
+
   Widget _content() {
     // Before anything else, including the failure below: a television that
     // cannot open its own store should still look like it started.
@@ -365,6 +406,28 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         color: OpenTvColors.ground,
         alignment: Alignment.center,
         child: const Text('Starting…', style: OpenTvType.body),
+      );
+    }
+
+    // Before anything else that could take the screen: a handover in flight
+    // is replacing the catalogue underneath every other screen here.
+    final incoming = _incoming;
+    if (incoming != null && _databaseFile != null) {
+      return HandoverReceiveScreen(
+        service: _handoverService(db),
+        pairing: incoming,
+        onDone: () async {
+          setState(() => _incoming = null);
+          // The file on disk is not the one this app has open any more.
+          await _open();
+        },
+      );
+    }
+
+    if (_offering && _databaseFile != null) {
+      return HandoverOfferScreen(
+        service: _handoverService(db),
+        touch: !widget.device.isTelevision,
       );
     }
 
@@ -438,6 +501,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         onSwitchSource: (next) => setState(() => _source = next),
         onAddSource: () => setState(() => _addingSource = true),
         onRemoveSource: _removeSource,
+        onOfferHandover: () => setState(() => _offering = true),
       );
     }
 

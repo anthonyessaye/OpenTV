@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Opentv</string>
+	<string>OpenTV</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -49,6 +49,27 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- The handover link. The other device displays a QR holding an
+	     opentv:// address and the system camera opens it here; nothing in
+	     this app asks for the camera, and no scanner is bundled, because a
+	     scanner package would have to declare tvOS support and none do. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.anthonyessaye.opentv.handover</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>opentv</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Required before this app may open a socket to another device on the
+	     same network. Stated in the words a viewer sees on the prompt. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OpenTV connects to your other device on this network to copy your providers and catalogue across.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

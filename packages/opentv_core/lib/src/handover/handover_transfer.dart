@@ -118,6 +118,13 @@ class HandoverServer {
 
   HttpServer? _server;
 
+  /// The port actually bound.
+  ///
+  /// Differs from the pairing's when that asked for zero, which is how a test
+  /// avoids colliding with a real handover — and how the app can fall back if
+  /// the preferred port is taken.
+  int? get boundPort => _server?.port;
+
   Future<void> start() async {
     final server = await HttpServer.bind(
       InternetAddress.anyIPv4,

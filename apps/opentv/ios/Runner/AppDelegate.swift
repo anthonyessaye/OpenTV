@@ -7,7 +7,25 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // The link that opened us, taken before Flutter starts so it is already
+    // waiting when Dart asks.
+    if let url = launchOptions?[.url] as? URL, url.scheme == "opentv" {
+      HostChannel.pendingLink = url.absoluteString
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// A link arriving while the app is already running.
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    guard url.scheme == "opentv" else {
+      return super.application(app, open: url, options: options)
+    }
+    HostChannel.pendingLink = url.absoluteString
+    return true
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {

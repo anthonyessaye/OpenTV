@@ -78,4 +78,15 @@ class Host {
   /// prevent, but not one worth crashing over in front of a viewer.
   Future<DeviceClass> deviceClass() async =>
       DeviceClass.parse(await _channel.invokeMethod<String>('deviceClass'));
+
+  /// The `opentv://` link this launch was started by, or null.
+  ///
+  /// Pulled rather than pushed. A link that arrives as an event has to find a
+  /// listener already attached, and the app is opened *by* the link — so the
+  /// event fires before any Dart exists to hear it. Asking for it once the
+  /// tree is up cannot miss it.
+  Future<Uri?> initialLink() async {
+    final raw = await _channel.invokeMethod<String>('initialLink');
+    return raw == null ? null : Uri.tryParse(raw);
+  }
 }

@@ -21,6 +21,8 @@ class HostContract {
     'readSecret',
     'deleteSecret',
     'deviceClass',
+    // The opentv:// link this app was opened by, if it was.
+    'initialLink',
   ];
 
   /// The values `deviceClass` is allowed to return.
