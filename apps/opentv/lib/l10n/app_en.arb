@@ -1,0 +1,68 @@
+{
+  "@@locale": "en",
+
+  "appName": "OpenTV",
+  "@appName": {
+    "description": "The application's name. Not translated — it is a mark."
+  },
+
+  "navLive": "Live",
+  "@navLive": { "description": "Bottom bar: live channels." },
+  "navFilms": "Films",
+  "@navFilms": { "description": "Bottom bar: films." },
+  "navSeries": "Series",
+  "@navSeries": { "description": "Bottom bar: series." },
+  "navSearch": "Search",
+  "@navSearch": { "description": "Bottom bar: search." },
+  "navSettings": "Settings",
+  "@navSettings": { "description": "Bottom bar: settings." },
+
+  "actionBack": "Back",
+  "@actionBack": { "description": "Returns to the previous screen." },
+  "actionPlay": "Play",
+  "@actionPlay": { "description": "Starts playback from the beginning." },
+  "actionPause": "Pause",
+  "@actionPause": { "description": "Pauses playback." },
+  "actionCancel": "Cancel",
+  "@actionCancel": { "description": "Dismisses without doing anything." },
+
+  "resumeFrom": "Resume from {position}",
+  "@resumeFrom": {
+    "description": "Continues a film or episode from where it stopped.",
+    "placeholders": { "position": { "type": "String", "example": "1:12" } }
+  },
+
+  "onAir": "ON AIR",
+  "@onAir": {
+    "description": "Badge on a live stream. Upper case in English; other languages should use whatever their own convention is for this emphasis rather than forcing capitals, which many scripts do not have."
+  },
+
+  "channelNumber": "Channel {number}",
+  "@channelNumber": {
+    "description": "A channel's position in the provider's list.",
+    "placeholders": { "number": { "type": "int", "example": "101" } }
+  },
+
+  "episodeCount": "{count, plural, =0{No episodes} =1{1 episode} other{{count} episodes}}",
+  "@episodeCount": {
+    "description": "How many episodes a series has. Written as a plural rather than 'N episode(s)' because Arabic has six plural forms and English's two are not a template for them.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "contentDisclaimer": "OpenTV supplies no channels, films or playlists. Everything you see in it comes from a provider you choose and an address you enter.",
+  "@contentDisclaimer": {
+    "description": "Shown during setup and in settings. Legally load-bearing: translate the meaning exactly and do not soften it."
+  },
+
+  "handoverOffer": "Hand this setup to another device",
+  "@handoverOffer": { "description": "Starts offering this device's setup." },
+  "handoverExplain": "Point the other device's camera at this code. It will carry your providers, their passwords, your catalogue and your history.",
+  "@handoverExplain": { "description": "What the QR code will transfer." },
+  "handoverExpires": "The code stops working when you leave this screen.",
+  "@handoverExpires": { "description": "The offer window is the screen." },
+
+  "providerPasswordGone": "This provider's password is no longer stored on this device.",
+  "@providerPasswordGone": {
+    "description": "Shown when a keystore entry is missing, which happens after clearing app data or restoring a backup without the keystore."
+  }
+}

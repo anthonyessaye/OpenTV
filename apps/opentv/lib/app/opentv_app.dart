@@ -4,6 +4,8 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+
+import '../l10n/strings.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
@@ -55,6 +57,17 @@ class OpenTvApp extends StatelessWidget {
     return WidgetsApp(
       navigatorKey: _navigator,
       color: OpenTvColors.ground,
+      // English only for now, and the machinery to add more without touching
+      // a screen. A language is an .arb file beside app_en.arb and its code
+      // in this list; nothing else in the app changes.
+      //
+      // Text direction is not listed here because it is not a setting: a
+      // locale carries its own, and WidgetsApp puts the matching
+      // Directionality above everything below it. What that does not do for
+      // free is layout — an EdgeInsets.only(left:) stays on the left in
+      // Arabic — which is why new code here uses the directional forms.
+      localizationsDelegates: Strings.localizationsDelegates,
+      supportedLocales: Strings.supportedLocales,
       debugShowCheckedModeBanner: false,
       // WidgetsApp has no default text style; without this a Text with no
       // style of its own renders as the debug red-on-yellow.

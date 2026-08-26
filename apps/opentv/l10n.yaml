@@ -1,0 +1,8 @@
+# Localisation is generated rather than hand-written, so a string that exists
+# in one language and not another is a build error instead of a blank on a
+# screen nobody is looking at.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: strings.dart
+output-class: Strings
+nullable-getter: false
