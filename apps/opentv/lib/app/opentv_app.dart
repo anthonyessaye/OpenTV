@@ -12,6 +12,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 import '../mobile/mobile_home.dart';
 import '../mobile/mobile_onboarding.dart';
 import '../mobile/mobile_setup.dart';
+import '../mobile/scan_screen.dart';
 import 'browse_screen.dart';
 import 'app_version.dart';
 import 'handover_screen.dart';
@@ -206,6 +207,24 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   ///
   /// Asked for rather than listened to. The link is what opened the app, so
   /// an event would have fired before any of this existed to hear it.
+  /// Opens the camera, and acts on whatever it reads.
+  ///
+  /// The same pairing the deep link produces, arriving by a different route.
+  /// Nothing downstream knows or cares which.
+  Future<void> _scanForHandover() async {
+    final navigator = Navigator.of(context);
+    await navigator.push(
+      PageRouteBuilder<void>(
+        pageBuilder: (context, _, _) => ScanScreen(
+          onFound: (pairing) {
+            Navigator.of(context).pop();
+            setState(() => _incoming = pairing);
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _checkLink() async {
     final uri = await _host.initialLink();
     if (uri == null || !mounted) return;
@@ -488,9 +507,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
           progress: service.progress,
           // Offered here, where somebody with a second device already set up
           // is otherwise about to type its provider address by hand.
-          onTakeFromDevice: _databaseFile == null
-              ? null
-              : () => setState(() => _offering = true),
+          onTakeFromDevice: _databaseFile == null ? null : _scanForHandover,
           onCancel: _addingSource
               ? () => setState(() => _addingSource = false)
               : null,
@@ -552,6 +569,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         onAddSource: () => setState(() => _addingSource = true),
         onRemoveSource: _removeSource,
         onOfferHandover: () => setState(() => _offering = true),
+        onScanHandover: _scanForHandover,
       );
     }
 

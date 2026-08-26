@@ -56,7 +56,29 @@ class _TouchFieldState extends State<TouchField> {
     _node.addListener(_onFocus);
   }
 
-  void _onFocus() => setState(() {});
+  void _onFocus() {
+    setState(() {});
+    if (!_node.hasFocus) return;
+    // Bring the field above the keyboard.
+    //
+    // The padding on the scaffold makes the room; this is what moves into it.
+    // Deferred a frame because the inset arrives with the keyboard animation,
+    // and scrolling before it lands aims at where the field used to be.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_node.hasFocus) return;
+      final box = context.findRenderObject();
+      if (box == null) return;
+      Scrollable.ensureVisible(
+        context,
+        // Not zero. A field flush against the top of the viewport looks like
+        // the list has jumped, and the label above it is what says which
+        // field the keyboard is typing into.
+        alignment: 0.25,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
 
   @override
   void dispose() {

@@ -126,32 +126,57 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
           ),
           if (widget.onTakeFromDevice != null) ...[
             const SizedBox(height: OpenTvTouchSpace.xl),
+            // Drawn as a button rather than a panel with a tappable
+            // surface. It read as a notice, which is why it was not obvious
+            // it did anything — the strongest thing on this screen should be
+            // the path that involves no typing at all.
             TouchTile(
               onTap: widget.onTakeFromDevice,
               minHeight: 72,
               child: Container(
                 padding: const EdgeInsets.all(OpenTvTouchSpace.lg),
                 decoration: BoxDecoration(
-                  color: OpenTvColors.surface,
+                  color: OpenTvColors.tally,
                   borderRadius: OpenTvRadius.tile,
-                  border: const Border(
-                    bottom: BorderSide(color: OpenTvColors.tally, width: 2),
-                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Text(
-                      'Already set up on another device?',
-                      style: OpenTvTouchType.section,
+                child: Row(
+                  children: [
+                    const GlyphIcon(
+                      Glyph.search,
+                      size: 22,
+                      color: OpenTvColors.ground,
                     ),
-                    SizedBox(height: OpenTvTouchSpace.xs),
-                    Text(
-                      'Point this phone at the code on it and take the whole '
-                      'thing — providers, passwords, catalogue and history. '
-                      'Nothing to type.',
-                      style: OpenTvTouchType.caption,
+                    const SizedBox(width: OpenTvTouchSpace.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Scan another device',
+                            style: OpenTvTouchType.section
+                                .copyWith(color: OpenTvColors.ground),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Take its providers, passwords, catalogue and '
+                            'history. Nothing to type.',
+                            style: OpenTvTouchType.caption
+                                .copyWith(color: const Color(0xCC07090C)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Transform.flip(
+                      flipX: Directionality.of(context) == TextDirection.rtl,
+                      child: Transform.rotate(
+                        angle: 3.14159,
+                        child: const GlyphIcon(
+                          Glyph.back,
+                          size: 18,
+                          color: OpenTvColors.ground,
+                        ),
+                      ),
                     ),
                   ],
                 ),

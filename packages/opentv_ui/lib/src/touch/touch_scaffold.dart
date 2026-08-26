@@ -51,6 +51,15 @@ class TouchScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
 
+    // How much of the screen the keyboard is currently covering.
+    //
+    // There is no Scaffold here to do this — the app draws its own surfaces on
+    // both devices — so nothing was accounting for it and a raised keyboard
+    // simply sat over the lower half of the form. The body is given the inset
+    // as padding, which lets a scroll view inside it move its content clear.
+    final keyboard = media.viewInsets.bottom;
+    final typing = keyboard > 0;
+
     return ColoredBox(
       color: OpenTvColors.ground,
       child: Column(
@@ -60,8 +69,20 @@ class TouchScaffold extends StatelessWidget {
           // different numbers and the app knows none of them.
           SizedBox(height: media.padding.top),
           _Bar(title: title, action: action, onBack: onBack),
-          Expanded(child: body),
-          if (destinations.isNotEmpty)
+          Expanded(
+            child: MediaQuery.removeViewInsets(
+              context: context,
+              removeBottom: true,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: keyboard),
+                child: body,
+              ),
+            ),
+          ),
+          // The bar goes away while the keyboard is up. It cannot be reached
+          // under one, and leaving it there costs a row of the form the space
+          // it needs.
+          if (destinations.isNotEmpty && !typing)
             _BottomBar(
               destinations: destinations,
               selected: selected,

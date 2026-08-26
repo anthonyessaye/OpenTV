@@ -197,11 +197,10 @@ displays and the phone always scans — whichever way the data then travels. The
 server serves a pull and accepts a push, which is the only way a television
 receives anything at all.
 
-**No scanner is bundled and no camera permission is requested.** Every QR
-scanner package declares iOS in its podspec and none declare tvOS, which is
-the same wall that put the data directory and the keystore on a hand-rolled
-channel. The code carries an `opentv://` address, whatever camera app the
-phone already has opens it, and the lens is never ours.
+The phone scans in the app. The camera is asked for nothing else, no image
+leaves the device, and the `opentv://` deep link still works as a fallback —
+whatever camera app the phone already has opens the same code. A television
+has no camera and no scanner is compiled into its build at all.
 
 ### Setting up from a phone
 

@@ -45,6 +45,7 @@ class MobileHome extends StatefulWidget {
     required this.onAddSource,
     required this.onRemoveSource,
     required this.onOfferHandover,
+    required this.onScanHandover,
   });
 
   final OpenTvDatabase db;
@@ -57,6 +58,9 @@ class MobileHome extends StatefulWidget {
   final VoidCallback onAddSource;
   final Future<void> Function(Source) onRemoveSource;
   final VoidCallback onOfferHandover;
+
+  /// Opens the camera to read another device's code.
+  final VoidCallback onScanHandover;
 
   @override
   State<MobileHome> createState() => _MobileHomeState();
@@ -663,6 +667,7 @@ class _MobileHomeState extends State<MobileHome> {
             ),
           ),
           onOpenTunnel: () => _push(MobileTunnelScreen(vpn: widget.vpn)),
+          onScanHandover: widget.onScanHandover,
           onOpenTmdb: () => _push(
             const MobileSecretScreen(
               title: 'TMDB key',
@@ -1183,6 +1188,7 @@ class _SettingsTab extends StatelessWidget {
     required this.onOpenTmdb,
     required this.onOpenAccount,
     required this.onOpenTunnel,
+    required this.onScanHandover,
   });
 
   final Source source;
@@ -1198,6 +1204,7 @@ class _SettingsTab extends StatelessWidget {
   final VoidCallback onOpenTmdb;
   final VoidCallback onOpenAccount;
   final VoidCallback onOpenTunnel;
+  final VoidCallback onScanHandover;
 
   @override
   Widget build(BuildContext context) {
@@ -1261,8 +1268,14 @@ class _SettingsTab extends StatelessWidget {
         ),
         const _Heading('Another device'),
         ChannelRow(
-          name: 'Hand this setup to another device',
-          now: 'Providers, passwords, catalogue and history',
+          name: 'Scan another device',
+          now: 'Take its setup, or send it this one',
+          onTap: onScanHandover,
+          artwork: false,
+        ),
+        ChannelRow(
+          name: 'Show a code',
+          now: 'For a device that is scanning this one',
           onTap: onOfferHandover,
           artwork: false,
         ),

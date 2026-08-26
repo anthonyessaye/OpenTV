@@ -62,13 +62,28 @@ class _SplashScreenState extends State<SplashScreen>
       // the sentence beneath it did not.
       child: FadeTransition(
         opacity: fade,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _Lamp(controller: _controller),
-            const SizedBox(width: SplashScreen._gap),
-            const Text('OPENTV', style: OpenTvType.hero),
-          ],
+        child: Padding(
+          // A margin at the edges, so the mark never sits against them.
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: FittedBox(
+            // Scaled down to fit, never up.
+            //
+            // The lockup is drawn at television proportions — a 72pt cap on a
+            // 1920 canvas — and the same Row on a 390-pixel phone ran off both
+            // sides, so the lamp was half off screen and the wordmark was cut.
+            // Scaling keeps the proportions the mark was drawn at, which
+            // matters more here than a size: it is the first thing the app
+            // shows and the only thing on the screen.
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _Lamp(controller: _controller),
+                const SizedBox(width: SplashScreen._gap),
+                const Text('OPENTV', style: OpenTvType.hero),
+              ],
+            ),
+          ),
         ),
       ),
     );

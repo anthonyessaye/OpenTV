@@ -68,6 +68,10 @@
 	</array>
 	<!-- Required before this app may open a socket to another device on the
 	     same network. Stated in the words a viewer sees on the prompt. -->
+	<!-- Only ever used to read a pairing code off another device's screen.
+	     Nothing is recorded and no image leaves the phone. -->
+	<key>NSCameraUsageDescription</key>
+	<string>OpenTV uses the camera only to read the pairing code shown on your other device.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>OpenTV connects to your other device on this network to copy your providers and catalogue across.</string>
 	<key>UILaunchStoryboardName</key>

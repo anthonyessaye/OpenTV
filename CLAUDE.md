@@ -206,6 +206,12 @@ something visible. The poster card is the clearest case: the grid used an
 aspect ratio guessed at two lines of title and the Continue strip used a round
 190, and both were fine until the first title long enough to wrap.
 
+**There is no Scaffold, so nothing handles the keyboard for you.** The app
+draws its own surfaces on both devices, which means `MediaQuery.viewInsets`
+has to be applied by hand — `TouchScaffold` takes the inset out of the body
+and hides the bottom bar while a keyboard is up. Without it a raised keyboard
+simply covers the lower half of a form.
+
 **A widget test cannot tell you whether type fits.** They render in Ahem,
 where every glyph is a full em square, so eight characters measure about twice
 what IBM Plex Mono draws. A fit assertion fails on a good layout and passes on
@@ -284,13 +290,24 @@ travels, and the server both serves a pull and accepts a push. Without the
 push a phone could only ever take, and handing a television the setup you just
 finished on your phone is the direction people actually want.
 
-**No scanner is bundled and no camera permission is asked for.** Every QR
-scanner package declares iOS in its podspec and none declare tvOS — the same
-wall that put the data directory and the keystore on a hand-rolled channel.
-The code carries an `opentv://` address, whatever camera app the phone already
-has opens it, and the lens is never ours. It also avoids iOS's multicast
-entitlement, which mDNS would have needed and which is an approval request to
-Apple with no guarantee.
+**A scanner is bundled on the phone, and this corrects an earlier claim in
+this file.** The argument used to be that scanner packages declare iOS and not
+tvOS, so bundling one would fail the Apple TV build — carried over from
+`path_provider` and `flutter_secure_storage`. It does not apply. Those were
+needed *on* tvOS, so their absence was fatal; a plugin that simply does not
+support a platform is **excluded from that platform's build**. Checked rather
+than assumed: with `mobile_scanner` in the pubspec, the Apple TV simulator
+build succeeds and the plugin appears in neither the tvOS registrant nor its
+Podfile.lock.
+
+The `opentv://` deep link still works and is still the fallback — whatever
+camera app the phone already has opens the same code. It also avoids iOS's
+multicast entitlement, which mDNS would have needed and which is an approval
+request to Apple with no guarantee.
+
+**Before ruling a package out for tvOS, build for tvOS with it.** The question
+is whether the feature is needed on that platform, not whether the podspec
+mentions it.
 
 **Secrets are written before the database is replaced.** The other order
 leaves a device holding a new catalogue it has no passwords for. The `-wal` is
