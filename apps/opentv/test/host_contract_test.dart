@@ -19,7 +19,7 @@ void main() {
   final android = File(
     'android/app/src/main/kotlin/com/anthonyessaye/opentv/HostChannel.kt',
   );
-  final apple = File('tvos/Runner/HostChannel.swift');
+  final apple = File('apple/HostChannel.swift');
 
   setUpAll(() {
     expect(android.existsSync(), isTrue, reason: '${android.path} not found');

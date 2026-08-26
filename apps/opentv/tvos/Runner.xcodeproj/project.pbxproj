@@ -29,7 +29,7 @@
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000082B41680 /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C146FA1CF9000082B4168C /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		A1C0FE0001HOSTCHANNEL001 /* HostChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostChannel.swift; sourceTree = "<group>"; };
+		A1C0FE0001HOSTCHANNEL001 /* HostChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HostChannel.swift; path = "../apple/HostChannel.swift"; sourceTree = SOURCE_ROOT; };
 		97C146FD1CF9000082B4168C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C146FE1CF9000082B4168C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		97C146FF1CF9000082B4168D /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Main.storyboard; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
