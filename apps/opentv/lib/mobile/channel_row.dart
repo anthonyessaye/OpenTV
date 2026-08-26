@@ -14,6 +14,7 @@ class ChannelRow extends StatelessWidget {
     this.now,
     this.logoUrl,
     this.onTap,
+    this.onLongPress,
   });
 
   final String name;
@@ -23,11 +24,13 @@ class ChannelRow extends StatelessWidget {
   final String? now;
   final String? logoUrl;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return TouchTile(
       onTap: onTap,
+      onLongPress: onLongPress,
       semanticLabel: name,
       minHeight: 64,
       child: Padding(
