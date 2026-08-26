@@ -19,9 +19,35 @@ import '../tokens/tokens.dart';
 /// off the edge of the screen.
 ///
 /// Drawn rather than taken from an icon font. Material's icons would drag in
-/// the design language this interface exists to avoid, and four shapes is
-/// less code than the dependency.
-enum Glyph { play, pause, heart, previous, next }
+/// the design language this interface exists to avoid, and a handful of
+/// shapes is less code than the dependency.
+///
+/// The navigation shapes below are a different case from the transport ones,
+/// and worth saying why they are allowed. A glyph nobody can name is a puzzle
+/// when it stands alone — which is the argument above, and it still holds.
+/// These never stand alone: every one of them sits directly above its own
+/// word in the bottom bar. The shape is what makes a destination findable at
+/// a glance once you know it; the word is what makes it learnable. Neither is
+/// carrying the meaning on its own.
+enum Glyph {
+  play,
+  pause,
+  heart,
+  previous,
+  next,
+
+  /// Bottom-bar destinations. Only ever drawn with a label beneath.
+  live,
+  film,
+  series,
+  guide,
+  search,
+  settings,
+
+  /// A directional chevron. Mirrors with the text direction rather than
+  /// pointing left forever, because in Arabic the way back is to the right.
+  back,
+}
 
 class GlyphIcon extends StatelessWidget {
   const GlyphIcon(
@@ -117,6 +143,147 @@ class _GlyphPainter extends CustomPainter {
           );
         }
         canvas.restore();
+
+      case Glyph.live:
+        // A dot with two arcs coming off it: the broadcast mark, and the same
+        // idea as the tally lamp the app is named around.
+        canvas.drawCircle(Offset(w * 0.5, h * 0.5), w * 0.13, paint);
+        final wave = paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w * 0.1
+          ..strokeCap = StrokeCap.round;
+        for (final r in [0.28, 0.44]) {
+          for (final start in [math.pi * 0.75, math.pi * 1.75]) {
+            canvas.drawArc(
+              Rect.fromCircle(center: Offset(w * 0.5, h * 0.5), radius: w * r),
+              start,
+              math.pi * 0.5,
+              false,
+              wave,
+            );
+          }
+        }
+
+      case Glyph.film:
+        // A frame with perforations down both edges. Reads as film at 22
+        // pixels, which a clapperboard does not — its arm becomes one pixel.
+        final stroke = paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w * 0.09;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.1, h * 0.16, w * 0.8, h * 0.68),
+            Radius.circular(w * 0.08),
+          ),
+          stroke,
+        );
+        final hole = Paint()..color = color;
+        for (final y in [0.32, 0.5, 0.68]) {
+          canvas.drawRect(
+            Rect.fromLTWH(w * 0.16, h * y - h * 0.035, w * 0.09, h * 0.07),
+            hole,
+          );
+          canvas.drawRect(
+            Rect.fromLTWH(w * 0.75, h * y - h * 0.035, w * 0.09, h * 0.07),
+            hole,
+          );
+        }
+
+      case Glyph.series:
+        // Stacked panes, back to front. A stack is what separates a series
+        // from a film at this size; anything more literal needs detail the
+        // pixels do not have.
+        final stroke = paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w * 0.09;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.08, h * 0.34, w * 0.62, h * 0.5),
+            Radius.circular(w * 0.07),
+          ),
+          stroke,
+        );
+        canvas.drawLine(
+          Offset(w * 0.26, h * 0.2),
+          Offset(w * 0.84, h * 0.2),
+          stroke,
+        );
+        canvas.drawLine(
+          Offset(w * 0.84, h * 0.2),
+          Offset(w * 0.84, h * 0.66),
+          stroke,
+        );
+
+      case Glyph.guide:
+        // A grid of unequal cells: a schedule, not a gallery. Equal squares
+        // would read as apps.
+        final stroke = paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w * 0.09;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.1, h * 0.16, w * 0.8, h * 0.68),
+            Radius.circular(w * 0.08),
+          ),
+          stroke,
+        );
+        canvas.drawLine(
+          Offset(w * 0.1, h * 0.42),
+          Offset(w * 0.9, h * 0.42),
+          stroke,
+        );
+        canvas.drawLine(
+          Offset(w * 0.42, h * 0.42),
+          Offset(w * 0.42, h * 0.84),
+          stroke,
+        );
+
+      case Glyph.search:
+        final stroke = paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w * 0.1
+          ..strokeCap = StrokeCap.round;
+        canvas.drawCircle(Offset(w * 0.44, h * 0.42), w * 0.26, stroke);
+        canvas.drawLine(
+          Offset(w * 0.63, h * 0.62),
+          Offset(w * 0.84, h * 0.84),
+          stroke,
+        );
+
+      case Glyph.settings:
+        // Sliders rather than a cog. A cog at 22 pixels is a blob with
+        // aliasing where the teeth were, and this app's settings genuinely
+        // are a column of switches.
+        final stroke = paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w * 0.1
+          ..strokeCap = StrokeCap.round;
+        for (final (y, knob) in [(0.28, 0.66), (0.5, 0.36), (0.72, 0.58)]) {
+          canvas.drawLine(
+            Offset(w * 0.12, h * y),
+            Offset(w * 0.88, h * y),
+            stroke,
+          );
+          canvas.drawCircle(
+            Offset(w * knob, h * y),
+            w * 0.11,
+            Paint()..color = color,
+          );
+        }
+
+      case Glyph.back:
+        final stroke = paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w * 0.11
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
+        canvas.drawPath(
+          Path()
+            ..moveTo(w * 0.62, h * 0.18)
+            ..lineTo(w * 0.3, h * 0.5)
+            ..lineTo(w * 0.62, h * 0.82),
+          stroke,
+        );
 
       case Glyph.heart:
         // Two arcs and a point, sized so the outline and the filled form

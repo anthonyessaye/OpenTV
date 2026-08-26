@@ -31,3 +31,5 @@ export 'src/tokens/tokens.dart';
 export 'src/tokens/tv_canvas.dart';
 export 'src/platform/device_class.dart';
 export 'src/tokens/touch_tokens.dart';
+export 'src/touch/touch_scaffold.dart';
+export 'src/touch/touch_tile.dart';

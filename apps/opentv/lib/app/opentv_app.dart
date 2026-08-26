@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
+import '../mobile/mobile_home.dart';
+import '../mobile/mobile_onboarding.dart';
 import 'browse_screen.dart';
 import 'host.dart';
 import 'phone_setup_screen.dart';
@@ -380,8 +382,26 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
 
     final source = _source;
     if (source == null || _addingSource) {
+      if (!widget.device.isTelevision) {
+        return MobileOnboarding(
+          progress: service.progress,
+          onCancel: _addingSource
+              ? () => setState(() => _addingSource = false)
+              : null,
+          onSubmit: (draft) async {
+            final failure = await service.add(draft);
+            if (failure == null) await _adopt();
+            return failure;
+          },
+        );
+      }
       return OnboardingScreen(
-        onUsePhone: () => setState(() => _usingPhone = true),
+        // Offered only where typing is the problem it solves. A phone has a
+        // keyboard; serving itself a form to fill in from a second device
+        // would be an imitation of something this device already does better.
+        onUsePhone: widget.device.isTelevision
+            ? () => setState(() => _usingPhone = true)
+            : null,
         // Adding a second provider can be abandoned; a first cannot, because
         // there would be nothing behind it to go back to.
         onCancel: _addingSource
@@ -404,6 +424,20 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         db: db,
         source: settingUp,
         onDone: () => setState(() => _settingUp = null),
+      );
+    }
+
+    if (!widget.device.isTelevision) {
+      return MobileHome(
+        db: db,
+        source: source,
+        resolver: _resolver!,
+        service: service,
+        sources: _sources,
+        vpn: _vpn,
+        onSwitchSource: (next) => setState(() => _source = next),
+        onAddSource: () => setState(() => _addingSource = true),
+        onRemoveSource: _removeSource,
       );
     }
 
