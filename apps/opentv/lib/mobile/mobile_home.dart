@@ -156,6 +156,19 @@ class _MobileHomeState extends State<MobileHome> {
   /// changes it.
   RegionFilter _regions = const RegionFilter();
 
+  /// Bumped whenever something that a shelf reads has changed.
+  ///
+  /// The Continue and Favourites strips load once when they are built, and
+  /// nothing rebuilt them — so watching an episode and coming back showed the
+  /// shelf as it was before, which reads as the app not recording anything.
+  /// Their keys carry this, so returning from a player or a detail screen
+  /// remounts them and they read the database again.
+  int _generation = 0;
+
+  void _refreshShelves() {
+    if (mounted) setState(() => _generation++);
+  }
+
   /// Categories a PIN keeps out of browsing.
   ///
   /// Absent rather than greyed out, which is the rule the television already
@@ -214,6 +227,8 @@ class _MobileHomeState extends State<MobileHome> {
         ),
       ),
     );
+    // A heart may have been toggled, or the film watched.
+    _refreshShelves();
   }
 
   Future<void> _openSeries(SeriesEntry series) async {
@@ -262,6 +277,7 @@ class _MobileHomeState extends State<MobileHome> {
         ),
       ),
     );
+    _refreshShelves();
   }
 
   /// Where a resume would start, or null when there is nothing to resume.
@@ -515,8 +531,8 @@ class _MobileHomeState extends State<MobileHome> {
   Widget _tabBody() {
     return switch (_tab) {
       0 => _LiveTab(
-          key: ValueKey('live:${_regions.forKind(ItemKind.live).join(',')}'
-              ':${_locked.length}'),
+          key: ValueKey('live:$_generation:'
+              '${_regions.forKind(ItemKind.live).join(',')}:${_locked.length}'),
           db: widget.db,
           source: widget.source,
           hiddenRegions: _regions.forKind(ItemKind.live),
@@ -543,7 +559,8 @@ class _MobileHomeState extends State<MobileHome> {
           onCatchUp: _playCatchUp,
         ),
       2 => _WithContinue(
-          key: ValueKey('films-c:${_regions.forKind(ItemKind.movie).join(',')}'),
+          key: ValueKey('films-c:$_generation:'
+              '${_regions.forKind(ItemKind.movie).join(',')}'),
           load: () async {
             final states = await widget.db.continueWatching(
               sourceId: widget.source.id,
@@ -573,7 +590,8 @@ class _MobileHomeState extends State<MobileHome> {
           },
           favourites: () => _favouriteItems(ItemKind.movie),
           child: _GridTab(
-          key: ValueKey('films:${_regions.forKind(ItemKind.movie).join(',')}'),
+          key: ValueKey('films:$_generation:'
+              '${_regions.forKind(ItemKind.movie).join(',')}'),
           load: () async => [
             for (final film in await widget.db.moviesIn(
               widget.source.id,
@@ -588,7 +606,8 @@ class _MobileHomeState extends State<MobileHome> {
           ),
         ),
       3 => _WithContinue(
-          key: ValueKey('series-c:${_regions.forKind(ItemKind.series).join(',')}'),
+          key: ValueKey('series-c:$_generation:'
+              '${_regions.forKind(ItemKind.series).join(',')}'),
           load: () async {
             // The series shelf, which keeps a show while it still has
             // somewhere to go — including after an episode is finished.
@@ -611,7 +630,8 @@ class _MobileHomeState extends State<MobileHome> {
           },
           favourites: () => _favouriteItems(ItemKind.series),
           child: _GridTab(
-          key: ValueKey('series:${_regions.forKind(ItemKind.series).join(',')}'),
+          key: ValueKey('series:$_generation:'
+              '${_regions.forKind(ItemKind.series).join(',')}'),
           load: () async => [
             for (final show in await widget.db.seriesIn(
               widget.source.id,

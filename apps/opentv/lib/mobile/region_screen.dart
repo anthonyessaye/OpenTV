@@ -59,7 +59,23 @@ class _RegionScreenState extends State<RegionScreen> {
   }
 
   Future<void> _toggle(ItemKind kind, String region, bool hide) async {
-    final next = _filter.withRegion(kind, region, hide: hide);
+    await _write(_filter.withRegion(kind, region, hide: hide));
+  }
+
+  /// Hide or show every region of this kind at once.
+  ///
+  /// The same reason the categories panel has them: a provider with a dozen
+  /// regions is not a list anybody works through one row at a time, and
+  /// hiding the lot then restoring the two you watch is the workable order.
+  Future<void> _setAll(bool hide) async {
+    var next = _filter;
+    for (final entry in _regions[_kinds[_tab]] ?? const []) {
+      next = next.withRegion(_kinds[_tab], entry.region, hide: hide);
+    }
+    await _write(next);
+  }
+
+  Future<void> _write(RegionFilter next) async {
     setState(() => _filter = next);
     await widget.db.setPreference(RegionFilter.preferenceKey, next.encode());
     widget.onChanged(next);
@@ -84,6 +100,42 @@ class _RegionScreenState extends State<RegionScreen> {
               onSelect: (i) => setState(() => _tab = i),
             ),
           ),
+          if (regions.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: OpenTvTouchSpace.gutter,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _Bulk(
+                      label: 'Hide all',
+                      onTap: () => _setAll(true),
+                    ),
+                  ),
+                  const SizedBox(width: OpenTvTouchSpace.sm),
+                  Expanded(
+                    child: _Bulk(
+                      label: 'Show all',
+                      onTap: () => _setAll(false),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                OpenTvTouchSpace.gutter,
+                OpenTvTouchSpace.sm,
+                OpenTvTouchSpace.gutter,
+                0,
+              ),
+              child: Text(
+                '${hidden.length} of ${regions.length} hidden',
+                style: OpenTvTouchType.data,
+              ),
+            ),
+          ],
           Expanded(
             child: _loading
                 ? const Center(
@@ -94,7 +146,12 @@ class _RegionScreenState extends State<RegionScreen> {
                         child: Padding(
                           padding: OpenTvTouchSpace.page,
                           child: Text(
-                            'This provider does not label these with a region.',
+                            'No regions are recorded for these.\n\n'
+                            'Either the provider does not put one in front of '
+                            'its titles, or this catalogue was imported by a '
+                            'version of the app that did not read them. '
+                            'Re-reading the catalogue from settings will '
+                            'record them.',
                             style: OpenTvTouchType.bodyMuted,
                             textAlign: TextAlign.center,
                           ),
@@ -129,6 +186,31 @@ class _RegionScreenState extends State<RegionScreen> {
       ),
     );
   }
+}
+
+/// A bulk action, matching the categories screen's.
+class _Bulk extends StatelessWidget {
+  const _Bulk({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => TouchTile(
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: OpenTvTouchSpace.sm),
+          decoration: BoxDecoration(
+            color: OpenTvColors.surface,
+            borderRadius: OpenTvRadius.tile,
+            border: const Border(
+              bottom: BorderSide(color: OpenTvColors.rule),
+            ),
+          ),
+          child: Text(label, style: OpenTvTouchType.body),
+        ),
+      );
 }
 
 class _RegionRow extends StatelessWidget {
