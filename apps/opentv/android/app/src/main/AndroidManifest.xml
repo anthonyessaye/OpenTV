@@ -5,13 +5,18 @@
          Touchscreen is optional because a television has none, and an app
          that requires one is filtered off every TV in the store.
 
-         Leanback is required because this is a television app and nothing
-         else. Every screen is laid out for a d-pad at three metres and there
-         is no touch target anywhere in it, so a phone install would be an
-         interface nobody can operate. Left at required="false" the store
-         reads that as "runs anywhere", lists it to phones and tablets, and
-         the reviews arrive from people it was never built for. -->
-    <uses-feature android:name="android.software.leanback" android:required="true" />
+         Leanback is optional because there are now two interfaces. It was
+         required for exactly one release, when the app had a d-pad layout and
+         nothing else and a phone install would have been an interface nobody
+         could operate. Both exist now, the app asks UiModeManager which
+         machine it is on before the first frame, and either answer leads
+         somewhere usable — so the store may offer it to both.
+
+         Note the asymmetry, because it is the thing that is easy to get
+         backwards: touchscreen-optional is what gets the app onto
+         televisions, and leanback-optional is what keeps it on phones. They
+         are opposite questions and neither implies the other. -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- IPTV portals overwhelmingly have no usable TLS — the one probed for
@@ -46,17 +51,13 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
-            <!-- Leanback only. The ordinary LAUNCHER category is a phone and
-                 tablet home screen entry, and declaring it is the second half
-                 of telling the store this runs on handsets.
-
-                 Nothing here needs it: flutter run starts the activity by
-                 explicit component, and so does adb am start -n. What it does
-                 break is launching by category, so use
-                 "am start -n com.anthonyessaye.opentv/.MainActivity" rather
-                 than monkey -c android.intent.category.LAUNCHER. -->
+            <!-- Both launchers. LEANBACK_LAUNCHER is the television home
+                 screen and LAUNCHER is the phone and tablet one; an app that
+                 runs on both needs an entry in both, and an app with only the
+                 leanback category simply does not appear on a handset. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
             </intent-filter>
             <!-- The handover arrives as a link, not through a camera.

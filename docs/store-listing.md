@@ -9,6 +9,9 @@ per language. The counts below were measured, not estimated.
 
 ## Title (30)
 
+As of 1.1.0 the app runs on phones and tablets as well as televisions, so
+"for Android TV" no longer belongs in the short description.
+
 ```
 OpenTV: IPTV & M3U Player
 ```
@@ -26,7 +29,7 @@ channels.
 ## Short description (80)
 
 ```
-Xtream Codes and M3U player for Android TV. Bring your own provider.
+Xtream Codes and M3U player for TV, phone and tablet. Bring your provider.
 ```
 
 ## Full description (4000)
@@ -71,24 +74,23 @@ Xtream puts your username and password inside every stream address, so no stream
 
 Nothing leaves your television except requests to the provider you entered and, if you choose to supply a key, to TMDB for artwork.
 
-BUILT FOR A REMOTE
-Every screen is laid out for a d-pad at three metres. Focus moves to the first item of the next row rather than to whichever one happens to sit under the last one. There is no touch target anywhere in it, and nothing that needs a mouse.
+TWO INTERFACES, ONE APP
+On a television every screen is laid out for a d-pad at three metres, and focus moves to the first item of the next row rather than whichever happens to sit under the last one. On a phone the same catalogue is a grid and a list, laid out for a thumb. The app asks the operating system which machine it is on and draws the right one; there is no setting for it and no wrong one to pick.
+
+HAND A SETUP BETWEEN THEM
+Set the app up once and give it to your other devices. The television shows a code, you point a phone's camera at it, and your providers, their passwords, your catalogue and your watch history copy across. The transfer never leaves your network, and it is encrypted with a key that only ever existed on the two screens.
 
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
-## Release notes — 1.0.1 (500)
+## Release notes — 1.1.0 (500)
 
 ```
-First release.
+OpenTV now runs on phones and tablets as well as televisions, with an interface built for each rather than one stretched to fit both.
 
-Xtream Codes and M3U/M3U8 providers. Live channels, films and series, an XMLTV guide with catch-up, and continue-watching that resumes a series at the right episode.
+Hand a whole setup between your devices: the television shows a code, your phone's camera reads it, and your providers, passwords, catalogue and history copy across over your own network, encrypted.
 
-4K and HDR straight to the panel. Subtitle and audio tracks, scrubbing, and next episode.
+Also new: an iPhone and iPad build, and the groundwork for other languages.
 
-Set the app up from your phone's browser instead of typing on the remote.
-
-Parental PIN, hidden categories, and an optional WireGuard tunnel.
-
-Passwords are kept in the Android keystore, never in the app's database.
+Passwords stay in the system keystore, never in the app's database.
 ```

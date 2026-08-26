@@ -132,3 +132,31 @@ there is something on the other side of it.
    added, and an RTL pass over both interfaces.
 6. **The handover**, as above.
 7. **Adaptive targeting**, and a store listing that covers both form factors.
+
+
+---
+
+## Where this ended up
+
+Steps 1 to 7 are built. What differs from the plan, and why:
+
+**No scanner package, and no camera permission.** The plan assumed the phone
+would scan. Every QR scanner package declares iOS in its podspec and none
+declare tvOS, which is the wall that already put the data directory and the
+keystore on a hand rolled channel. The QR carries an `opentv://` address
+instead, whatever camera app the phone already has opens it, and the lens is
+never ours. The pairing direction is unchanged — the television still displays
+and the phone still reads — so the design survived; only the mechanism moved.
+
+**Translation is groundwork only, by request.** The pipeline, the template and
+the RTL tests are in. No second language is invented, and a test asserts that,
+so adding a real one means deliberately removing the assertion.
+
+**Not done: the television's focus system does not mirror.** `FocusRow` treats
+left as previous, which is right on a d-pad in any language, but the layout
+order reverses under RTL so the two stop meaning the same thing. It needs
+doing before Arabic ships on a television. `docs/adding-a-language.md` carries
+the detail.
+
+**Not done: the guide has no touch screen.** Live, films, series, search,
+settings, detail and the player do. The guide is still television only.
