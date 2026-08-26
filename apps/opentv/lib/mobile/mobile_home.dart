@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
+import '../app/app_version.dart';
 import '../app/source_service.dart';
 import '../app/stream_resolver.dart';
 import '../app/vpn_service.dart';
@@ -11,8 +12,10 @@ import 'channel_row.dart';
 import 'mobile_detail.dart';
 import 'mobile_player.dart';
 import 'poster_card.dart';
+import 'mobile_account.dart';
 import 'mobile_guide.dart';
 import 'mobile_settings_screens.dart';
+import 'mobile_tunnel.dart';
 import 'region_screen.dart';
 
 /// The phone's equivalent of `BrowseScreen`.
@@ -126,6 +129,17 @@ class _MobileHomeState extends State<MobileHome> {
   /// there is no cached copy in the database object to go stale when settings
   /// changes it.
   RegionFilter _regions = const RegionFilter();
+
+  /// Categories a PIN keeps out of browsing.
+  ///
+  /// Absent rather than greyed out, which is the rule the television already
+  /// follows: a list that advertises what it is hiding tells a child exactly
+  /// where to look, and tells everyone else the device has something to hide.
+  ///
+  /// This was set on the television and not enforced here at all, which made
+  /// the lock decorative on a phone — a parent could set a PIN, hand the
+  /// phone over, and everything was still there.
+  Set<String> _locked = const {};
 
   /// A line along the bottom, cleared after a few seconds.
   ///
@@ -256,6 +270,48 @@ class _MobileHomeState extends State<MobileHome> {
         PageRouteBuilder<void>(pageBuilder: (context, _, _) => screen),
       );
 
+  /// Films or shows this viewer has hearted.
+  ///
+  /// Until this existed the heart wrote to a table nothing on the phone ever
+  /// read — the same failure as the orphaned episode favourite, only the
+  /// other way round. A control that records something invisible is a control
+  /// that does nothing.
+  Future<List<_ContinueItem>> _favouriteItems(ItemKind kind) async {
+    final rows = await widget.db.favouritesOf(widget.source.id, kind);
+    final ids = [for (final row in rows) row.itemRemoteId];
+    if (ids.isEmpty) return const [];
+
+    if (kind == ItemKind.movie) {
+      final films = await widget.db.moviesByRemoteIds(widget.source.id, ids);
+      final byId = {for (final f in films) f.remoteId: f};
+      return [
+        for (final id in ids)
+          if (byId[id] case final film?
+              when !_locked.contains(film.categoryRemoteId))
+            (
+              title: TitleCleaner.clean(film.name).title,
+              imageUrl: film.iconUrl,
+              progress: null,
+              onTap: () => _openFilm(film),
+            ),
+      ];
+    }
+
+    final shows = await widget.db.seriesByRemoteIds(widget.source.id, ids);
+    final byId = {for (final s in shows) s.remoteId: s};
+    return [
+      for (final id in ids)
+        if (byId[id] case final show?
+            when !_locked.contains(show.categoryRemoteId))
+          (
+            title: TitleCleaner.clean(show.name).title,
+            imageUrl: show.coverUrl,
+            progress: null,
+            onTap: () => _openSeries(show),
+          ),
+    ];
+  }
+
   Future<void> _openRegions() async {
     await Navigator.of(context).push(
       PageRouteBuilder<void>(
@@ -367,7 +423,13 @@ class _MobileHomeState extends State<MobileHome> {
 
   Future<void> _loadRegions() async {
     final stored = await widget.db.preference(RegionFilter.preferenceKey);
-    if (mounted) setState(() => _regions = RegionFilter.decode(stored));
+    final locked = await widget.db.lockedCategories(widget.source.id);
+    if (mounted) {
+      setState(() {
+        _regions = RegionFilter.decode(stored);
+        _locked = locked;
+      });
+    }
   }
 
   @override
@@ -427,10 +489,12 @@ class _MobileHomeState extends State<MobileHome> {
   Widget _tabBody() {
     return switch (_tab) {
       0 => _LiveTab(
-          key: ValueKey(_regions.forKind(ItemKind.live).join(',')),
+          key: ValueKey('live:${_regions.forKind(ItemKind.live).join(',')}'
+              ':${_locked.length}'),
           db: widget.db,
           source: widget.source,
           hiddenRegions: _regions.forKind(ItemKind.live),
+          locked: _locked,
           onPlay: (item) => _play(item),
         ),
       1 => MobileGuide(
@@ -438,6 +502,7 @@ class _MobileHomeState extends State<MobileHome> {
           db: widget.db,
           sourceId: widget.source.id,
           hiddenRegions: _regions.forKind(ItemKind.live),
+          locked: _locked,
           onPlay: (channel) => _play(Playable.channel(channel)),
           canCatchUp: (channel, start) => StreamResolver.isWithinArchive(
             channel,
@@ -475,13 +540,17 @@ class _MobileHomeState extends State<MobileHome> {
                   ),
             ];
           },
+          favourites: () => _favouriteItems(ItemKind.movie),
           child: _GridTab(
           key: ValueKey('films:${_regions.forKind(ItemKind.movie).join(',')}'),
-          load: () => widget.db.moviesIn(
-            widget.source.id,
-            limit: 200,
-            hiddenRegions: _regions.forKind(ItemKind.movie),
-          ),
+          load: () async => [
+            for (final film in await widget.db.moviesIn(
+              widget.source.id,
+              limit: 200,
+              hiddenRegions: _regions.forKind(ItemKind.movie),
+            ))
+              if (!_locked.contains(film.categoryRemoteId)) film,
+          ],
           titleOf: (m) => TitleCleaner.clean((m as Movie).name).title,
           imageOf: (m) => (m as Movie).iconUrl,
           onOpen: (m) => _openFilm(m as Movie),
@@ -509,13 +578,17 @@ class _MobileHomeState extends State<MobileHome> {
                   ),
             ];
           },
+          favourites: () => _favouriteItems(ItemKind.series),
           child: _GridTab(
           key: ValueKey('series:${_regions.forKind(ItemKind.series).join(',')}'),
-          load: () => widget.db.seriesIn(
-            widget.source.id,
-            limit: 200,
-            hiddenRegions: _regions.forKind(ItemKind.series),
-          ),
+          load: () async => [
+            for (final show in await widget.db.seriesIn(
+              widget.source.id,
+              limit: 200,
+              hiddenRegions: _regions.forKind(ItemKind.series),
+            ))
+              if (!_locked.contains(show.categoryRemoteId)) show,
+          ],
           titleOf: (s) => TitleCleaner.clean((s as SeriesEntry).name).title,
           imageOf: (s) => (s as SeriesEntry).coverUrl,
           onOpen: (s) => _openSeries(s as SeriesEntry),
@@ -524,6 +597,7 @@ class _MobileHomeState extends State<MobileHome> {
       4 => _SearchTab(
           db: widget.db,
           source: widget.source,
+          locked: _locked,
           onChannel: (c) => _play(Playable.channel(c)),
           onFilm: _openFilm,
           onSeries: _openSeries,
@@ -554,6 +628,14 @@ class _MobileHomeState extends State<MobileHome> {
                   'behind the PIN. Four digits or more.',
             ),
           ),
+          onOpenAccount: () => _push(
+            MobileAccountScreen(
+              db: widget.db,
+              service: widget.service,
+              source: widget.source,
+            ),
+          ),
+          onOpenTunnel: () => _push(MobileTunnelScreen(vpn: widget.vpn)),
           onOpenTmdb: () => _push(
             const MobileSecretScreen(
               title: 'TMDB key',
@@ -577,12 +659,14 @@ class _LiveTab extends StatefulWidget {
     required this.db,
     required this.source,
     required this.hiddenRegions,
+    required this.locked,
     required this.onPlay,
   });
 
   final OpenTvDatabase db;
   final Source source;
   final Set<String> hiddenRegions;
+  final Set<String> locked;
   final ValueChanged<Playable> onPlay;
 
   @override
@@ -602,7 +686,13 @@ class _LiveTabState extends State<_LiveTab> {
           hiddenRegions: widget.hiddenRegions,
         )
         .then((rows) {
-      if (mounted) setState(() => _channels = rows);
+      if (!mounted) return;
+      setState(() {
+        _channels = [
+          for (final channel in rows)
+            if (!widget.locked.contains(channel.categoryRemoteId)) channel,
+        ];
+      });
     });
   }
 
@@ -705,6 +795,7 @@ class _SearchTab extends StatefulWidget {
   const _SearchTab({
     required this.db,
     required this.source,
+    required this.locked,
     required this.onChannel,
     required this.onFilm,
     required this.onSeries,
@@ -712,6 +803,10 @@ class _SearchTab extends StatefulWidget {
 
   final OpenTvDatabase db;
   final Source source;
+
+  /// Locked categories, filtered out of results. A lock that only applied to
+  /// browsing would be one search away from useless.
+  final Set<String> locked;
   final ValueChanged<Channel> onChannel;
   final ValueChanged<Movie> onFilm;
   final ValueChanged<SeriesEntry> onSeries;
@@ -761,9 +856,18 @@ class _SearchTabState extends State<_SearchTab> {
     ]);
     if (!mounted || _controller.text.trim() != term) return;
     setState(() {
-      _channels = results[0] as List<Channel>;
-      _movies = results[1] as List<Movie>;
-      _series = results[2] as List<SeriesEntry>;
+      _channels = [
+        for (final row in results[0] as List<Channel>)
+          if (!widget.locked.contains(row.categoryRemoteId)) row,
+      ];
+      _movies = [
+        for (final row in results[1] as List<Movie>)
+          if (!widget.locked.contains(row.categoryRemoteId)) row,
+      ];
+      _series = [
+        for (final row in results[2] as List<SeriesEntry>)
+          if (!widget.locked.contains(row.categoryRemoteId)) row,
+      ];
     });
   }
 
@@ -852,6 +956,8 @@ class _SettingsTab extends StatelessWidget {
     required this.onOpenCategories,
     required this.onOpenPin,
     required this.onOpenTmdb,
+    required this.onOpenAccount,
+    required this.onOpenTunnel,
   });
 
   final Source source;
@@ -865,6 +971,8 @@ class _SettingsTab extends StatelessWidget {
   final VoidCallback onOpenCategories;
   final VoidCallback onOpenPin;
   final VoidCallback onOpenTmdb;
+  final VoidCallback onOpenAccount;
+  final VoidCallback onOpenTunnel;
 
   @override
   Widget build(BuildContext context) {
@@ -872,69 +980,103 @@ class _SettingsTab extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: OpenTvTouchSpace.xxl),
       children: [
         const _Heading('Providers'),
-        for (final s in sources)
-          ChannelRow(
-            name: s.name,
-            now: s.id == source.id ? 'In use' : null,
-            onTap: () => onSwitchSource(s),
-            // Long press rather than a row of delete buttons. Forgetting a
-            // provider takes its stored password with it and cannot be
-            // undone, so it should not sit one stray tap away from switching
-            // to it.
-            onLongPress: sources.length > 1
-                ? () => _confirmForget(context, s)
-                : null,
-          ),
-        ChannelRow(name: 'Add a provider', onTap: onAddSource),
+        ChannelRow(
+          name: source.name,
+          now: 'Account, catalogue and re-sync',
+          onTap: onOpenAccount,
+          artwork: false,
+        ),
+        // Only a section when there is something to switch between. With one
+        // provider it repeated the row directly above it.
+        if (sources.length > 1) ...[
+          const _Heading('Switch'),
+          for (final other in sources)
+            if (other.id != source.id)
+              ChannelRow(
+                name: other.name,
+                artwork: false,
+                onTap: () => onSwitchSource(other),
+                // Long press rather than a row of delete buttons. Forgetting
+                // a provider takes its stored password with it and cannot be
+                // undone, so it should not sit one stray tap away from
+                // switching to it.
+                onLongPress: () => _confirmForget(context, other),
+              ),
+        ],
+        ChannelRow(
+          name: 'Add a provider',
+          onTap: onAddSource,
+          artwork: false,
+        ),
         const _Heading('What is shown'),
         ChannelRow(
           name: 'Regions',
           now: 'Hide what you do not watch',
           onTap: onOpenRegions,
+          artwork: false,
         ),
         ChannelRow(
           name: 'Categories',
           now: 'Hide whole sections of the catalogue',
           onTap: onOpenCategories,
+          artwork: false,
         ),
         ChannelRow(
           name: 'Parental lock',
           now: 'A PIN, and what it hides',
           onTap: onOpenPin,
+          artwork: false,
         ),
         const _Heading('Metadata'),
         ChannelRow(
           name: 'TMDB key',
           now: 'Synopses, cast and artwork',
           onTap: onOpenTmdb,
+          artwork: false,
         ),
         const _Heading('Another device'),
         ChannelRow(
           name: 'Hand this setup to another device',
           now: 'Providers, passwords, catalogue and history',
           onTap: onOfferHandover,
+          artwork: false,
         ),
-        if (vpn.isSupported) ...[
-          const _Heading('Tunnel'),
-          ChannelRow(
-            name: 'WireGuard',
-            now: 'Configured on the television, if at all',
-            onTap: null,
-          ),
-        ],
+        const _Heading('Tunnel'),
+        ChannelRow(
+          name: 'Private tunnel',
+          now: vpn.isSupported
+              ? 'WireGuard, for this device’s traffic'
+              : 'Not available on this platform',
+          onTap: onOpenTunnel,
+          artwork: false,
+        ),
         const _Heading('About'),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
+        const Padding(
+          padding: EdgeInsets.fromLTRB(
             OpenTvTouchSpace.gutter,
             OpenTvTouchSpace.sm,
             OpenTvTouchSpace.gutter,
             0,
           ),
-          child: Text(
-            'OpenTV supplies no channels, films or playlists. It hosts no '
-            'content and transmits none. Everything you see in it comes from '
-            'a provider you chose and an address you entered.',
-            style: OpenTvTouchType.bodyMuted,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'OpenTV supplies no channels, films or playlists. It hosts no '
+                'content and transmits none. Everything you see in it comes '
+                'from a provider you chose and an address you entered.',
+                style: OpenTvTouchType.bodyMuted,
+              ),
+              SizedBox(height: OpenTvTouchSpace.md),
+              Text(
+                'Your provider passwords, the parental PIN, the TMDB key and '
+                'any tunnel configuration are held in this device’s keystore. '
+                'The catalogue holds a reference and never the secret.',
+                style: OpenTvTouchType.bodyMuted,
+              ),
+              SizedBox(height: OpenTvTouchSpace.md),
+              Text('VERSION $appVersion', style: OpenTvTouchType.label),
+            ],
           ),
         ),
       ],
@@ -1049,10 +1191,12 @@ class _WithContinue extends StatefulWidget {
   const _WithContinue({
     super.key,
     required this.load,
+    required this.favourites,
     required this.child,
   });
 
   final Future<List<_ContinueItem>> Function() load;
+  final Future<List<_ContinueItem>> Function() favourites;
   final Widget child;
 
   @override
@@ -1060,9 +1204,8 @@ class _WithContinue extends StatefulWidget {
 }
 
 class _WithContinueState extends State<_WithContinue> {
-  static const _stripCardWidth = 104.0;
-
   List<_ContinueItem> _items = const [];
+  List<_ContinueItem> _favourites = const [];
 
   @override
   void initState() {
@@ -1070,47 +1213,77 @@ class _WithContinueState extends State<_WithContinue> {
     widget.load().then((rows) {
       if (mounted) setState(() => _items = rows);
     });
+    widget.favourites().then((rows) {
+      if (mounted) setState(() => _favourites = rows);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_items.isEmpty) return widget.child;
+    // Absent rather than empty when there is nothing in them. A heading over
+    // no tiles is a first run looking like a fault, which is why the
+    // television puts its own shelves behind the same condition.
+    if (_items.isEmpty && _favourites.isEmpty) return widget.child;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(
+        if (_items.isNotEmpty)
+          _Strip(label: 'CONTINUE WATCHING', items: _items),
+        if (_favourites.isNotEmpty)
+          _Strip(label: 'FAVOURITES', items: _favourites),
+        Expanded(child: widget.child),
+      ],
+    );
+  }
+}
+
+/// One horizontal shelf.
+class _Strip extends StatelessWidget {
+  const _Strip({required this.label, required this.items});
+
+  static const cardWidth = 104.0;
+
+  final String label;
+  final List<_ContinueItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
             OpenTvTouchSpace.gutter,
             OpenTvTouchSpace.md,
             OpenTvTouchSpace.gutter,
             OpenTvTouchSpace.sm,
           ),
-          child: Text('CONTINUE WATCHING', style: OpenTvTouchType.label),
+          child: Text(label, style: OpenTvTouchType.label),
         ),
         SizedBox(
           // Measured from the card rather than picked. 190 was picked, and it
           // was 16 pixels short the first time a title wrapped.
-          height: PosterCard.heightFor(_stripCardWidth, titleLines: 1),
+          height: PosterCard.heightFor(cardWidth, titleLines: 1),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: OpenTvTouchSpace.page,
-            itemCount: _items.length,
+            itemCount: items.length,
             separatorBuilder: (_, _) =>
                 const SizedBox(width: OpenTvTouchSpace.md),
             itemBuilder: (context, i) => SizedBox(
-              width: _stripCardWidth,
+              width: cardWidth,
               child: PosterCard(
-                title: _items[i].title,
-                imageUrl: _items[i].imageUrl,
-                progress: _items[i].progress,
+                title: items[i].title,
+                imageUrl: items[i].imageUrl,
+                progress: items[i].progress,
                 titleLines: 1,
-                onTap: _items[i].onTap,
+                onTap: items[i].onTap,
               ),
             ),
           ),
         ),
-        Expanded(child: widget.child),
       ],
     );
   }

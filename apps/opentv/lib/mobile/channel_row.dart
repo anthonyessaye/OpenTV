@@ -15,6 +15,7 @@ class ChannelRow extends StatelessWidget {
     this.logoUrl,
     this.onTap,
     this.onLongPress,
+    this.artwork = true,
   });
 
   final String name;
@@ -25,6 +26,14 @@ class ChannelRow extends StatelessWidget {
   final String? logoUrl;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+
+  /// Whether to leave room for a logo.
+  ///
+  /// False on a settings row. The placeholder is right in a channel list —
+  /// most channels have artwork and a missing one should not shuffle the
+  /// column — but a settings screen has no artwork at all, and a row of empty
+  /// squares down the side reads as a list that failed to load.
+  final bool artwork;
 
   @override
   Widget build(BuildContext context) {
@@ -40,22 +49,24 @@ class ChannelRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: OpenTvRadius.tile,
-              child: Container(
-                width: 44,
-                height: 44,
-                color: OpenTvColors.artworkPlaceholder,
-                child: logoUrl == null
-                    ? null
-                    : Image.network(
-                        logoUrl!,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const SizedBox(),
-                      ),
+            if (artwork) ...[
+              ClipRRect(
+                borderRadius: OpenTvRadius.tile,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  color: OpenTvColors.artworkPlaceholder,
+                  child: logoUrl == null
+                      ? null
+                      : Image.network(
+                          logoUrl!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const SizedBox(),
+                        ),
+                ),
               ),
-            ),
-            const SizedBox(width: OpenTvTouchSpace.md),
+              const SizedBox(width: OpenTvTouchSpace.md),
+            ],
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

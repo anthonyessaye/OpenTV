@@ -21,6 +21,7 @@ class MobileGuide extends StatefulWidget {
     required this.db,
     required this.sourceId,
     required this.hiddenRegions,
+    required this.locked,
     required this.onPlay,
     this.onCatchUp,
     this.canCatchUp,
@@ -29,6 +30,11 @@ class MobileGuide extends StatefulWidget {
   final OpenTvDatabase db;
   final int sourceId;
   final Set<String> hiddenRegions;
+
+  /// Locked categories. A guide that still listed them would put the titles
+  /// of everything behind the PIN on screen.
+  final Set<String> locked;
+
   final ValueChanged<Channel> onPlay;
 
   /// Plays something that already aired, from the provider's archive.
@@ -53,11 +59,14 @@ class _MobileGuideState extends State<MobileGuide> {
   }
 
   Future<void> _load() async {
-    final channels = await widget.db.channelsIn(
-      widget.sourceId,
-      limit: 200,
-      hiddenRegions: widget.hiddenRegions,
-    );
+    final channels = [
+      for (final channel in await widget.db.channelsIn(
+        widget.sourceId,
+        limit: 200,
+        hiddenRegions: widget.hiddenRegions,
+      ))
+        if (!widget.locked.contains(channel.categoryRemoteId)) channel,
+    ];
 
     // Only channels the guide actually covers are asked about. A provider
     // commonly carries a few hundred channels and XMLTV data for a fraction

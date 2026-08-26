@@ -11,7 +11,9 @@ import 'package:opentv_ui/opentv_ui.dart';
 
 import '../mobile/mobile_home.dart';
 import '../mobile/mobile_onboarding.dart';
+import '../mobile/mobile_setup.dart';
 import 'browse_screen.dart';
+import 'app_version.dart';
 import 'handover_screen.dart';
 import 'handover_service.dart';
 import 'host.dart';
@@ -386,7 +388,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       _handover ??= HandoverService(
         db: db,
         databaseFile: _databaseFile!,
-        appVersion: '1.0.1',
+        appVersion: appVersion,
       );
 
   Widget _content() {
@@ -504,6 +506,13 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
 
     final settingUp = _settingUp;
     if (settingUp != null) {
+      if (!widget.device.isTelevision) {
+        return MobileSetupScreen(
+          db: db,
+          source: settingUp,
+          onDone: () => setState(() => _settingUp = null),
+        );
+      }
       return SetupScreen(
         db: db,
         source: settingUp,
