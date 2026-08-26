@@ -29,3 +29,6 @@ export 'src/xtream/xtream_account.dart';
 export 'src/xtream/xtream_credentials.dart';
 export 'src/xtream/xtream_models.dart';
 export 'src/xtream/xtream_urls.dart';
+export 'src/handover/handover_transfer.dart';
+export 'src/handover/handover_bundle.dart';
+export 'src/handover/handover_pairing.dart';
