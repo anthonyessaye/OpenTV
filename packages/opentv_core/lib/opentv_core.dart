@@ -33,3 +33,4 @@ export 'src/handover/handover_transfer.dart';
 export 'src/handover/handover_bundle.dart';
 export 'src/handover/handover_pairing.dart';
 export 'src/handover/handover_client.dart';
+export 'src/store/region_filter.dart';

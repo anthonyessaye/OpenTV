@@ -188,6 +188,21 @@ class _SeriesScreenState extends State<SeriesScreen> {
     return (position / (seconds * 1000)).clamp(0.0, 1.0);
   }
 
+  /// The provider's own cast list, split and de-duplicated.
+  ///
+  /// From the catalogue rather than TMDB: it is already there, it needs no
+  /// key, and a show whose metadata never matched still has one. It arrives
+  /// as a single comma-separated string with repeats and stray spacing.
+  List<String> get _cast {
+    final raw = widget.series.castList;
+    if (raw == null || raw.trim().isEmpty) return const [];
+    final seen = <String>{};
+    return [
+      for (final name in raw.split(','))
+        if (name.trim().isNotEmpty && seen.add(name.trim())) name.trim(),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final cleaned = TitleCleaner.clean(widget.series.name);
@@ -325,6 +340,28 @@ class _SeriesScreenState extends State<SeriesScreen> {
                       ),
               ),
             ),
+            if (_cast.isNotEmpty) ...[
+              const SizedBox(height: OpenTvSpace.md),
+              const Text('CAST', style: OpenTvType.label),
+              const SizedBox(height: OpenTvSpace.xs),
+              // Below the episodes, not above them. Somebody opening a show is
+              // deciding which episode to watch; the cast is what they read
+              // afterwards, and putting it first pushes the thing they came for
+              // off a 1080-pixel screen.
+              //
+              // Not focusable. There is nothing to do with a name here — no
+              // filmography to open — and a row of stops a d-pad has to walk
+              // through to reach nothing is a row that is in the way.
+              SizedBox(
+                width: 1400,
+                child: Text(
+                  _cast.join('   ·   '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: OpenTvType.bodyMuted,
+                ),
+              ),
+            ],
           ],
         ),
       ),

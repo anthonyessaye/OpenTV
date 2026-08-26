@@ -58,10 +58,15 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-enum _Panel { sources, account, hidden, metadata, vpn, parental, about }
+enum _Panel { sources, account, hidden, regions, metadata, vpn, parental, about }
 
 class _SettingsScreenState extends State<SettingsScreen> {
   _Panel _panel = _Panel.sources;
+
+  /// Which kind's regions are being edited, and what is hidden.
+  ItemKind _regionKind = ItemKind.movie;
+  RegionFilter _regionFilter = const RegionFilter();
+  List<({String region, int count})> _regionsForKind = const [];
 
   bool _hasPin = false;
   Set<String> _locked = const {};
@@ -199,6 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Panel.sources => 'Providers',
                       _Panel.account => 'Account',
                       _Panel.hidden => 'Hidden categories',
+                      _Panel.regions => 'Regions',
                       _Panel.metadata => 'Metadata',
                       _Panel.vpn => 'Private tunnel',
                       _Panel.parental => 'Parental lock',
@@ -220,6 +226,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           !_askingPortal) {
                         _askPortal();
                       }
+                      // Regions are counted out of the catalogue with a GROUP
+                      // BY over the whole source, so they are read when the
+                      // panel is opened rather than on every settings build.
+                      if (panel == _Panel.regions) _loadRegions();
                     },
                   ),
                 ),
@@ -236,6 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _Panel.sources => _sources(),
               _Panel.account => _accountPanel(),
               _Panel.hidden => _hidden(),
+              _Panel.regions => _regions(),
               _Panel.metadata => _metadata(),
               _Panel.vpn => _vpn(),
               _Panel.parental => _parental(),
@@ -673,6 +684,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ],
     );
+  }
+
+
+  /// Which regions to see, per kind.
+  ///
+  /// Separate from hidden categories rather than folded into it, because they
+  /// cut across each other: a provider commonly files everything it carries
+  /// under "MOVIES" and distinguishes the languages only in the titles, so
+  /// hiding categories cannot express "not the Turkish ones" at all.
+  ///
+  /// Phrased as hiding, like the categories panel. A viewer with eleven
+  /// regions wants to remove the two they do not speak rather than tick nine
+  /// — and it matters when a sync adds a twelfth, because a hide list lets it
+  /// through and a show list would swallow it silently.
+  Widget _regions() {
+    final hidden = _regionFilter.forKind(_regionKind);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Providers put a region in front of a title — AR, TR, EX-YU. '
+          'Anything hidden here is removed from browsing and search. Titles '
+          'with no region are always shown, which on most catalogues is most '
+          'of what they carry.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Row(
+          children: [
+            for (final kind in [
+              ItemKind.live,
+              ItemKind.movie,
+              ItemKind.series,
+            ]) ...[
+              PlayerButton(
+                label: switch (kind) {
+                  ItemKind.live => 'CHANNELS',
+                  ItemKind.movie => 'FILMS',
+                  _ => 'SERIES',
+                },
+                emphasis: kind == _regionKind,
+                autofocus: kind == ItemKind.live,
+                onSelect: () {
+                  setState(() => _regionKind = kind);
+                  _loadRegions();
+                },
+              ),
+              const SizedBox(width: OpenTvSpace.xs),
+            ],
+          ],
+        ),
+        const SizedBox(height: OpenTvSpace.sm),
+        Text(
+          '${hidden.length} of ${_regionsForKind.length} hidden',
+          style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+        ),
+        const SizedBox(height: OpenTvSpace.sm),
+        Expanded(
+          child: _regionsForKind.isEmpty
+              ? const Text(
+                  'This provider does not put a region in front of these.',
+                  style: OpenTvType.bodyMuted,
+                )
+              : ListView.builder(
+                  itemCount: _regionsForKind.length,
+                  itemBuilder: (context, index) {
+                    final entry = _regionsForKind[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: _LockRow(
+                        name: '${entry.region}   ·   ${entry.count} titles',
+                        locked: hidden.contains(entry.region),
+                        lockedLabel: 'HIDDEN',
+                        onToggle: () => _toggleRegion(entry.region),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _loadRegions() async {
+    final stored = await widget.db.preference(RegionFilter.preferenceKey);
+    final rows = await widget.db.regionsIn(widget.active.id, _regionKind);
+    if (!mounted) return;
+    setState(() {
+      _regionFilter = RegionFilter.decode(stored);
+      _regionsForKind = rows;
+    });
+  }
+
+  Future<void> _toggleRegion(String region) async {
+    final hide = !_regionFilter.forKind(_regionKind).contains(region);
+    final next = _regionFilter.withRegion(_regionKind, region, hide: hide);
+    setState(() => _regionFilter = next);
+    await widget.db.setPreference(RegionFilter.preferenceKey, next.encode());
   }
 
   Future<void> _setAllHidden(bool hidden) async {

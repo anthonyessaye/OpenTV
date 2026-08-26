@@ -127,8 +127,16 @@ class _BrowseScreenState extends State<BrowseScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSection();
+    _readRegions().then((_) => _loadSection());
     _readTmdbKey();
+  }
+
+  /// Read before the first query rather than alongside it, or the first
+  /// shelves are built unfiltered and then rebuilt — which on a large source
+  /// is a visible flash of the regions the viewer asked not to see.
+  Future<void> _readRegions() async {
+    final stored = await widget.db.preference(RegionFilter.preferenceKey);
+    if (mounted) setState(() => _regions = RegionFilter.decode(stored));
   }
 
   @override
@@ -164,12 +172,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
     // The viewer's own lists, which the old Android app surfaced and which
     // would otherwise be data the schema keeps and nothing ever shows.
-    final resumable = await widget.db.continueWatching(
-      sourceId: widget.source.id,
-      limit: 60,
-    );
     final favourites = await widget.db.favouritesOf(widget.source.id, _kind);
-    final mine = _resumableIds(resumable, _kind);
+    final mine = await _continueIds(widget.source.id, 60);
 
     if (!mounted || generation != _generation) return;
 
@@ -207,13 +211,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (_category == _continueId || _category == _favouritesId) {
       final ids = _category == _continueId
           ? [
-              ..._resumableIds(
-                await widget.db.continueWatching(
-                  sourceId: sourceId,
-                  limit: window,
-                ),
-                _kind,
-              ),
+              ...await _continueIds(sourceId, window),
             ]
           : [
               for (final row in await widget.db.favouritesOf(sourceId, _kind))
@@ -255,6 +253,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
           sourceId,
           categoryRemoteId: _category,
           limit: window,
+          hiddenRegions: _regions.forKind(ItemKind.movie),
         ))
           if (!hidden.contains(film.categoryRemoteId)) _Item.film(film),
       ],
@@ -263,6 +262,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
           sourceId,
           categoryRemoteId: _category,
           limit: window,
+          hiddenRegions: _regions.forKind(ItemKind.series),
         ))
           if (!hidden.contains(entry.categoryRemoteId)) _Item.series(entry),
       ],
@@ -271,6 +271,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
           sourceId,
           categoryRemoteId: _category,
           limit: window,
+          hiddenRegions: _regions.forKind(ItemKind.live),
         ))
           if (!hidden.contains(channel.categoryRemoteId))
             _Item.channel(channel),
@@ -351,6 +352,29 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// What the shelf is about is the parent, so that is what this returns,
   /// deduplicated: six episodes of one series are one thing to carry on with,
   /// not six.
+  /// Which regions this viewer has chosen not to see.
+  ///
+  /// Passed into every query rather than read inside them, so nothing caches
+  /// a copy that settings can leave stale.
+  RegionFilter _regions = const RegionFilter();
+
+  /// What belongs on the Continue shelf for the section being browsed.
+  ///
+  /// Series go through continueSeries rather than the generic shelf, because
+  /// the generic one excludes completed rows — which is right for a film and
+  /// removes a show from the shelf the moment an episode is finished, exactly
+  /// when the next one is most wanted.
+  Future<List<String>> _continueIds(int sourceId, int window) async {
+    if (_kind == ItemKind.series) {
+      final rows = await widget.db.continueSeries(sourceId, limit: window);
+      return [for (final row in rows) row.seriesRemoteId];
+    }
+    return _resumableIds(
+      await widget.db.continueWatching(sourceId: sourceId, limit: window),
+      _kind,
+    );
+  }
+
   static List<String> _resumableIds(
     Iterable<PlaybackState> states,
     ItemKind kind,
@@ -790,7 +814,11 @@ class _BrowseScreenState extends State<BrowseScreen> {
               // Guide and search browse nothing: they have their own shape
               // and their own queries.
               if (section != TvSection.guide && section != TvSection.search) {
-                _loadSection();
+                // Regions are re-read on the way out of settings, which is
+                // the only place they change. Doing it here rather than on a
+                // callback keeps settings from needing to know who is
+                // listening.
+                _readRegions().then((_) => _loadSection());
               }
             },
           ),

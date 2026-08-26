@@ -23,6 +23,7 @@ class MobileDetail extends StatelessWidget {
     this.onToggleFavourite,
     this.episodes = const [],
     this.onEpisode,
+    this.cast = const [],
   });
 
   final String title;
@@ -39,6 +40,13 @@ class MobileDetail extends StatelessWidget {
   final VoidCallback? onToggleFavourite;
   final List<Episode> episodes;
   final void Function(Episode)? onEpisode;
+
+  /// Names, in the provider's own order.
+  ///
+  /// Below the episodes rather than above them. Somebody opening a show is
+  /// deciding which episode to watch; the cast is what they read afterwards,
+  /// and putting it first pushes the thing they came for off the screen.
+  final List<String> cast;
 
   static String _clock(Duration d) =>
       '${d.inHours}:${d.inMinutes.remainder(60).toString().padLeft(2, '0')}';
@@ -190,6 +198,38 @@ class MobileDetail extends StatelessWidget {
                   ),
                 ),
               ),
+          ],
+          if (cast.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                OpenTvTouchSpace.gutter,
+                OpenTvTouchSpace.xxl,
+                OpenTvTouchSpace.gutter,
+                OpenTvTouchSpace.sm,
+              ),
+              child: Text('CAST', style: OpenTvTouchType.label),
+            ),
+            Padding(
+              padding: OpenTvTouchSpace.page,
+              child: Wrap(
+                spacing: OpenTvTouchSpace.sm,
+                runSpacing: OpenTvTouchSpace.sm,
+                children: [
+                  for (final name in cast)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: OpenTvTouchSpace.md,
+                        vertical: OpenTvTouchSpace.sm,
+                      ),
+                      decoration: BoxDecoration(
+                        color: OpenTvColors.surface,
+                        borderRadius: OpenTvRadius.tile,
+                      ),
+                      child: Text(name, style: OpenTvTouchType.body),
+                    ),
+                ],
+              ),
+            ),
           ],
         ],
       ),

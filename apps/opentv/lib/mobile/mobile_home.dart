@@ -11,6 +11,7 @@ import 'channel_row.dart';
 import 'mobile_detail.dart';
 import 'mobile_player.dart';
 import 'poster_card.dart';
+import 'region_screen.dart';
 
 /// The phone's equivalent of `BrowseScreen`.
 ///
@@ -104,6 +105,13 @@ class _MobileHomeState extends State<MobileHome> {
     );
   }
 
+  /// Which regions this viewer has chosen not to see.
+  ///
+  /// Held here and passed into every query rather than read inside them, so
+  /// there is no cached copy in the database object to go stale when settings
+  /// changes it.
+  RegionFilter _regions = const RegionFilter();
+
   /// A line along the bottom, cleared after a few seconds.
   ///
   /// Stated rather than swallowed. The failure it reports — a provider whose
@@ -134,6 +142,10 @@ class _MobileHomeState extends State<MobileHome> {
           subtitle: cleaned.year?.toString(),
           imageUrl: film.iconUrl,
           isFavourite: favourite,
+          onToggleFavourite: () => _toggleFavourite(
+            ItemKind.movie,
+            film.remoteId,
+          ),
           resumeAt: _resumeFrom(progress),
           facts: [
             if (cleaned.quality != null) ('quality', cleaned.quality!),
@@ -154,6 +166,13 @@ class _MobileHomeState extends State<MobileHome> {
       widget.source.id,
       series.remoteId,
     );
+    // The show, not the episode. An episode-level favourite was orphaned:
+    // the Series shelf only ever asks for series favourites.
+    final favourite = await widget.db.isFavourite(
+      sourceId: widget.source.id,
+      kind: ItemKind.series,
+      remoteId: series.remoteId,
+    );
     if (!mounted) return;
 
     final cleaned = TitleCleaner.clean(series.name);
@@ -164,6 +183,12 @@ class _MobileHomeState extends State<MobileHome> {
           subtitle: series.genres,
           synopsis: series.plot,
           imageUrl: series.coverUrl,
+          isFavourite: favourite,
+          onToggleFavourite: () => _toggleFavourite(
+            ItemKind.series,
+            series.remoteId,
+          ),
+          cast: _castOf(series),
           episodes: episodes,
           onEpisode: (episode) => _play(Playable.episode(episode)),
           // A series has no stream of its own; the button plays the first
@@ -189,12 +214,80 @@ class _MobileHomeState extends State<MobileHome> {
     return Duration(milliseconds: ms);
   }
 
+  /// The provider's own cast list, split.
+  ///
+  /// Taken from the catalogue rather than from TMDB, because it is already
+  /// there and needs no key. It arrives as one comma-separated string, and
+  /// entries frequently repeat or carry stray spacing.
+  static List<String> _castOf(SeriesEntry series) {
+    final raw = series.castList;
+    if (raw == null || raw.trim().isEmpty) return const [];
+    final seen = <String>{};
+    return [
+      for (final name in raw.split(','))
+        if (name.trim().isNotEmpty && seen.add(name.trim())) name.trim(),
+    ];
+  }
+
+  Future<void> _openRegions() async {
+    await Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder: (context, _, _) => RegionScreen(
+          db: widget.db,
+          sourceId: widget.source.id,
+          onChanged: (filter) => setState(() => _regions = filter),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleFavourite(ItemKind kind, String remoteId) async {
+    final already = await widget.db.isFavourite(
+      sourceId: widget.source.id,
+      kind: kind,
+      remoteId: remoteId,
+    );
+    if (already) {
+      await widget.db.removeFavourite(
+        sourceId: widget.source.id,
+        kind: kind,
+        remoteId: remoteId,
+      );
+    } else {
+      await widget.db.addFavourite(
+        sourceId: widget.source.id,
+        kind: kind,
+        remoteId: remoteId,
+        at: DateTime.now(),
+      );
+    }
+  }
+
+  /// How far through, or null when the duration is unknown.
+  static double? _fraction(PlaybackState state) {
+    final position = state.positionMs;
+    final duration = state.durationMs;
+    if (position == null || duration == null || duration <= 0) return null;
+    return position / duration;
+  }
+
   void _say(String message) {
     setState(() => _notice = message);
     _noticeTimer?.cancel();
     _noticeTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) setState(() => _notice = null);
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRegions();
+  }
+
+  Future<void> _loadRegions() async {
+    final stored = await widget.db.preference(RegionFilter.preferenceKey);
+    if (mounted) setState(() => _regions = RegionFilter.decode(stored));
   }
 
   @override
@@ -252,23 +345,86 @@ class _MobileHomeState extends State<MobileHome> {
   Widget _tabBody() {
     return switch (_tab) {
       0 => _LiveTab(
+          key: ValueKey(_regions.forKind(ItemKind.live).join(',')),
           db: widget.db,
           source: widget.source,
+          hiddenRegions: _regions.forKind(ItemKind.live),
           onPlay: (item) => _play(item),
         ),
-      1 => _GridTab(
-          key: const ValueKey('films'),
-          load: () => widget.db.recentMovies(widget.source.id, limit: 90),
+      1 => _WithContinue(
+          key: ValueKey('films-c:${_regions.forKind(ItemKind.movie).join(',')}'),
+          load: () async {
+            final states = await widget.db.continueWatching(
+              sourceId: widget.source.id,
+              limit: 20,
+            );
+            final films = await widget.db.moviesByRemoteIds(
+              widget.source.id,
+              [
+                for (final s in states)
+                  if (s.itemKind == ItemKind.movie) s.itemRemoteId,
+              ],
+            );
+            final byId = {for (final f in films) f.remoteId: f};
+            return [
+              for (final state in states)
+                if (byId[state.itemRemoteId] case final film?)
+                  (
+                    title: TitleCleaner.clean(film.name).title,
+                    imageUrl: film.iconUrl,
+                    progress: _fraction(state),
+                    onTap: () => _play(
+                      Playable.movie(film),
+                      startAt: Duration(milliseconds: state.positionMs ?? 0),
+                    ),
+                  ),
+            ];
+          },
+          child: _GridTab(
+          key: ValueKey('films:${_regions.forKind(ItemKind.movie).join(',')}'),
+          load: () => widget.db.moviesIn(
+            widget.source.id,
+            limit: 200,
+            hiddenRegions: _regions.forKind(ItemKind.movie),
+          ),
           titleOf: (m) => TitleCleaner.clean((m as Movie).name).title,
           imageOf: (m) => (m as Movie).iconUrl,
           onOpen: (m) => _openFilm(m as Movie),
+          ),
         ),
-      2 => _GridTab(
-          key: const ValueKey('series'),
-          load: () => widget.db.recentSeries(widget.source.id, limit: 90),
+      2 => _WithContinue(
+          key: ValueKey('series-c:${_regions.forKind(ItemKind.series).join(',')}'),
+          load: () async {
+            // The series shelf, which keeps a show while it still has
+            // somewhere to go — including after an episode is finished.
+            final rows = await widget.db.continueSeries(widget.source.id);
+            final shows = await widget.db.seriesByRemoteIds(
+              widget.source.id,
+              [for (final r in rows) r.seriesRemoteId],
+            );
+            final byId = {for (final s in shows) s.remoteId: s};
+            return [
+              for (final row in rows)
+                if (byId[row.seriesRemoteId] case final show?)
+                  (
+                    title: TitleCleaner.clean(show.name).title,
+                    imageUrl: show.coverUrl,
+                    progress: null,
+                    onTap: () => _play(Playable.episode(row.next)),
+                  ),
+            ];
+          },
+          child: _GridTab(
+          key: ValueKey('series:${_regions.forKind(ItemKind.series).join(',')}'),
+          load: () => widget.db.seriesIn(
+            widget.source.id,
+            limit: 200,
+            hiddenRegions: _regions.forKind(ItemKind.series),
+          ),
           titleOf: (s) => TitleCleaner.clean((s as SeriesEntry).name).title,
           imageOf: (s) => (s as SeriesEntry).coverUrl,
           onOpen: (s) => _openSeries(s as SeriesEntry),
+          ),
         ),
       3 => _SearchTab(
           db: widget.db,
@@ -285,6 +441,7 @@ class _MobileHomeState extends State<MobileHome> {
           onRemoveSource: widget.onRemoveSource,
           vpn: widget.vpn,
           onOfferHandover: widget.onOfferHandover,
+          onOpenRegions: _openRegions,
         ),
     };
   }
@@ -293,13 +450,16 @@ class _MobileHomeState extends State<MobileHome> {
 /// Channels, as a list.
 class _LiveTab extends StatefulWidget {
   const _LiveTab({
+    super.key,
     required this.db,
     required this.source,
+    required this.hiddenRegions,
     required this.onPlay,
   });
 
   final OpenTvDatabase db;
   final Source source;
+  final Set<String> hiddenRegions;
   final ValueChanged<Playable> onPlay;
 
   @override
@@ -312,7 +472,13 @@ class _LiveTabState extends State<_LiveTab> {
   @override
   void initState() {
     super.initState();
-    widget.db.channelsIn(widget.source.id, limit: 400).then((rows) {
+    widget.db
+        .channelsIn(
+          widget.source.id,
+          limit: 400,
+          hiddenRegions: widget.hiddenRegions,
+        )
+        .then((rows) {
       if (mounted) setState(() => _channels = rows);
     });
   }
@@ -552,6 +718,7 @@ class _SettingsTab extends StatelessWidget {
     required this.onRemoveSource,
     required this.vpn,
     required this.onOfferHandover,
+    required this.onOpenRegions,
   });
 
   final Source source;
@@ -561,6 +728,7 @@ class _SettingsTab extends StatelessWidget {
   final Future<void> Function(Source) onRemoveSource;
   final VpnService vpn;
   final VoidCallback onOfferHandover;
+  final VoidCallback onOpenRegions;
 
   @override
   Widget build(BuildContext context) {
@@ -582,6 +750,12 @@ class _SettingsTab extends StatelessWidget {
                 : null,
           ),
         ChannelRow(name: 'Add a provider', onTap: onAddSource),
+        const _Heading('What is shown'),
+        ChannelRow(
+          name: 'Regions',
+          now: 'Hide what you do not watch',
+          onTap: onOpenRegions,
+        ),
         const _Heading('Another device'),
         ChannelRow(
           name: 'Hand this setup to another device',
@@ -705,6 +879,84 @@ Future<bool> showTouchConfirm(
     ),
   );
   return answer ?? false;
+}
+
+/// A Continue strip above whatever the tab normally shows.
+///
+/// Absent rather than empty when there is nothing to continue. A shelf with a
+/// heading and no tiles is a first run looking like a fault, which is why the
+/// television puts its own Continue row behind the same condition.
+typedef _ContinueItem = ({
+  String title,
+  String? imageUrl,
+  double? progress,
+  VoidCallback onTap,
+});
+
+class _WithContinue extends StatefulWidget {
+  const _WithContinue({
+    super.key,
+    required this.load,
+    required this.child,
+  });
+
+  final Future<List<_ContinueItem>> Function() load;
+  final Widget child;
+
+  @override
+  State<_WithContinue> createState() => _WithContinueState();
+}
+
+class _WithContinueState extends State<_WithContinue> {
+  List<_ContinueItem> _items = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.load().then((rows) {
+      if (mounted) setState(() => _items = rows);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items.isEmpty) return widget.child;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(
+            OpenTvTouchSpace.gutter,
+            OpenTvTouchSpace.md,
+            OpenTvTouchSpace.gutter,
+            OpenTvTouchSpace.sm,
+          ),
+          child: Text('CONTINUE WATCHING', style: OpenTvTouchType.label),
+        ),
+        SizedBox(
+          height: 190,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: OpenTvTouchSpace.page,
+            itemCount: _items.length,
+            separatorBuilder: (_, _) =>
+                const SizedBox(width: OpenTvTouchSpace.md),
+            itemBuilder: (context, i) => SizedBox(
+              width: 104,
+              child: PosterCard(
+                title: _items[i].title,
+                imageUrl: _items[i].imageUrl,
+                progress: _items[i].progress,
+                onTap: _items[i].onTap,
+              ),
+            ),
+          ),
+        ),
+        Expanded(child: widget.child),
+      ],
+    );
+  }
 }
 
 class _Heading extends StatelessWidget {
