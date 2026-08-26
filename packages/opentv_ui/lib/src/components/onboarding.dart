@@ -89,6 +89,7 @@ class OnboardingScreen extends StatefulWidget {
     this.progress,
     this.onCancel,
     this.onUsePhone,
+    this.onTakeFromDevice,
   });
 
   /// Performs the connection and the first sync. Returns null when the source
@@ -112,6 +113,14 @@ class OnboardingScreen extends StatefulWidget {
   /// worst part of this app; a WireGuard configuration is barely possible at
   /// all. Null when there is no network to serve it on.
   final VoidCallback? onUsePhone;
+
+  /// Shows a pairing code for a phone to scan, and takes its whole setup.
+  ///
+  /// Offered here rather than only in settings, because this is the screen
+  /// where somebody who already has OpenTV working on a phone is otherwise
+  /// about to type a portal address with a remote for no reason. It is also
+  /// the only path on this screen that involves no typing at all.
+  final VoidCallback? onTakeFromDevice;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -277,6 +286,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           onChoose: _choose,
           onCancel: widget.onCancel,
           onUsePhone: widget.onUsePhone,
+          onTakeFromDevice: widget.onTakeFromDevice,
         ),
         _Stage.details => _DetailsStep(
           field: _fields[_index],
@@ -332,11 +342,17 @@ class _Masthead extends StatelessWidget {
 }
 
 class _KindStep extends StatelessWidget {
-  const _KindStep({required this.onChoose, this.onCancel, this.onUsePhone});
+  const _KindStep({
+    required this.onChoose,
+    this.onCancel,
+    this.onUsePhone,
+    this.onTakeFromDevice,
+  });
 
   final ValueChanged<OnboardingSourceKind> onChoose;
   final VoidCallback? onCancel;
   final VoidCallback? onUsePhone;
+  final VoidCallback? onTakeFromDevice;
 
   @override
   Widget build(BuildContext context) {
@@ -382,21 +398,40 @@ class _KindStep extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onUsePhone != null) ...[
+              if (onTakeFromDevice != null || onUsePhone != null) ...[
                 const SizedBox(height: OpenTvSpace.md),
-                const Text(
-                  'Or fill this in on your phone instead — the same '
-                  'questions, on a keyboard that has letters.',
+                Text(
+                  onTakeFromDevice != null
+                      // Two ways to avoid the remote, and they are not the
+                      // same offer. One copies a setup that already exists;
+                      // the other is the same form on a better keyboard.
+                      ? 'Or leave the remote alone. If OpenTV is already set '
+                          'up on your phone, this television can take the '
+                          'whole thing from it — providers, passwords, '
+                          'catalogue and history. Otherwise fill the same '
+                          'questions in on your phone’s browser.'
+                      : 'Or fill this in on your phone instead — the same '
+                          'questions, on a keyboard that has letters.',
                   style: OpenTvType.bodyMuted,
                 ),
                 const SizedBox(height: OpenTvSpace.xs),
               ],
               Row(
                 children: [
+                  // First, and emphasised, because it is the only path here
+                  // that involves no typing anywhere.
+                  if (onTakeFromDevice != null) ...[
+                    PlayerButton(
+                      label: 'TAKE IT FROM MY PHONE',
+                      emphasis: true,
+                      onSelect: onTakeFromDevice,
+                    ),
+                    const SizedBox(width: OpenTvSpace.sm),
+                  ],
                   if (onUsePhone != null)
                     PlayerButton(
                       label: 'USE MY PHONE',
-                      emphasis: true,
+                      emphasis: onTakeFromDevice == null,
                       onSelect: onUsePhone,
                     ),
                   if (onUsePhone != null && onCancel != null)

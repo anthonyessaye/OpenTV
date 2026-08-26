@@ -525,6 +525,12 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         onUsePhone: widget.device.isTelevision
             ? () => setState(() => _usingPhone = true)
             : null,
+        // The television shows a code and the phone scans it, which is the
+        // same arrangement settings uses and the same one the hardware
+        // dictates: a phone has a camera and a television does not.
+        onTakeFromDevice: widget.device.isTelevision && _databaseFile != null
+            ? () => setState(() => _offering = true)
+            : null,
         // Adding a second provider can be abandoned; a first cannot, because
         // there would be nothing behind it to go back to.
         onCancel: _addingSource
