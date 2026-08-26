@@ -18,13 +18,26 @@ import 'dart:typed_data';
 /// somebody else's approval.
 class HandoverPairing {
   const HandoverPairing({
-    required this.host,
+    required this.hosts,
     required this.port,
     required this.key,
-  });
+  }) : assert(hosts.length > 0, 'a pairing needs somewhere to connect to');
 
-  /// The address of the device that is displaying this code.
-  final String host;
+  /// Every address the displaying device might be reachable at.
+  ///
+  /// A list rather than one, because the device showing the code cannot know
+  /// which of its own addresses the other one can reach. A television box
+  /// commonly has Ethernet and Wi-Fi up at once, and this app can put a
+  /// WireGuard tunnel on top of that — and the first interface in the list is
+  /// frequently not the one a phone on the sofa can get to.
+  ///
+  /// Offering one meant a scan that produced a spinner at nought per cent for
+  /// twenty seconds and then a timeout. The receiver tries each in turn
+  /// instead, which is fast because the wrong ones refuse immediately.
+  final List<String> hosts;
+
+  /// The first address, for anything that needs to show one.
+  String get host => hosts.first;
 
   final int port;
 
@@ -39,13 +52,13 @@ class HandoverPairing {
 
   /// A fresh pairing for a session.
   static HandoverPairing generate({
-    required String host,
+    required List<String> hosts,
     required int port,
     Random? random,
   }) {
     final source = random ?? Random.secure();
     return HandoverPairing(
-      host: host,
+      hosts: hosts,
       port: port,
       key: Uint8List.fromList(
         List<int>.generate(keyLength, (_) => source.nextInt(256)),
@@ -80,12 +93,16 @@ class HandoverPairing {
     if (uri == null || uri.scheme != 'opentv' || uri.host != 'handover') {
       return null;
     }
-    final host = uri.queryParameters['h'];
+    final rawHosts = uri.queryParameters['h'];
     final port = int.tryParse(uri.queryParameters['p'] ?? '');
     final rawKey = uri.queryParameters['k'];
-    if (host == null || host.isEmpty || port == null || rawKey == null) {
-      return null;
-    }
+    if (rawHosts == null || port == null || rawKey == null) return null;
+
+    final hosts = [
+      for (final host in rawHosts.split(','))
+        if (host.trim().isNotEmpty) host.trim(),
+    ];
+    if (hosts.isEmpty) return null;
     Uint8List key;
     try {
       key = Uint8List.fromList(base64Url.decode(rawKey));
@@ -96,6 +113,6 @@ class HandoverPairing {
     // failure that would silently weaken the encryption to whatever was
     // scanned.
     if (key.length != keyLength) return null;
-    return HandoverPairing(host: host, port: port, key: key);
+    return HandoverPairing(hosts: hosts, port: port, key: key);
   }
 }

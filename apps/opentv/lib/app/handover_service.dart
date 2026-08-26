@@ -68,7 +68,7 @@ class HandoverService {
   /// receives anything at all, because it can display a code and never read
   /// one.
   Future<HandoverPairing> offer({
-    required String host,
+    required List<String> hosts,
     int port = 8100,
     Future<void> Function()? onReceived,
   }) async {
@@ -87,7 +87,7 @@ class HandoverService {
       sourceCount: (await db.allSources()).length,
     );
 
-    final pairing = HandoverPairing.generate(host: host, port: port);
+    final pairing = HandoverPairing.generate(hosts: hosts, port: port);
     final server = HandoverServer(
       pairing: pairing,
       bundle: bundle,
@@ -101,7 +101,7 @@ class HandoverService {
     _server = server;
 
     return HandoverPairing(
-      host: pairing.host,
+      hosts: pairing.hosts,
       port: server.boundPort ?? port,
       key: pairing.key,
     );

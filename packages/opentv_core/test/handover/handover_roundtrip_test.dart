@@ -37,7 +37,7 @@ void main() {
   Future<void> serve(HandoverBundle bundle, {bool accepting = false}) async {
     // Port 0 lets the OS pick, so a test run does not collide with a real
     // handover or with another test.
-    pairing = HandoverPairing.generate(host: '127.0.0.1', port: 0);
+    pairing = HandoverPairing.generate(hosts: ['127.0.0.1'], port: 0);
     server = HandoverServer(
       pairing: pairing,
       bundle: bundle,
@@ -48,7 +48,7 @@ void main() {
     );
     await server.start();
     pairing = HandoverPairing(
-      host: '127.0.0.1',
+      hosts: const ['127.0.0.1'],
       port: server.boundPort!,
       key: pairing.key,
     );
@@ -115,9 +115,9 @@ void main() {
     );
 
     final wrong = HandoverPairing(
-      host: pairing.host,
+      hosts: pairing.hosts,
       port: pairing.port,
-      key: HandoverPairing.generate(host: 'x', port: 1).key,
+      key: HandoverPairing.generate(hosts: ['x'], port: 1).key,
     );
 
     await expectLater(
@@ -193,9 +193,9 @@ void main() {
       await serve(_bundle(), accepting: true);
 
       final wrong = HandoverPairing(
-        host: pairing.host,
+        hosts: pairing.hosts,
         port: pairing.port,
-        key: HandoverPairing.generate(host: 'x', port: 1).key,
+        key: HandoverPairing.generate(hosts: ['x'], port: 1).key,
       );
 
       await expectLater(
@@ -208,13 +208,77 @@ void main() {
     });
   });
 
+  group('several addresses, only one of them reachable', () {
+    // This is what "scanning showed nought per cent and did nothing" was. The
+    // television put one address in the code — the first non-loopback
+    // interface — and a box with Ethernet and Wi-Fi up at once, or with a
+    // tunnel running, routinely offered one the phone could not route to.
+    //
+    // 203.0.113.x is TEST-NET-3, reserved by RFC 5737 for documentation and
+    // guaranteed not to be a real host, so it stands in for an address that
+    // exists on the sender and is unreachable from the receiver.
+    const unreachable = '203.0.113.7';
+
+    test('the reachable one is found even when it is not first', () async {
+      final original = _bundle();
+      await serve(original);
+
+      final spread = HandoverPairing(
+        hosts: [unreachable, pairing.host],
+        port: pairing.port,
+        key: pairing.key,
+      );
+
+      final received = await const HandoverClient(
+        compatibility: HandoverCompatibility(schemaVersion: 3),
+        timeout: Duration(milliseconds: 400),
+      ).fetch(spread);
+
+      expect(received.database, original.database);
+    });
+
+    test('a push finds it too', () async {
+      await serve(_bundle(), accepting: true);
+
+      final spread = HandoverPairing(
+        hosts: [unreachable, pairing.host],
+        port: pairing.port,
+        key: pairing.key,
+      );
+
+      await const HandoverClient(
+        compatibility: HandoverCompatibility(schemaVersion: 3),
+        timeout: Duration(milliseconds: 400),
+      ).send(spread, _bundle());
+
+      expect(received, isNotNull);
+    });
+
+    test('all of them unreachable still reports, and names them', () async {
+      const client = HandoverClient(
+        compatibility: HandoverCompatibility(schemaVersion: 3),
+        timeout: Duration(milliseconds: 300),
+      );
+      final nowhere = HandoverPairing(
+        hosts: const [unreachable, '203.0.113.8'],
+        port: 8100,
+        key: HandoverPairing.generate(hosts: const ['x'], port: 1).key,
+      );
+
+      await expectLater(
+        client.manifest(nowhere),
+        throwsA(isA<HandoverException>()),
+      );
+    }, timeout: const Timeout(Duration(seconds: 20)));
+  });
+
   test('nothing listening is reported rather than hung', () async {
     const client = HandoverClient(
       compatibility: HandoverCompatibility(schemaVersion: 3),
       timeout: Duration(milliseconds: 300),
     );
     // Port 1 is reserved and nothing will answer on it.
-    final nowhere = HandoverPairing.generate(host: '127.0.0.1', port: 1);
+    final nowhere = HandoverPairing.generate(hosts: ['127.0.0.1'], port: 1);
 
     await expectLater(
       client.manifest(nowhere),

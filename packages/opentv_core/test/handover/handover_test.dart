@@ -29,7 +29,7 @@ HandoverBundle _bundle({int schemaVersion = 3, int databaseBytes = 2048}) {
 void main() {
   group('pairing', () {
     test('survives a round trip through the QR text', () {
-      final pairing = HandoverPairing.generate(host: '192.168.1.40', port: 8100);
+      final pairing = HandoverPairing.generate(hosts: ['192.168.1.40'], port: 8100);
       final decoded = HandoverPairing.decode(pairing.encode())!;
 
       expect(decoded.host, '192.168.1.40');
@@ -38,8 +38,8 @@ void main() {
     });
 
     test('two pairings do not share a key', () {
-      final a = HandoverPairing.generate(host: 'a', port: 1);
-      final b = HandoverPairing.generate(host: 'a', port: 1);
+      final a = HandoverPairing.generate(hosts: ['a'], port: 1);
+      final b = HandoverPairing.generate(hosts: ['a'], port: 1);
       expect(a.key, isNot(b.key));
     });
 
@@ -152,7 +152,7 @@ void main() {
     const cipher = HandoverCipher();
 
     test('seals and opens under the same pairing', () async {
-      final pairing = HandoverPairing.generate(host: 'a', port: 1);
+      final pairing = HandoverPairing.generate(hosts: ['a'], port: 1);
       final bundle = _bundle();
 
       final sealed = await cipher.seal(bundle.payload(), pairing);
@@ -162,7 +162,7 @@ void main() {
     });
 
     test('the sealed bytes do not contain the secret', () async {
-      final pairing = HandoverPairing.generate(host: 'a', port: 1);
+      final pairing = HandoverPairing.generate(hosts: ['a'], port: 1);
       final sealed = await cipher.seal(_bundle().payload(), pairing);
       expect(utf8.decode(sealed, allowMalformed: true),
           isNot(contains('hunter2')));
@@ -171,10 +171,10 @@ void main() {
     test('a different key does not open it', () async {
       final sealed = await cipher.seal(
         _bundle().payload(),
-        HandoverPairing.generate(host: 'a', port: 1),
+        HandoverPairing.generate(hosts: ['a'], port: 1),
       );
       expect(
-        () => cipher.open(sealed, HandoverPairing.generate(host: 'a', port: 1)),
+        () => cipher.open(sealed, HandoverPairing.generate(hosts: ['a'], port: 1)),
         throwsA(isA<HandoverException>().having(
           (e) => e.refusal, 'refusal', HandoverRefusal.notAuthentic)),
       );
@@ -184,7 +184,7 @@ void main() {
       // The reason for GCM rather than an unauthenticated mode: without this
       // anyone on the network could change a stream address in flight and the
       // receiver would have no way to see it.
-      final pairing = HandoverPairing.generate(host: 'a', port: 1);
+      final pairing = HandoverPairing.generate(hosts: ['a'], port: 1);
       final sealed = await cipher.seal(_bundle().payload(), pairing);
       sealed[sealed.length ~/ 2] ^= 0x01;
 
@@ -198,7 +198,7 @@ void main() {
     test('two seals of the same payload differ', () async {
       // A repeated nonce under one key breaks GCM outright, so the only safe
       // arrangement is one that cannot store a nonce to reuse.
-      final pairing = HandoverPairing.generate(host: 'a', port: 1);
+      final pairing = HandoverPairing.generate(hosts: ['a'], port: 1);
       final payload = _bundle().payload();
       final first = await cipher.seal(payload, pairing);
       final second = await cipher.seal(payload, pairing);

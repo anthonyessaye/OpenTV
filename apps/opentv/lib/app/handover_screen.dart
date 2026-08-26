@@ -61,14 +61,14 @@ class _HandoverOfferScreenState extends State<HandoverOfferScreen> {
 
   Future<void> _start() async {
     try {
-      final address = await _localAddress();
-      if (address == null) {
+      final addresses = await _localAddresses();
+      if (addresses.isEmpty) {
         setState(() => _failure =
             'This device is not on a network that another device can reach.');
         return;
       }
       final pairing = await widget.service.offer(
-        host: address,
+        hosts: addresses,
         onReceived: widget.onReceived,
       );
       if (mounted) setState(() => _pairing = pairing);
@@ -77,23 +77,50 @@ class _HandoverOfferScreenState extends State<HandoverOfferScreen> {
     }
   }
 
-  /// The address another device on the same network can reach.
+  /// Every address another device might reach this one at.
   ///
-  /// Picked from the interfaces rather than asked of the platform, because
+  /// All of them, not the first. This device cannot know which of its own
+  /// addresses the other one can get to: a television box commonly has
+  /// Ethernet and Wi-Fi up at once, and this app can put a WireGuard tunnel
+  /// on top of that. Offering only the first meant a phone that scanned the
+  /// code sat at nought per cent against an address it could not route to,
+  /// until a twenty-second timeout finally said so.
+  ///
+  /// Ordered with the likeliest first, so the receiver usually gets it on the
+  /// first try: private LAN ranges before anything else, since a handover
+  /// happens between two devices in one room.
+  ///
+  /// Read from the interfaces rather than asked of the platform, because
   /// neither Android nor Apple offers a straight answer and both would need a
   /// channel method to give one. Loopback is excluded, which is the whole
   /// trick: it is the address that always exists and never works.
-  static Future<String?> _localAddress() async {
+  static Future<List<String>> _localAddresses() async {
     final interfaces = await NetworkInterface.list(
       type: InternetAddressType.IPv4,
       includeLoopback: false,
     );
+
+    final private = <String>[];
+    final rest = <String>[];
     for (final interface in interfaces) {
       for (final address in interface.addresses) {
-        if (!address.isLoopback) return address.address;
+        if (address.isLoopback) continue;
+        (_isPrivate(address.address) ? private : rest).add(address.address);
       }
     }
-    return null;
+    return [...private, ...rest];
+  }
+
+  /// Whether this looks like an address on somebody's own network.
+  static bool _isPrivate(String address) {
+    final parts = address.split('.');
+    if (parts.length != 4) return false;
+    final a = int.tryParse(parts[0]);
+    final b = int.tryParse(parts[1]);
+    if (a == null || b == null) return false;
+    return a == 10 ||
+        (a == 192 && b == 168) ||
+        (a == 172 && b >= 16 && b <= 31);
   }
 
   @override

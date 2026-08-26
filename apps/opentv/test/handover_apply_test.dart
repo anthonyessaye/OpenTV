@@ -80,7 +80,7 @@ void main() {
     required int schemaVersion,
     required Uint8List database,
   }) async {
-    final seed = HandoverPairing.generate(host: '127.0.0.1', port: 0);
+    final seed = HandoverPairing.generate(hosts: ['127.0.0.1'], port: 0);
     final server = HandoverServer(
       pairing: seed,
       bundle: HandoverBundle(
@@ -102,7 +102,7 @@ void main() {
     await server.start();
     return (
       HandoverPairing(
-        host: '127.0.0.1',
+        hosts: const ['127.0.0.1'],
         port: server.boundPort!,
         key: seed.key,
       ),
