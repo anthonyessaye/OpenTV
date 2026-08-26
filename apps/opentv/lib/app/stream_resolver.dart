@@ -217,6 +217,24 @@ class Playable {
 
   /// The catalogue's own vocabulary for this, for favourites and history.
   ///
+  /// What a favourite on this item should be recorded against.
+  ///
+  /// An episode's favourite belongs to its show. Recorded against the episode
+  /// it was orphaned: the Series shelf asks for [ItemKind.series] favourites,
+  /// which an [ItemKind.episode] row never matches, so hearting an episode
+  /// put it somewhere nothing ever looked — and hearting the same show twice
+  /// from two episodes made two of them.
+  ///
+  /// Progress stays on the episode. That is the opposite choice and the right
+  /// one for the opposite reason: where you are is a fact about the episode,
+  /// while liking it is a statement about the show.
+  ({ItemKind kind, String remoteId}) get favouriteTarget {
+    if (kind == XtreamStreamKind.series && parentRemoteId != null) {
+      return (kind: ItemKind.series, remoteId: parentRemoteId!);
+    }
+    return (kind: itemKind, remoteId: remoteId);
+  }
+
   /// An episode is stored as [ItemKind.episode] rather than series, because
   /// what a viewer resumed is one episode and not the whole run.
   ItemKind get itemKind => switch (kind) {

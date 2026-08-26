@@ -1128,6 +1128,15 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _regionMeta = const VerificationMeta('region');
+  @override
+  late final GeneratedColumn<String> region = GeneratedColumn<String>(
+    'region',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _searchNameMeta = const VerificationMeta(
     'searchName',
   );
@@ -1258,6 +1267,7 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
     sourceId,
     remoteId,
     name,
+    region,
     searchName,
     iconUrl,
     categoryRemoteId,
@@ -1305,6 +1315,12 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
       );
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('region')) {
+      context.handle(
+        _regionMeta,
+        region.isAcceptableOrUnknown(data['region']!, _regionMeta),
+      );
     }
     if (data.containsKey('search_name')) {
       context.handle(
@@ -1407,6 +1423,10 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
         DriftSqlType.string,
         data['${effectivePrefix}name'],
       )!,
+      region: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region'],
+      ),
       searchName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}search_name'],
@@ -1465,6 +1485,18 @@ class Channel extends DataClass implements Insertable<Channel> {
   final String remoteId;
   final String name;
 
+  /// The provider's region prefix, lifted out of [name] at sync.
+  ///
+  /// Stored rather than derived at read time, because it has to be filtered
+  /// on. A region that only exists as the output of a regex over the title
+  /// cannot appear in a WHERE clause, and filtering after the query means
+  /// filtering after LIMIT — which produces short shelves and, on a source
+  /// where one region dominates, empty ones.
+  ///
+  /// Null where the title carries no prefix, which is most of a well-kept
+  /// catalogue and all of some.
+  final String? region;
+
   /// Lower-cased, punctuation-stripped [name]. Indexed, so search is a range
   /// scan rather than the full table scan the Android app was doing.
   final String searchName;
@@ -1491,6 +1523,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     required this.sourceId,
     required this.remoteId,
     required this.name,
+    this.region,
     required this.searchName,
     this.iconUrl,
     this.categoryRemoteId,
@@ -1509,6 +1542,9 @@ class Channel extends DataClass implements Insertable<Channel> {
     map['source_id'] = Variable<int>(sourceId);
     map['remote_id'] = Variable<String>(remoteId);
     map['name'] = Variable<String>(name);
+    if (!nullToAbsent || region != null) {
+      map['region'] = Variable<String>(region);
+    }
     map['search_name'] = Variable<String>(searchName);
     if (!nullToAbsent || iconUrl != null) {
       map['icon_url'] = Variable<String>(iconUrl);
@@ -1544,6 +1580,9 @@ class Channel extends DataClass implements Insertable<Channel> {
       sourceId: Value(sourceId),
       remoteId: Value(remoteId),
       name: Value(name),
+      region: region == null && nullToAbsent
+          ? const Value.absent()
+          : Value(region),
       searchName: Value(searchName),
       iconUrl: iconUrl == null && nullToAbsent
           ? const Value.absent()
@@ -1583,6 +1622,7 @@ class Channel extends DataClass implements Insertable<Channel> {
       sourceId: serializer.fromJson<int>(json['sourceId']),
       remoteId: serializer.fromJson<String>(json['remoteId']),
       name: serializer.fromJson<String>(json['name']),
+      region: serializer.fromJson<String?>(json['region']),
       searchName: serializer.fromJson<String>(json['searchName']),
       iconUrl: serializer.fromJson<String?>(json['iconUrl']),
       categoryRemoteId: serializer.fromJson<String?>(json['categoryRemoteId']),
@@ -1603,6 +1643,7 @@ class Channel extends DataClass implements Insertable<Channel> {
       'sourceId': serializer.toJson<int>(sourceId),
       'remoteId': serializer.toJson<String>(remoteId),
       'name': serializer.toJson<String>(name),
+      'region': serializer.toJson<String?>(region),
       'searchName': serializer.toJson<String>(searchName),
       'iconUrl': serializer.toJson<String?>(iconUrl),
       'categoryRemoteId': serializer.toJson<String?>(categoryRemoteId),
@@ -1621,6 +1662,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     int? sourceId,
     String? remoteId,
     String? name,
+    Value<String?> region = const Value.absent(),
     String? searchName,
     Value<String?> iconUrl = const Value.absent(),
     Value<String?> categoryRemoteId = const Value.absent(),
@@ -1636,6 +1678,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     sourceId: sourceId ?? this.sourceId,
     remoteId: remoteId ?? this.remoteId,
     name: name ?? this.name,
+    region: region.present ? region.value : this.region,
     searchName: searchName ?? this.searchName,
     iconUrl: iconUrl.present ? iconUrl.value : this.iconUrl,
     categoryRemoteId: categoryRemoteId.present
@@ -1657,6 +1700,7 @@ class Channel extends DataClass implements Insertable<Channel> {
       sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
       remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       name: data.name.present ? data.name.value : this.name,
+      region: data.region.present ? data.region.value : this.region,
       searchName: data.searchName.present
           ? data.searchName.value
           : this.searchName,
@@ -1689,6 +1733,7 @@ class Channel extends DataClass implements Insertable<Channel> {
           ..write('sourceId: $sourceId, ')
           ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
+          ..write('region: $region, ')
           ..write('searchName: $searchName, ')
           ..write('iconUrl: $iconUrl, ')
           ..write('categoryRemoteId: $categoryRemoteId, ')
@@ -1709,6 +1754,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     sourceId,
     remoteId,
     name,
+    region,
     searchName,
     iconUrl,
     categoryRemoteId,
@@ -1728,6 +1774,7 @@ class Channel extends DataClass implements Insertable<Channel> {
           other.sourceId == this.sourceId &&
           other.remoteId == this.remoteId &&
           other.name == this.name &&
+          other.region == this.region &&
           other.searchName == this.searchName &&
           other.iconUrl == this.iconUrl &&
           other.categoryRemoteId == this.categoryRemoteId &&
@@ -1745,6 +1792,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
   final Value<int> sourceId;
   final Value<String> remoteId;
   final Value<String> name;
+  final Value<String?> region;
   final Value<String> searchName;
   final Value<String?> iconUrl;
   final Value<String?> categoryRemoteId;
@@ -1761,6 +1809,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     this.sourceId = const Value.absent(),
     this.remoteId = const Value.absent(),
     this.name = const Value.absent(),
+    this.region = const Value.absent(),
     this.searchName = const Value.absent(),
     this.iconUrl = const Value.absent(),
     this.categoryRemoteId = const Value.absent(),
@@ -1778,6 +1827,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     required int sourceId,
     required String remoteId,
     required String name,
+    this.region = const Value.absent(),
     required String searchName,
     this.iconUrl = const Value.absent(),
     this.categoryRemoteId = const Value.absent(),
@@ -1798,6 +1848,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     Expression<int>? sourceId,
     Expression<String>? remoteId,
     Expression<String>? name,
+    Expression<String>? region,
     Expression<String>? searchName,
     Expression<String>? iconUrl,
     Expression<String>? categoryRemoteId,
@@ -1815,6 +1866,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
       if (sourceId != null) 'source_id': sourceId,
       if (remoteId != null) 'remote_id': remoteId,
       if (name != null) 'name': name,
+      if (region != null) 'region': region,
       if (searchName != null) 'search_name': searchName,
       if (iconUrl != null) 'icon_url': iconUrl,
       if (categoryRemoteId != null) 'category_remote_id': categoryRemoteId,
@@ -1834,6 +1886,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     Value<int>? sourceId,
     Value<String>? remoteId,
     Value<String>? name,
+    Value<String?>? region,
     Value<String>? searchName,
     Value<String?>? iconUrl,
     Value<String?>? categoryRemoteId,
@@ -1851,6 +1904,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
       sourceId: sourceId ?? this.sourceId,
       remoteId: remoteId ?? this.remoteId,
       name: name ?? this.name,
+      region: region ?? this.region,
       searchName: searchName ?? this.searchName,
       iconUrl: iconUrl ?? this.iconUrl,
       categoryRemoteId: categoryRemoteId ?? this.categoryRemoteId,
@@ -1877,6 +1931,9 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
+    }
+    if (region.present) {
+      map['region'] = Variable<String>(region.value);
     }
     if (searchName.present) {
       map['search_name'] = Variable<String>(searchName.value);
@@ -1923,6 +1980,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
           ..write('sourceId: $sourceId, ')
           ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
+          ..write('region: $region, ')
           ..write('searchName: $searchName, ')
           ..write('iconUrl: $iconUrl, ')
           ..write('categoryRemoteId: $categoryRemoteId, ')
@@ -1975,6 +2033,15 @@ class $MoviesTable extends Movies with TableInfo<$MoviesTable, Movie> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _regionMeta = const VerificationMeta('region');
+  @override
+  late final GeneratedColumn<String> region = GeneratedColumn<String>(
+    'region',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _searchNameMeta = const VerificationMeta(
     'searchName',
@@ -2089,6 +2156,7 @@ class $MoviesTable extends Movies with TableInfo<$MoviesTable, Movie> {
     sourceId,
     remoteId,
     name,
+    region,
     searchName,
     iconUrl,
     categoryRemoteId,
@@ -2135,6 +2203,12 @@ class $MoviesTable extends Movies with TableInfo<$MoviesTable, Movie> {
       );
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('region')) {
+      context.handle(
+        _regionMeta,
+        region.isAcceptableOrUnknown(data['region']!, _regionMeta),
+      );
     }
     if (data.containsKey('search_name')) {
       context.handle(
@@ -2228,6 +2302,10 @@ class $MoviesTable extends Movies with TableInfo<$MoviesTable, Movie> {
         DriftSqlType.string,
         data['${effectivePrefix}name'],
       )!,
+      region: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region'],
+      ),
       searchName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}search_name'],
@@ -2281,6 +2359,18 @@ class Movie extends DataClass implements Insertable<Movie> {
   final int sourceId;
   final String remoteId;
   final String name;
+
+  /// The provider's region prefix, lifted out of [name] at sync.
+  ///
+  /// Stored rather than derived at read time, because it has to be filtered
+  /// on. A region that only exists as the output of a regex over the title
+  /// cannot appear in a WHERE clause, and filtering after the query means
+  /// filtering after LIMIT — which produces short shelves and, on a source
+  /// where one region dominates, empty ones.
+  ///
+  /// Null where the title carries no prefix, which is most of a well-kept
+  /// catalogue and all of some.
+  final String? region;
   final String searchName;
   final String? iconUrl;
   final String? categoryRemoteId;
@@ -2297,6 +2387,7 @@ class Movie extends DataClass implements Insertable<Movie> {
     required this.sourceId,
     required this.remoteId,
     required this.name,
+    this.region,
     required this.searchName,
     this.iconUrl,
     this.categoryRemoteId,
@@ -2314,6 +2405,9 @@ class Movie extends DataClass implements Insertable<Movie> {
     map['source_id'] = Variable<int>(sourceId);
     map['remote_id'] = Variable<String>(remoteId);
     map['name'] = Variable<String>(name);
+    if (!nullToAbsent || region != null) {
+      map['region'] = Variable<String>(region);
+    }
     map['search_name'] = Variable<String>(searchName);
     if (!nullToAbsent || iconUrl != null) {
       map['icon_url'] = Variable<String>(iconUrl);
@@ -2348,6 +2442,9 @@ class Movie extends DataClass implements Insertable<Movie> {
       sourceId: Value(sourceId),
       remoteId: Value(remoteId),
       name: Value(name),
+      region: region == null && nullToAbsent
+          ? const Value.absent()
+          : Value(region),
       searchName: Value(searchName),
       iconUrl: iconUrl == null && nullToAbsent
           ? const Value.absent()
@@ -2386,6 +2483,7 @@ class Movie extends DataClass implements Insertable<Movie> {
       sourceId: serializer.fromJson<int>(json['sourceId']),
       remoteId: serializer.fromJson<String>(json['remoteId']),
       name: serializer.fromJson<String>(json['name']),
+      region: serializer.fromJson<String?>(json['region']),
       searchName: serializer.fromJson<String>(json['searchName']),
       iconUrl: serializer.fromJson<String?>(json['iconUrl']),
       categoryRemoteId: serializer.fromJson<String?>(json['categoryRemoteId']),
@@ -2407,6 +2505,7 @@ class Movie extends DataClass implements Insertable<Movie> {
       'sourceId': serializer.toJson<int>(sourceId),
       'remoteId': serializer.toJson<String>(remoteId),
       'name': serializer.toJson<String>(name),
+      'region': serializer.toJson<String?>(region),
       'searchName': serializer.toJson<String>(searchName),
       'iconUrl': serializer.toJson<String?>(iconUrl),
       'categoryRemoteId': serializer.toJson<String?>(categoryRemoteId),
@@ -2424,6 +2523,7 @@ class Movie extends DataClass implements Insertable<Movie> {
     int? sourceId,
     String? remoteId,
     String? name,
+    Value<String?> region = const Value.absent(),
     String? searchName,
     Value<String?> iconUrl = const Value.absent(),
     Value<String?> categoryRemoteId = const Value.absent(),
@@ -2438,6 +2538,7 @@ class Movie extends DataClass implements Insertable<Movie> {
     sourceId: sourceId ?? this.sourceId,
     remoteId: remoteId ?? this.remoteId,
     name: name ?? this.name,
+    region: region.present ? region.value : this.region,
     searchName: searchName ?? this.searchName,
     iconUrl: iconUrl.present ? iconUrl.value : this.iconUrl,
     categoryRemoteId: categoryRemoteId.present
@@ -2460,6 +2561,7 @@ class Movie extends DataClass implements Insertable<Movie> {
       sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
       remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       name: data.name.present ? data.name.value : this.name,
+      region: data.region.present ? data.region.value : this.region,
       searchName: data.searchName.present
           ? data.searchName.value
           : this.searchName,
@@ -2487,6 +2589,7 @@ class Movie extends DataClass implements Insertable<Movie> {
           ..write('sourceId: $sourceId, ')
           ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
+          ..write('region: $region, ')
           ..write('searchName: $searchName, ')
           ..write('iconUrl: $iconUrl, ')
           ..write('categoryRemoteId: $categoryRemoteId, ')
@@ -2506,6 +2609,7 @@ class Movie extends DataClass implements Insertable<Movie> {
     sourceId,
     remoteId,
     name,
+    region,
     searchName,
     iconUrl,
     categoryRemoteId,
@@ -2524,6 +2628,7 @@ class Movie extends DataClass implements Insertable<Movie> {
           other.sourceId == this.sourceId &&
           other.remoteId == this.remoteId &&
           other.name == this.name &&
+          other.region == this.region &&
           other.searchName == this.searchName &&
           other.iconUrl == this.iconUrl &&
           other.categoryRemoteId == this.categoryRemoteId &&
@@ -2540,6 +2645,7 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
   final Value<int> sourceId;
   final Value<String> remoteId;
   final Value<String> name;
+  final Value<String?> region;
   final Value<String> searchName;
   final Value<String?> iconUrl;
   final Value<String?> categoryRemoteId;
@@ -2555,6 +2661,7 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
     this.sourceId = const Value.absent(),
     this.remoteId = const Value.absent(),
     this.name = const Value.absent(),
+    this.region = const Value.absent(),
     this.searchName = const Value.absent(),
     this.iconUrl = const Value.absent(),
     this.categoryRemoteId = const Value.absent(),
@@ -2571,6 +2678,7 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
     required int sourceId,
     required String remoteId,
     required String name,
+    this.region = const Value.absent(),
     required String searchName,
     this.iconUrl = const Value.absent(),
     this.categoryRemoteId = const Value.absent(),
@@ -2590,6 +2698,7 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
     Expression<int>? sourceId,
     Expression<String>? remoteId,
     Expression<String>? name,
+    Expression<String>? region,
     Expression<String>? searchName,
     Expression<String>? iconUrl,
     Expression<String>? categoryRemoteId,
@@ -2606,6 +2715,7 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
       if (sourceId != null) 'source_id': sourceId,
       if (remoteId != null) 'remote_id': remoteId,
       if (name != null) 'name': name,
+      if (region != null) 'region': region,
       if (searchName != null) 'search_name': searchName,
       if (iconUrl != null) 'icon_url': iconUrl,
       if (categoryRemoteId != null) 'category_remote_id': categoryRemoteId,
@@ -2624,6 +2734,7 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
     Value<int>? sourceId,
     Value<String>? remoteId,
     Value<String>? name,
+    Value<String?>? region,
     Value<String>? searchName,
     Value<String?>? iconUrl,
     Value<String?>? categoryRemoteId,
@@ -2640,6 +2751,7 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
       sourceId: sourceId ?? this.sourceId,
       remoteId: remoteId ?? this.remoteId,
       name: name ?? this.name,
+      region: region ?? this.region,
       searchName: searchName ?? this.searchName,
       iconUrl: iconUrl ?? this.iconUrl,
       categoryRemoteId: categoryRemoteId ?? this.categoryRemoteId,
@@ -2665,6 +2777,9 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
+    }
+    if (region.present) {
+      map['region'] = Variable<String>(region.value);
     }
     if (searchName.present) {
       map['search_name'] = Variable<String>(searchName.value);
@@ -2708,6 +2823,7 @@ class MoviesCompanion extends UpdateCompanion<Movie> {
           ..write('sourceId: $sourceId, ')
           ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
+          ..write('region: $region, ')
           ..write('searchName: $searchName, ')
           ..write('iconUrl: $iconUrl, ')
           ..write('categoryRemoteId: $categoryRemoteId, ')
@@ -2760,6 +2876,15 @@ class $SeriesEntriesTable extends SeriesEntries
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _regionMeta = const VerificationMeta('region');
+  @override
+  late final GeneratedColumn<String> region = GeneratedColumn<String>(
+    'region',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _searchNameMeta = const VerificationMeta(
     'searchName',
@@ -2893,6 +3018,7 @@ class $SeriesEntriesTable extends SeriesEntries
     sourceId,
     remoteId,
     name,
+    region,
     searchName,
     coverUrl,
     categoryRemoteId,
@@ -2941,6 +3067,12 @@ class $SeriesEntriesTable extends SeriesEntries
       );
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('region')) {
+      context.handle(
+        _regionMeta,
+        region.isAcceptableOrUnknown(data['region']!, _regionMeta),
+      );
     }
     if (data.containsKey('search_name')) {
       context.handle(
@@ -3049,6 +3181,10 @@ class $SeriesEntriesTable extends SeriesEntries
         DriftSqlType.string,
         data['${effectivePrefix}name'],
       )!,
+      region: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region'],
+      ),
       searchName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}search_name'],
@@ -3110,6 +3246,18 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
   final int sourceId;
   final String remoteId;
   final String name;
+
+  /// The provider's region prefix, lifted out of [name] at sync.
+  ///
+  /// Stored rather than derived at read time, because it has to be filtered
+  /// on. A region that only exists as the output of a regex over the title
+  /// cannot appear in a WHERE clause, and filtering after the query means
+  /// filtering after LIMIT — which produces short shelves and, on a source
+  /// where one region dominates, empty ones.
+  ///
+  /// Null where the title carries no prefix, which is most of a well-kept
+  /// catalogue and all of some.
+  final String? region;
   final String searchName;
   final String? coverUrl;
   final String? categoryRemoteId;
@@ -3134,6 +3282,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
     required this.sourceId,
     required this.remoteId,
     required this.name,
+    this.region,
     required this.searchName,
     this.coverUrl,
     this.categoryRemoteId,
@@ -3153,6 +3302,9 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
     map['source_id'] = Variable<int>(sourceId);
     map['remote_id'] = Variable<String>(remoteId);
     map['name'] = Variable<String>(name);
+    if (!nullToAbsent || region != null) {
+      map['region'] = Variable<String>(region);
+    }
     map['search_name'] = Variable<String>(searchName);
     if (!nullToAbsent || coverUrl != null) {
       map['cover_url'] = Variable<String>(coverUrl);
@@ -3193,6 +3345,9 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
       sourceId: Value(sourceId),
       remoteId: Value(remoteId),
       name: Value(name),
+      region: region == null && nullToAbsent
+          ? const Value.absent()
+          : Value(region),
       searchName: Value(searchName),
       coverUrl: coverUrl == null && nullToAbsent
           ? const Value.absent()
@@ -3235,6 +3390,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
       sourceId: serializer.fromJson<int>(json['sourceId']),
       remoteId: serializer.fromJson<String>(json['remoteId']),
       name: serializer.fromJson<String>(json['name']),
+      region: serializer.fromJson<String?>(json['region']),
       searchName: serializer.fromJson<String>(json['searchName']),
       coverUrl: serializer.fromJson<String?>(json['coverUrl']),
       categoryRemoteId: serializer.fromJson<String?>(json['categoryRemoteId']),
@@ -3258,6 +3414,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
       'sourceId': serializer.toJson<int>(sourceId),
       'remoteId': serializer.toJson<String>(remoteId),
       'name': serializer.toJson<String>(name),
+      'region': serializer.toJson<String?>(region),
       'searchName': serializer.toJson<String>(searchName),
       'coverUrl': serializer.toJson<String?>(coverUrl),
       'categoryRemoteId': serializer.toJson<String?>(categoryRemoteId),
@@ -3277,6 +3434,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
     int? sourceId,
     String? remoteId,
     String? name,
+    Value<String?> region = const Value.absent(),
     String? searchName,
     Value<String?> coverUrl = const Value.absent(),
     Value<String?> categoryRemoteId = const Value.absent(),
@@ -3293,6 +3451,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
     sourceId: sourceId ?? this.sourceId,
     remoteId: remoteId ?? this.remoteId,
     name: name ?? this.name,
+    region: region.present ? region.value : this.region,
     searchName: searchName ?? this.searchName,
     coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
     categoryRemoteId: categoryRemoteId.present
@@ -3315,6 +3474,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
       sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
       remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       name: data.name.present ? data.name.value : this.name,
+      region: data.region.present ? data.region.value : this.region,
       searchName: data.searchName.present
           ? data.searchName.value
           : this.searchName,
@@ -3346,6 +3506,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
           ..write('sourceId: $sourceId, ')
           ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
+          ..write('region: $region, ')
           ..write('searchName: $searchName, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('categoryRemoteId: $categoryRemoteId, ')
@@ -3367,6 +3528,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
     sourceId,
     remoteId,
     name,
+    region,
     searchName,
     coverUrl,
     categoryRemoteId,
@@ -3387,6 +3549,7 @@ class SeriesEntry extends DataClass implements Insertable<SeriesEntry> {
           other.sourceId == this.sourceId &&
           other.remoteId == this.remoteId &&
           other.name == this.name &&
+          other.region == this.region &&
           other.searchName == this.searchName &&
           other.coverUrl == this.coverUrl &&
           other.categoryRemoteId == this.categoryRemoteId &&
@@ -3405,6 +3568,7 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
   final Value<int> sourceId;
   final Value<String> remoteId;
   final Value<String> name;
+  final Value<String?> region;
   final Value<String> searchName;
   final Value<String?> coverUrl;
   final Value<String?> categoryRemoteId;
@@ -3422,6 +3586,7 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
     this.sourceId = const Value.absent(),
     this.remoteId = const Value.absent(),
     this.name = const Value.absent(),
+    this.region = const Value.absent(),
     this.searchName = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.categoryRemoteId = const Value.absent(),
@@ -3440,6 +3605,7 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
     required int sourceId,
     required String remoteId,
     required String name,
+    this.region = const Value.absent(),
     required String searchName,
     this.coverUrl = const Value.absent(),
     this.categoryRemoteId = const Value.absent(),
@@ -3461,6 +3627,7 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
     Expression<int>? sourceId,
     Expression<String>? remoteId,
     Expression<String>? name,
+    Expression<String>? region,
     Expression<String>? searchName,
     Expression<String>? coverUrl,
     Expression<String>? categoryRemoteId,
@@ -3479,6 +3646,7 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
       if (sourceId != null) 'source_id': sourceId,
       if (remoteId != null) 'remote_id': remoteId,
       if (name != null) 'name': name,
+      if (region != null) 'region': region,
       if (searchName != null) 'search_name': searchName,
       if (coverUrl != null) 'cover_url': coverUrl,
       if (categoryRemoteId != null) 'category_remote_id': categoryRemoteId,
@@ -3499,6 +3667,7 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
     Value<int>? sourceId,
     Value<String>? remoteId,
     Value<String>? name,
+    Value<String?>? region,
     Value<String>? searchName,
     Value<String?>? coverUrl,
     Value<String?>? categoryRemoteId,
@@ -3517,6 +3686,7 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
       sourceId: sourceId ?? this.sourceId,
       remoteId: remoteId ?? this.remoteId,
       name: name ?? this.name,
+      region: region ?? this.region,
       searchName: searchName ?? this.searchName,
       coverUrl: coverUrl ?? this.coverUrl,
       categoryRemoteId: categoryRemoteId ?? this.categoryRemoteId,
@@ -3544,6 +3714,9 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
+    }
+    if (region.present) {
+      map['region'] = Variable<String>(region.value);
     }
     if (searchName.present) {
       map['search_name'] = Variable<String>(searchName.value);
@@ -3593,6 +3766,7 @@ class SeriesEntriesCompanion extends UpdateCompanion<SeriesEntry> {
           ..write('sourceId: $sourceId, ')
           ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
+          ..write('region: $region, ')
           ..write('searchName: $searchName, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('categoryRemoteId: $categoryRemoteId, ')
@@ -7539,6 +7713,7 @@ typedef $$ChannelsTableCreateCompanionBuilder =
       required int sourceId,
       required String remoteId,
       required String name,
+      Value<String?> region,
       required String searchName,
       Value<String?> iconUrl,
       Value<String?> categoryRemoteId,
@@ -7557,6 +7732,7 @@ typedef $$ChannelsTableUpdateCompanionBuilder =
       Value<int> sourceId,
       Value<String> remoteId,
       Value<String> name,
+      Value<String?> region,
       Value<String> searchName,
       Value<String?> iconUrl,
       Value<String?> categoryRemoteId,
@@ -7592,6 +7768,11 @@ class $$ChannelsTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
     column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get region => $composableBuilder(
+    column: $table.region,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7675,6 +7856,11 @@ class $$ChannelsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get region => $composableBuilder(
+    column: $table.region,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get searchName => $composableBuilder(
     column: $table.searchName,
     builder: (column) => ColumnOrderings(column),
@@ -7748,6 +7934,9 @@ class $$ChannelsTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get region =>
+      $composableBuilder(column: $table.region, builder: (column) => column);
 
   GeneratedColumn<String> get searchName => $composableBuilder(
     column: $table.searchName,
@@ -7826,6 +8015,7 @@ class $$ChannelsTableTableManager
                 Value<int> sourceId = const Value.absent(),
                 Value<String> remoteId = const Value.absent(),
                 Value<String> name = const Value.absent(),
+                Value<String?> region = const Value.absent(),
                 Value<String> searchName = const Value.absent(),
                 Value<String?> iconUrl = const Value.absent(),
                 Value<String?> categoryRemoteId = const Value.absent(),
@@ -7842,6 +8032,7 @@ class $$ChannelsTableTableManager
                 sourceId: sourceId,
                 remoteId: remoteId,
                 name: name,
+                region: region,
                 searchName: searchName,
                 iconUrl: iconUrl,
                 categoryRemoteId: categoryRemoteId,
@@ -7860,6 +8051,7 @@ class $$ChannelsTableTableManager
                 required int sourceId,
                 required String remoteId,
                 required String name,
+                Value<String?> region = const Value.absent(),
                 required String searchName,
                 Value<String?> iconUrl = const Value.absent(),
                 Value<String?> categoryRemoteId = const Value.absent(),
@@ -7876,6 +8068,7 @@ class $$ChannelsTableTableManager
                 sourceId: sourceId,
                 remoteId: remoteId,
                 name: name,
+                region: region,
                 searchName: searchName,
                 iconUrl: iconUrl,
                 categoryRemoteId: categoryRemoteId,
@@ -7916,6 +8109,7 @@ typedef $$MoviesTableCreateCompanionBuilder =
       required int sourceId,
       required String remoteId,
       required String name,
+      Value<String?> region,
       required String searchName,
       Value<String?> iconUrl,
       Value<String?> categoryRemoteId,
@@ -7933,6 +8127,7 @@ typedef $$MoviesTableUpdateCompanionBuilder =
       Value<int> sourceId,
       Value<String> remoteId,
       Value<String> name,
+      Value<String?> region,
       Value<String> searchName,
       Value<String?> iconUrl,
       Value<String?> categoryRemoteId,
@@ -7967,6 +8162,11 @@ class $$MoviesTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
     column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get region => $composableBuilder(
+    column: $table.region,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8045,6 +8245,11 @@ class $$MoviesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get region => $composableBuilder(
+    column: $table.region,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get searchName => $composableBuilder(
     column: $table.searchName,
     builder: (column) => ColumnOrderings(column),
@@ -8113,6 +8318,9 @@ class $$MoviesTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get region =>
+      $composableBuilder(column: $table.region, builder: (column) => column);
 
   GeneratedColumn<String> get searchName => $composableBuilder(
     column: $table.searchName,
@@ -8184,6 +8392,7 @@ class $$MoviesTableTableManager
                 Value<int> sourceId = const Value.absent(),
                 Value<String> remoteId = const Value.absent(),
                 Value<String> name = const Value.absent(),
+                Value<String?> region = const Value.absent(),
                 Value<String> searchName = const Value.absent(),
                 Value<String?> iconUrl = const Value.absent(),
                 Value<String?> categoryRemoteId = const Value.absent(),
@@ -8199,6 +8408,7 @@ class $$MoviesTableTableManager
                 sourceId: sourceId,
                 remoteId: remoteId,
                 name: name,
+                region: region,
                 searchName: searchName,
                 iconUrl: iconUrl,
                 categoryRemoteId: categoryRemoteId,
@@ -8216,6 +8426,7 @@ class $$MoviesTableTableManager
                 required int sourceId,
                 required String remoteId,
                 required String name,
+                Value<String?> region = const Value.absent(),
                 required String searchName,
                 Value<String?> iconUrl = const Value.absent(),
                 Value<String?> categoryRemoteId = const Value.absent(),
@@ -8231,6 +8442,7 @@ class $$MoviesTableTableManager
                 sourceId: sourceId,
                 remoteId: remoteId,
                 name: name,
+                region: region,
                 searchName: searchName,
                 iconUrl: iconUrl,
                 categoryRemoteId: categoryRemoteId,
@@ -8270,6 +8482,7 @@ typedef $$SeriesEntriesTableCreateCompanionBuilder =
       required int sourceId,
       required String remoteId,
       required String name,
+      Value<String?> region,
       required String searchName,
       Value<String?> coverUrl,
       Value<String?> categoryRemoteId,
@@ -8289,6 +8502,7 @@ typedef $$SeriesEntriesTableUpdateCompanionBuilder =
       Value<int> sourceId,
       Value<String> remoteId,
       Value<String> name,
+      Value<String?> region,
       Value<String> searchName,
       Value<String?> coverUrl,
       Value<String?> categoryRemoteId,
@@ -8325,6 +8539,11 @@ class $$SeriesEntriesTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
     column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get region => $composableBuilder(
+    column: $table.region,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8413,6 +8632,11 @@ class $$SeriesEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get region => $composableBuilder(
+    column: $table.region,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get searchName => $composableBuilder(
     column: $table.searchName,
     builder: (column) => ColumnOrderings(column),
@@ -8491,6 +8715,9 @@ class $$SeriesEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get region =>
+      $composableBuilder(column: $table.region, builder: (column) => column);
 
   GeneratedColumn<String> get searchName => $composableBuilder(
     column: $table.searchName,
@@ -8575,6 +8802,7 @@ class $$SeriesEntriesTableTableManager
                 Value<int> sourceId = const Value.absent(),
                 Value<String> remoteId = const Value.absent(),
                 Value<String> name = const Value.absent(),
+                Value<String?> region = const Value.absent(),
                 Value<String> searchName = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> categoryRemoteId = const Value.absent(),
@@ -8592,6 +8820,7 @@ class $$SeriesEntriesTableTableManager
                 sourceId: sourceId,
                 remoteId: remoteId,
                 name: name,
+                region: region,
                 searchName: searchName,
                 coverUrl: coverUrl,
                 categoryRemoteId: categoryRemoteId,
@@ -8611,6 +8840,7 @@ class $$SeriesEntriesTableTableManager
                 required int sourceId,
                 required String remoteId,
                 required String name,
+                Value<String?> region = const Value.absent(),
                 required String searchName,
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> categoryRemoteId = const Value.absent(),
@@ -8628,6 +8858,7 @@ class $$SeriesEntriesTableTableManager
                 sourceId: sourceId,
                 remoteId: remoteId,
                 name: name,
+                region: region,
                 searchName: searchName,
                 coverUrl: coverUrl,
                 categoryRemoteId: categoryRemoteId,

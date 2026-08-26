@@ -97,6 +97,18 @@ class Channels extends Table {
 
   TextColumn get name => text()();
 
+  /// The provider's region prefix, lifted out of [name] at sync.
+  ///
+  /// Stored rather than derived at read time, because it has to be filtered
+  /// on. A region that only exists as the output of a regex over the title
+  /// cannot appear in a WHERE clause, and filtering after the query means
+  /// filtering after LIMIT — which produces short shelves and, on a source
+  /// where one region dominates, empty ones.
+  ///
+  /// Null where the title carries no prefix, which is most of a well-kept
+  /// catalogue and all of some.
+  TextColumn get region => text().nullable()();
+
   /// Lower-cased, punctuation-stripped [name]. Indexed, so search is a range
   /// scan rather than the full table scan the Android app was doing.
   TextColumn get searchName => text()();
@@ -162,6 +174,18 @@ class Movies extends Table {
   TextColumn get remoteId => text()();
 
   TextColumn get name => text()();
+
+  /// The provider's region prefix, lifted out of [name] at sync.
+  ///
+  /// Stored rather than derived at read time, because it has to be filtered
+  /// on. A region that only exists as the output of a regex over the title
+  /// cannot appear in a WHERE clause, and filtering after the query means
+  /// filtering after LIMIT — which produces short shelves and, on a source
+  /// where one region dominates, empty ones.
+  ///
+  /// Null where the title carries no prefix, which is most of a well-kept
+  /// catalogue and all of some.
+  TextColumn get region => text().nullable()();
   TextColumn get searchName => text()();
   TextColumn get iconUrl => text().nullable()();
   TextColumn get categoryRemoteId => text().nullable()();
@@ -201,6 +225,18 @@ class SeriesEntries extends Table {
   TextColumn get remoteId => text()();
 
   TextColumn get name => text()();
+
+  /// The provider's region prefix, lifted out of [name] at sync.
+  ///
+  /// Stored rather than derived at read time, because it has to be filtered
+  /// on. A region that only exists as the output of a regex over the title
+  /// cannot appear in a WHERE clause, and filtering after the query means
+  /// filtering after LIMIT — which produces short shelves and, on a source
+  /// where one region dominates, empty ones.
+  ///
+  /// Null where the title carries no prefix, which is most of a well-kept
+  /// catalogue and all of some.
+  TextColumn get region => text().nullable()();
   TextColumn get searchName => text()();
   TextColumn get coverUrl => text().nullable()();
   TextColumn get categoryRemoteId => text().nullable()();

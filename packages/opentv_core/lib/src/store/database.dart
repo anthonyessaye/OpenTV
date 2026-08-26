@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../metadata/title_cleaner.dart';
 import 'search_text.dart';
 import 'tables.dart';
 
@@ -33,7 +34,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   OpenTvDatabase(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -71,6 +72,21 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         ]) {
           await m.createIndex(index);
         }
+      }
+
+      // 4 adds the region each row's title was prefixed with, so a viewer can
+      // keep one provider's Arabic films and hide its Turkish ones without
+      // hiding the categories they happen to sit in.
+      //
+      // Backfilled here rather than left to the next sync. A column that
+      // stayed null until somebody happened to re-import would make the
+      // feature look broken on every existing install: the region list would
+      // come up empty on a catalogue full of prefixed titles.
+      if (from < 4) {
+        await m.addColumn(channels, channels.region);
+        await m.addColumn(movies, movies.region);
+        await m.addColumn(seriesEntries, seriesEntries.region);
+        await backfillRegions();
       }
     },
     beforeOpen: (details) async {
@@ -179,9 +195,16 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String? categoryRemoteId,
     int limit = 200,
     int offset = 0,
+      Set<String> hiddenRegions = const {},
   }) {
     final query = select(channels)
       ..where((c) => c.sourceId.equals(sourceId) & c.hidden.equals(false));
+    if (hiddenRegions.isNotEmpty) {
+      // Rows with no prefix are never hidden by a region rule. A
+      // catalogue that labels only some of its titles would otherwise
+      // lose every unlabelled one the moment a viewer hid anything.
+      query.where((c) => c.region.isNull() | c.region.isNotIn(hiddenRegions.toList()));
+    }
     if (categoryRemoteId != null) {
       query.where((c) => c.categoryRemoteId.equals(categoryRemoteId));
     }
@@ -203,9 +226,16 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String? categoryRemoteId,
     int limit = 200,
     int offset = 0,
+      Set<String> hiddenRegions = const {},
   }) {
     final query = select(movies)
       ..where((m) => m.sourceId.equals(sourceId) & m.hidden.equals(false));
+    if (hiddenRegions.isNotEmpty) {
+      // Rows with no prefix are never hidden by a region rule. A
+      // catalogue that labels only some of its titles would otherwise
+      // lose every unlabelled one the moment a viewer hid anything.
+      query.where((m) => m.region.isNull() | m.region.isNotIn(hiddenRegions.toList()));
+    }
     if (categoryRemoteId != null) {
       query.where((m) => m.categoryRemoteId.equals(categoryRemoteId));
     }
@@ -221,9 +251,16 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String? categoryRemoteId,
     int limit = 200,
     int offset = 0,
+      Set<String> hiddenRegions = const {},
   }) {
     final query = select(seriesEntries)
       ..where((e) => e.sourceId.equals(sourceId) & e.hidden.equals(false));
+    if (hiddenRegions.isNotEmpty) {
+      // Rows with no prefix are never hidden by a region rule. A
+      // catalogue that labels only some of its titles would otherwise
+      // lose every unlabelled one the moment a viewer hid anything.
+      query.where((s) => s.region.isNull() | s.region.isNotIn(hiddenRegions.toList()));
+    }
     if (categoryRemoteId != null) {
       query.where((e) => e.categoryRemoteId.equals(categoryRemoteId));
     }
@@ -1060,4 +1097,208 @@ class OpenTvDatabase extends _$OpenTvDatabase {
 
   Future<int> resetStages(int sourceId) =>
       (delete(syncStages)..where((s) => s.sourceId.equals(sourceId))).go();
+
+  /// Fills the region column from the titles already in the catalogue.
+  ///
+  /// In Dart because the rule is a regex with alternatives SQLite cannot
+  /// express, and in batches because a large source is a few hundred thousand
+  /// rows and one transaction holding all of them is a memory spike on a
+  /// television.
+  ///
+  /// Only rows whose title actually carries a prefix are written. Most of a
+  /// well-kept catalogue has none, and rewriting those to null is work with
+  /// no result.
+  ///
+  /// Public so the sync can call it after an import, and so a test can.
+  Future<void> backfillRegions() async {
+    for (final table in ['channels', 'movies', 'series_entries']) {
+      await _backfillRegionsIn(table);
+    }
+  }
+
+  /// One table's worth, addressed by name.
+  ///
+  /// Raw SQL rather than the generated API: three tables with three different
+  /// row types would need three near-identical passes, and the only thing
+  /// that differs between them is a name.
+  Future<void> _backfillRegionsIn(String table) async {
+    const window = 2000;
+    var offset = 0;
+
+    while (true) {
+      final rows = await customSelect(
+        'SELECT rowid AS rid, name FROM $table '
+        'ORDER BY rowid LIMIT $window OFFSET $offset',
+      ).get();
+      if (rows.isEmpty) break;
+
+      final updates = <MapEntry<int, String>>[];
+      for (final row in rows) {
+        final region = TitleCleaner.clean(row.read<String>('name')).region;
+        if (region != null) {
+          updates.add(MapEntry(row.read<int>('rid'), region));
+        }
+      }
+
+      for (final update in updates) {
+        await customStatement(
+          'UPDATE $table SET region = ? WHERE rowid = ?',
+          [update.value, update.key],
+        );
+      }
+
+      offset += rows.length;
+    }
+  }
+
+  /// Every region present in one kind, with how many rows carry it.
+  ///
+  /// Counted from the catalogue rather than from a fixed list of countries,
+  /// because these are whatever the provider chose to type — `AR`, `4K`,
+  /// `VIP` and `EX-YU` all turn up — and a list of real countries would hide
+  /// most of them.
+  Future<List<({String region, int count})>> regionsIn(
+    int sourceId,
+    ItemKind kind,
+  ) async {
+    final table = switch (kind) {
+      ItemKind.live => 'channels',
+      ItemKind.movie => 'movies',
+      _ => 'series_entries',
+    };
+    final rows = await customSelect(
+      'SELECT region, COUNT(*) AS n FROM $table '
+      'WHERE source_id = ? AND region IS NOT NULL '
+      'GROUP BY region ORDER BY n DESC',
+      variables: [Variable<int>(sourceId)],
+    ).get();
+    return [
+      for (final row in rows)
+        (region: row.read<String>('region'), count: row.read<int>('n')),
+    ];
+  }
+
+
+  /// Series that still have somewhere to go, newest activity first.
+  ///
+  /// Two things make this different from filtering [continueWatching] to
+  /// episodes, and both were bugs.
+  ///
+  /// A finished episode used to remove its series from the shelf entirely.
+  /// `continueWatching` excludes completed rows, which is right for a film —
+  /// there is nothing after it — and wrong for a series, where finishing
+  /// episode three is the strongest possible signal that episode four is
+  /// wanted.
+  ///
+  /// And "next" is the first episode not yet finished, not the one
+  /// immediately after the last watched. An earlier version took the
+  /// immediate successor and dropped the whole series when that happened to
+  /// be watched already, which is what a viewer who binges out of order
+  /// produces routinely — finish four, then go back and finish three, and the
+  /// show disappeared.
+  ///
+  /// Returned with that episode, so the caller does not work it out again to
+  /// decide between Resume and Play.
+  Future<List<({String seriesRemoteId, Episode next, bool resuming})>>
+      continueSeries(int sourceId, {int limit = 20}) async {
+    // Completed rows included, unlike the film shelf.
+    final states = await (select(playbackStates)
+          ..where((p) =>
+              p.sourceId.equals(sourceId) &
+              p.itemKind.equalsValue(ItemKind.episode))
+          ..orderBy([
+            (p) => OrderingTerm(
+                expression: p.lastWatchedUtc, mode: OrderingMode.desc),
+          ]))
+        .get();
+
+    final out = <({String seriesRemoteId, Episode next, bool resuming})>[];
+    final seen = <String>{};
+
+    for (final state in states) {
+      final parent = state.parentRemoteId;
+      if (parent == null || !seen.add(parent)) continue;
+
+      // Still mid-episode: that is where to carry on, whatever else is
+      // unwatched further down.
+      if (!state.completed) {
+        final current = await _episodeByRemoteId(sourceId, state.itemRemoteId);
+        if (current != null) {
+          out.add((seriesRemoteId: parent, next: current, resuming: true));
+          if (out.length >= limit) break;
+        }
+        continue;
+      }
+
+      final next = await _nextUnfinishedAfter(
+        sourceId,
+        parent,
+        state.itemRemoteId,
+      );
+      if (next == null) continue;
+
+      out.add((seriesRemoteId: parent, next: next, resuming: false));
+      if (out.length >= limit) break;
+    }
+
+    return out;
+  }
+
+  /// The first unfinished episode *after* the one just watched.
+  ///
+  /// Forwards only, and that is the whole rule. Searching the series from the
+  /// start instead would send somebody who has just finished the last episode
+  /// back to the first one they skipped in season one, which is not
+  /// continuing anything. Walking forward from where they were also handles
+  /// bingeing out of order for free: finish four, go back and finish three,
+  /// and the walk from three steps over four and lands on five.
+  ///
+  /// In season and episode order rather than the provider's own, which is
+  /// frequently alphabetical and would make "next" mean episode 10 after
+  /// episode 1.
+  ///
+  /// Null when there is nothing after it, which retires the series from the
+  /// shelf.
+  Future<Episode?> _nextUnfinishedAfter(
+    int sourceId,
+    String seriesRemoteId,
+    String afterRemoteId,
+  ) async {
+    final all = await (select(episodes)
+          ..where((e) =>
+              e.sourceId.equals(sourceId) &
+              e.seriesRemoteId.equals(seriesRemoteId))
+          ..orderBy([
+            (e) => OrderingTerm(expression: e.season),
+            (e) => OrderingTerm(expression: e.episodeNumber),
+          ]))
+        .get();
+
+    final from = all.indexWhere((e) => e.remoteId == afterRemoteId);
+    if (from < 0 || from + 1 >= all.length) return null;
+    final rest = all.sublist(from + 1);
+
+    final progress = {
+      for (final state in await playbackStatesFor(
+        sourceId: sourceId,
+        kind: ItemKind.episode,
+        remoteIds: [for (final e in rest) e.remoteId],
+      ))
+        state.itemRemoteId: state,
+    };
+
+    for (final episode in rest) {
+      if (!(progress[episode.remoteId]?.completed ?? false)) return episode;
+    }
+    return null;
+  }
+
+  Future<Episode?> _episodeByRemoteId(int sourceId, String remoteId) =>
+      (select(episodes)
+            ..where((e) =>
+                e.sourceId.equals(sourceId) & e.remoteId.equals(remoteId))
+            ..limit(1))
+          .getSingleOrNull();
+
+
 }

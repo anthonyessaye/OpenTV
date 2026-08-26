@@ -1167,10 +1167,11 @@ class _PlayerRouteState extends State<_PlayerRoute> {
   }
 
   Future<void> _readFavourite() async {
+    final target = widget.playable.favouriteTarget;
     final favourite = await widget.db.isFavourite(
       sourceId: widget.sourceId,
-      kind: widget.playable.itemKind,
-      remoteId: widget.playable.remoteId,
+      kind: target.kind,
+      remoteId: target.remoteId,
     );
     if (mounted) setState(() => _favourite = favourite);
   }
@@ -1203,17 +1204,19 @@ class _PlayerRouteState extends State<_PlayerRoute> {
   }
 
   Future<void> _toggle() async {
+    // The show, not the episode. See Playable.favouriteTarget.
+    final target = widget.playable.favouriteTarget;
     if (_favourite) {
       await widget.db.removeFavourite(
         sourceId: widget.sourceId,
-        kind: widget.playable.itemKind,
-        remoteId: widget.playable.remoteId,
+        kind: target.kind,
+        remoteId: target.remoteId,
       );
     } else {
       await widget.db.addFavourite(
         sourceId: widget.sourceId,
-        kind: widget.playable.itemKind,
-        remoteId: widget.playable.remoteId,
+        kind: target.kind,
+        remoteId: target.remoteId,
         at: DateTime.now(),
       );
     }
