@@ -17,6 +17,7 @@ import 'mobile_guide.dart';
 import 'mobile_settings_screens.dart';
 import 'mobile_tunnel.dart';
 import 'region_screen.dart';
+import 'zapping.dart';
 
 /// The phone's equivalent of `BrowseScreen`.
 ///
@@ -72,6 +73,7 @@ class _MobileHomeState extends State<MobileHome> {
     Playable item, {
     Duration? startAt,
     List<Playable> queue = const [],
+    List<Channel> channels = const [],
   }) async {
     final url = await widget.resolver.urlFor(widget.source, item);
     if (!mounted) return;
@@ -98,7 +100,25 @@ class _MobileHomeState extends State<MobileHome> {
             streamOptions: widget.resolver.optionsFor(item),
             isLive: item.isLive,
             startAt: startAt,
-            nextLabel: _nextIn(queue, item) == null ? null : 'NEXT EPISODE',
+            nextLabel: _nextIn(queue, item)?.title,
+            onPreviousChannel: zapTo(channels, item, -1) == null
+                ? null
+                : () {
+                    Navigator.of(context).pop();
+                    _play(
+                      Playable.channel(zapTo(channels, item, -1)!),
+                      channels: channels,
+                    );
+                  },
+            onNextChannel: zapTo(channels, item, 1) == null
+                ? null
+                : () {
+                    Navigator.of(context).pop();
+                    _play(
+                      Playable.channel(zapTo(channels, item, 1)!),
+                      channels: channels,
+                    );
+                  },
             onNext: _nextIn(queue, item) == null
                 ? null
                 : () {
@@ -495,7 +515,7 @@ class _MobileHomeState extends State<MobileHome> {
           source: widget.source,
           hiddenRegions: _regions.forKind(ItemKind.live),
           locked: _locked,
-          onPlay: (item) => _play(item),
+          onPlay: (item, channels) => _play(item, channels: channels),
         ),
       1 => MobileGuide(
           key: ValueKey('guide:${_regions.forKind(ItemKind.live).join(',')}'),
@@ -503,7 +523,10 @@ class _MobileHomeState extends State<MobileHome> {
           sourceId: widget.source.id,
           hiddenRegions: _regions.forKind(ItemKind.live),
           locked: _locked,
-          onPlay: (channel) => _play(Playable.channel(channel)),
+          onPlay: (channel, channels) => _play(
+            Playable.channel(channel),
+            channels: channels,
+          ),
           canCatchUp: (channel, start) => StreamResolver.isWithinArchive(
             channel,
             start,
@@ -667,7 +690,7 @@ class _LiveTab extends StatefulWidget {
   final Source source;
   final Set<String> hiddenRegions;
   final Set<String> locked;
-  final ValueChanged<Playable> onPlay;
+  final void Function(Playable, List<Channel>) onPlay;
 
   @override
   State<_LiveTab> createState() => _LiveTabState();
@@ -708,7 +731,9 @@ class _LiveTabState extends State<_LiveTab> {
         name: channels[i].name,
         number: channels[i].number?.toString(),
         logoUrl: channels[i].iconUrl,
-        onTap: () => widget.onPlay(Playable.channel(channels[i])),
+        // The whole visible list travels with it, so a flick in the player
+        // moves to the next channel of what was being browsed.
+        onTap: () => widget.onPlay(Playable.channel(channels[i]), channels),
       ),
     );
   }

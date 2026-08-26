@@ -35,7 +35,8 @@ class MobileGuide extends StatefulWidget {
   /// of everything behind the PIN on screen.
   final Set<String> locked;
 
-  final ValueChanged<Channel> onPlay;
+  /// Given the channel and the whole visible list, so the player can zap.
+  final void Function(Channel, List<Channel>) onPlay;
 
   /// Plays something that already aired, from the provider's archive.
   final void Function(Channel, EpgProgrammeRow)? onCatchUp;
@@ -136,7 +137,7 @@ class _MobileGuideState extends State<MobileGuide> {
           logoUrl: channel.iconUrl,
           number: onNow == null ? null : _clock(onNow.startUtc),
           now: onNow?.title,
-          onTap: () => widget.onPlay(channel),
+          onTap: () => widget.onPlay(channel, _channels),
           // The schedule is a press-and-hold rather than a second tap target.
           // A guide row's obvious action is "watch this channel", and putting
           // a chevron beside it to mean "read its evening" makes the row into
@@ -164,7 +165,7 @@ class _MobileGuideState extends State<MobileGuide> {
         pageBuilder: (context, _, _) => _Schedule(
           channel: channel,
           programmes: programmes,
-          onPlay: () => widget.onPlay(channel),
+          onPlay: () => widget.onPlay(channel, const []),
           onCatchUp: widget.onCatchUp,
           canCatchUp: widget.canCatchUp,
         ),

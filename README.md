@@ -9,6 +9,11 @@ transmits none.** Everything you see in it comes from a provider you choose
 and an address you enter. You are responsible for holding the rights to
 whatever you connect it to.
 
+It runs on **Android TV, Apple TV, Android phones and tablets, and iOS** —
+one codebase, two interfaces. The app asks the operating system which machine
+it is on and draws the ten-foot one or the touch one; there is no setting for
+it and no wrong answer to pick.
+
 ![Films](docs/screenshots/03-films.png)
 
 ## What it does
@@ -21,6 +26,8 @@ whatever you connect it to.
 - XMLTV guide data, picked up automatically from a playlist's own `x-tvg-url`
 - Set up from a phone browser instead of the remote — the television serves a
   form on your network for as long as setup is open
+- Or set the app up on your phone and hand the whole thing to the television:
+  providers, their stored passwords, the catalogue and your history
 - Forget a provider, and its stored password goes with it
 
 **Watching**
@@ -50,7 +57,10 @@ whatever you connect it to.
 
 - Account: expiry, connections in use, catalogue counts. Never the password
 - Hide categories, in bulk, one kind at a time
-- A parental PIN that removes locked categories rather than greying them out
+- Hide regions — providers put `AR`, `TR`, `EX-YU` in front of a title, and
+  hiding a category cannot express "not those"
+- A parental PIN that removes locked categories rather than greying them out,
+  from browsing, search and the guide alike
 - A TMDB key for synopses, cast and artwork — accepts either credential TMDB
   issues
 - A WireGuard tunnel (Android), up on launch and down when the app leaves
@@ -60,20 +70,44 @@ whatever you connect it to.
 
 ## Architecture
 
-Three packages, ~31,000 lines of Dart and ~1,500 of Kotlin and Swift.
+Three packages, ~38,000 lines of Dart and ~1,900 of Kotlin and Swift.
 
 ```
-apps/opentv          The Flutter app: screens, navigation, platform channels
+apps/opentv          The Flutter app
+  lib/app/…          The ten-foot interface, navigation, platform channels
+  lib/mobile/…       The touch interface
   android/…          Kotlin: Media3 player, keystore, WireGuard tunnel
-  tvos/…             Swift: libVLC player, keystore
+  apple/…            Swift compiled into BOTH Apple targets
+  tvos/  ios/…       The two Xcode projects
 packages/opentv_core Pure Dart, no Flutter: everything testable without a device
-packages/opentv_ui   Widgets, design tokens, and the focus system
+packages/opentv_ui   Widgets, design tokens, the focus system, the touch set
 ```
 
 **`opentv_core`** holds the parts that have nothing to do with a screen —
-`store` (drift/SQLite, schema v3), `xtream`, `playlist`, `epg`, `sync`,
-`metadata` (TMDB), `vpn` (WireGuard config), `setup` (the local server). It
-imports no Flutter, which is why 426 of its tests run in a second on a laptop.
+`store` (drift/SQLite, schema v4), `xtream`, `playlist`, `epg`, `sync`,
+`metadata` (TMDB), `vpn` (WireGuard config), `setup` (the local server),
+`handover`. It imports no Flutter, which is why 463 of its tests run in
+seconds on a laptop — and why adding phones cost it nothing at all. Not one
+line of it knew what a television was.
+
+### One app, two interfaces
+
+`Host.deviceClass()` asks the operating system, before the first frame, and
+the answer decides which interface exists.
+
+Dart cannot work it out. `Platform.isIOS` is **true on tvOS**, so an Apple TV
+and an iPhone are the same device from inside Flutter — and the screen does
+not separate them either, because an Android TV reports 960×540 logical pixels
+and a tablet in landscape can report the same shape. `UiModeManager` and
+`UIUserInterfaceIdiom` know, because they are what decided which home screen
+to launch.
+
+The two are not ports of each other. A d-pad moves between neighbours, so
+shelves under a hero suit it; a thumb flicks a column and taps what it lands
+on, so the same catalogue is a grid and a list. The type and spacing scales
+are separate for the same reason: 1920×1080 at three metres and 400 pixels at
+thirty centimetres are different problems, not one problem at two
+magnifications.
 
 ### One player contract, two engines
 
@@ -144,6 +178,31 @@ path, so no stream URL is ever persisted for an Xtream source: it is assembled
 at playback from the row's id and a password read from the keystore, and never
 written down.
 
+### Handing a setup between devices
+
+Set the app up once and give it to your other devices: providers, their stored
+passwords, the catalogue and your watch history, over your own network.
+
+The database on its own would be useless on the other end. `credentialRef` is
+a keystore handle and the secret has never been in the catalogue, so a copied
+SQLite file arrives as a complete catalogue in which every provider points at
+a keystore entry that does not exist there — it would sync, it would show, and
+nothing would play. The payload is the database *plus* its secrets, which
+makes this a transfer of everything the app holds, so it is encrypted with
+AES-GCM under a key that only ever exists on a screen and a camera in the same
+room.
+
+A television can display a code and never read one, so the television always
+displays and the phone always scans — whichever way the data then travels. The
+server serves a pull and accepts a push, which is the only way a television
+receives anything at all.
+
+**No scanner is bundled and no camera permission is requested.** Every QR
+scanner package declares iOS in its podspec and none declare tvOS, which is
+the same wall that put the data directory and the keystore on a hand-rolled
+channel. The code carries an `opentv://` address, whatever camera app the
+phone already has opens it, and the lens is never ours.
+
 ### Setting up from a phone
 
 The television serves a form on the local network while setup is open. It
@@ -205,12 +264,17 @@ in settings. It is never committed.
 
 ## What is not done
 
-- **Apple TV has never been run.** Every tvOS line was written from
-  documentation and checked only by the contract test. See
+- **Apple TV has never been run on hardware.** Every tvOS line was written
+  from documentation and checked by the contract tests and the simulator. See
   [docs/tvos-status.md](docs/tvos-status.md).
+- **One language.** The machinery for others is in — `flutter_localizations`,
+  an ARB template with a description on every string, and tests that lay the
+  touch chrome out right-to-left. No second language is invented, and a test
+  asserts that. The television's focus system does not mirror yet, which is
+  written down in [docs/adding-a-language.md](docs/adding-a-language.md).
 - No external player, no recording, no multi-screen.
-- The tunnel is Android-only. Apple TV needs a Network Extension, which needs
-  a paid developer account.
+- The tunnel is Android-only, on televisions and phones alike. iOS and tvOS
+  need a Network Extension, which needs a paid developer account.
 
 ## Licence
 

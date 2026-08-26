@@ -1,3 +1,9 @@
+> **Stale.** This file describes gaps against the original Kotlin app and has
+> not tracked the last two releases. Parental control, multiple providers,
+> regions, the handover and the phone and iOS interfaces have all shipped
+> since it was written. Kept for the history rather than as a to-do list;
+> `CLAUDE.md` has the current position.
+
 # Where we stand against IPTV Smarters Pro
 
 Smarters Pro is the app most IPTV subscribers have used, so it is the fair

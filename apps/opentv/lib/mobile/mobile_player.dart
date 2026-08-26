@@ -28,6 +28,8 @@ class MobilePlayer extends StatefulWidget {
     this.onProgress,
     this.nextLabel,
     this.onNext,
+    this.onPreviousChannel,
+    this.onNextChannel,
   });
 
   final String url;
@@ -47,6 +49,14 @@ class MobilePlayer extends StatefulWidget {
   /// does not, and offering one would be a button that lies.
   final String? nextLabel;
   final VoidCallback? onNext;
+
+  /// The neighbouring channels, when there are any.
+  ///
+  /// Only live has them. A film has no next channel, and offering one would
+  /// be a control that lies — the same reason the television leaves them null
+  /// off a live stream.
+  final VoidCallback? onPreviousChannel;
+  final VoidCallback? onNextChannel;
 
   @override
   State<MobilePlayer> createState() => _MobilePlayerState();
@@ -73,6 +83,12 @@ class _MobilePlayerState extends State<MobilePlayer> {
   _Sheet? _sheet;
   int _width = 0;
   int _height = 0;
+
+  /// True once the engine reports the stream finished.
+  ///
+  /// Both engines answer "ended" in the same state key, which is the point of
+  /// the contract — Dart never learns which one is underneath.
+  bool _ended = false;
 
   DateTime _lastReport = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -118,6 +134,15 @@ class _MobilePlayerState extends State<MobilePlayer> {
       final h = state['height'];
       if (w is int) _width = w;
       if (h is int) _height = h;
+
+      // The end of a film is the end of it; the end of an episode is the
+      // moment the next one is most wanted, and until now the phone simply
+      // stopped and sat there.
+      if (state['state'] == 'ended' && !_ended) {
+        _ended = true;
+        _chrome = true;
+        _hide?.cancel();
+      }
     });
 
     // Every ten seconds rather than every poll: this is a database write, and
@@ -205,6 +230,18 @@ class _MobilePlayerState extends State<MobilePlayer> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _toggleChrome,
+        // Vertical flicks change channel, which is what a thumb does instead
+        // of reaching for a d-pad's up and down. Only bound on live, so the
+        // gesture does nothing surprising in the middle of a film.
+        onVerticalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity.abs() < 240) return;
+          if (velocity < 0) {
+            widget.onNextChannel?.call();
+          } else {
+            widget.onPreviousChannel?.call();
+          }
+        },
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -252,6 +289,12 @@ class _MobilePlayerState extends State<MobilePlayer> {
                 ),
               ),
             ),
+            if (_ended && widget.onNext != null)
+              _EndCard(
+                nextLabel: widget.nextLabel ?? 'Next episode',
+                onNext: widget.onNext!,
+                onBack: () => Navigator.of(context).maybePop(),
+              ),
             if (_sheet != null)
               _SheetPanel(
                 sheet: _sheet!,
@@ -306,6 +349,7 @@ class _Chrome extends StatelessWidget {
   final VoidCallback onPicture;
   final String? nextLabel;
   final VoidCallback? onNext;
+
 
   @override
   Widget build(BuildContext context) {
@@ -792,6 +836,79 @@ class _Row extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What is offered when an episode finishes.
+///
+/// Over the picture rather than replacing the screen, because the last frame
+/// is still the thing the viewer was watching a second ago and a hard cut to a
+/// menu reads as the app having crashed.
+///
+/// It does not start the next one by itself. Autoplay is a decision about
+/// somebody's evening that an app should not make on their behalf — and on a
+/// provider allowing one connection, an episode nobody is watching is a
+/// connection nobody can use.
+class _EndCard extends StatelessWidget {
+  const _EndCard({
+    required this.nextLabel,
+    required this.onNext,
+    required this.onBack,
+  });
+
+  final String nextLabel;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: const Color(0xD107090C),
+        child: Padding(
+          padding: OpenTvTouchSpace.page,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'THAT IS THE END OF THIS ONE',
+                style: OpenTvTouchType.label
+                    .copyWith(color: OpenTvColors.tally),
+              ),
+              const SizedBox(height: OpenTvTouchSpace.sm),
+              Text(nextLabel, style: OpenTvTouchType.hero),
+              const SizedBox(height: OpenTvTouchSpace.xl),
+              TouchTile(
+                onTap: onNext,
+                minHeight: 52,
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: OpenTvColors.tally,
+                    borderRadius: OpenTvRadius.tile,
+                  ),
+                  child: Text(
+                    'Play it',
+                    style: OpenTvTouchType.section
+                        .copyWith(color: OpenTvColors.ground),
+                  ),
+                ),
+              ),
+              const SizedBox(height: OpenTvTouchSpace.sm),
+              TouchTile(
+                onTap: onBack,
+                minHeight: 52,
+                child: Container(
+                  alignment: Alignment.center,
+                  child: const Text('Done', style: OpenTvTouchType.section),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
