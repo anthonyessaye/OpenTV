@@ -293,6 +293,19 @@ class _MobileHomeState extends State<MobileHome> {
     return Duration(milliseconds: ms);
   }
 
+  /// The provider's groupings for one kind, without anything a PIN hides.
+  ///
+  /// A locked category is absent from the bar as well as from the shelves. A
+  /// bar that still listed it would name what is behind the PIN, which is the
+  /// same mistake as greying a category out instead of removing it.
+  Future<List<Category>> _categoriesFor(ItemKind kind) async {
+    final rows = await widget.db.categoriesFor(widget.source.id, kind);
+    return [
+      for (final category in rows)
+        if (!_locked.contains(category.remoteId)) category,
+    ];
+  }
+
   /// The provider's own cast list, split.
   ///
   /// Taken from the catalogue rather than from TMDB, because it is already
@@ -592,9 +605,11 @@ class _MobileHomeState extends State<MobileHome> {
           child: _GridTab(
           key: ValueKey('films:$_generation:'
               '${_regions.forKind(ItemKind.movie).join(',')}'),
-          load: () async => [
+          categories: () => _categoriesFor(ItemKind.movie),
+          load: (category) async => [
             for (final film in await widget.db.moviesIn(
               widget.source.id,
+              categoryRemoteId: category,
               limit: 200,
               hiddenRegions: _regions.forKind(ItemKind.movie),
             ))
@@ -632,9 +647,11 @@ class _MobileHomeState extends State<MobileHome> {
           child: _GridTab(
           key: ValueKey('series:$_generation:'
               '${_regions.forKind(ItemKind.series).join(',')}'),
-          load: () async => [
+          categories: () => _categoriesFor(ItemKind.series),
+          load: (category) async => [
             for (final show in await widget.db.seriesIn(
               widget.source.id,
+              categoryRemoteId: category,
               limit: 200,
               hiddenRegions: _regions.forKind(ItemKind.series),
             ))
@@ -792,6 +809,8 @@ class _LiveTabState extends State<_LiveTab> {
     );
     if (!mounted) return;
     setState(() {
+      // A locked category is absent from the bar as well as from the list.
+      // One that was still named would say what is behind the PIN.
       _categories = [
         for (final category in rows)
           if (!widget.locked.contains(category.remoteId)) category,
@@ -836,50 +855,18 @@ class _LiveTabState extends State<_LiveTab> {
 
     return Column(
       children: [
-        if (_categories.isNotEmpty)
-          SizedBox(
-            height: 44,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: OpenTvTouchSpace.page,
-              itemCount: _categories.length + 1,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(width: OpenTvTouchSpace.sm),
-              itemBuilder: (context, i) {
-                final category = i == 0 ? null : _categories[i - 1];
-                final selected = category?.remoteId == _category;
-                return TouchTile(
-                  onTap: () {
-                    setState(() {
-                      _category = category?.remoteId;
-                      _channels = null;
-                    });
-                    _loadChannels();
-                  },
-                  child: Container(
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: OpenTvTouchSpace.lg,
-                    ),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? OpenTvColors.tally
-                          : OpenTvColors.surface,
-                      borderRadius: OpenTvRadius.tile,
-                    ),
-                    child: Text(
-                      category?.name ?? 'All',
-                      style: OpenTvTouchType.section.copyWith(
-                        color: selected
-                            ? OpenTvColors.ground
-                            : OpenTvColors.ink,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+        _CategoryBar(
+          categories: _categories,
+          selected: _category,
+          onSelect: (id) {
+            if (id == _category) return;
+            setState(() {
+              _category = id;
+              _channels = null;
+            });
+            _loadChannels();
+          },
+        ),
         Expanded(child: _list(channels, resume, resumeUrl)),
       ],
     );
@@ -1047,16 +1034,78 @@ class _MiniPlayerState extends State<_MiniPlayer> {
 }
 
 /// Films or series, as a grid.
+/// The provider's groupings, along the top.
+///
+/// Shared by live, films and series rather than written three times: the
+/// question is the same on all of them, and so is the answer. All comes first
+/// because somebody who knows what they are looking for would rather scan one
+/// list than guess which group a provider filed it under.
+class _CategoryBar extends StatelessWidget {
+  const _CategoryBar({
+    required this.categories,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final List<Category> categories;
+  final String? selected;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    if (categories.isEmpty) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: OpenTvTouchSpace.page,
+        itemCount: categories.length + 1,
+        separatorBuilder: (_, _) => const SizedBox(width: OpenTvTouchSpace.sm),
+        itemBuilder: (context, i) {
+          final category = i == 0 ? null : categories[i - 1];
+          final isSelected = category?.remoteId == selected;
+          return TouchTile(
+            onTap: () => onSelect(category?.remoteId),
+            child: Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(
+                horizontal: OpenTvTouchSpace.lg,
+              ),
+              decoration: BoxDecoration(
+                color: isSelected ? OpenTvColors.tally : OpenTvColors.surface,
+                borderRadius: OpenTvRadius.tile,
+              ),
+              child: Text(
+                category?.name ?? 'All',
+                style: OpenTvTouchType.section.copyWith(
+                  color: isSelected ? OpenTvColors.ground : OpenTvColors.ink,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _GridTab extends StatefulWidget {
   const _GridTab({
     super.key,
     required this.load,
+    required this.categories,
     required this.titleOf,
     required this.imageOf,
     required this.onOpen,
   });
 
-  final Future<List<Object>> Function() load;
+  /// Given the chosen grouping, or null for everything.
+  final Future<List<Object>> Function(String?) load;
+
+  /// The provider's own groupings for this kind, already stripped of anything
+  /// a PIN hides.
+  final Future<List<Category>> Function() categories;
   final String Function(Object) titleOf;
   final String? Function(Object) imageOf;
   final void Function(Object) onOpen;
@@ -1067,20 +1116,55 @@ class _GridTab extends StatefulWidget {
 
 class _GridTabState extends State<_GridTab> {
   List<Object>? _items;
+  List<Category> _categories = const [];
+  String? _category;
 
   @override
   void initState() {
     super.initState();
-    widget.load().then((rows) {
+    _load();
+    widget.categories().then((rows) {
+      if (mounted) setState(() => _categories = rows);
+    });
+  }
+
+  void _load() {
+    widget.load(_category).then((rows) {
       if (mounted) setState(() => _items = rows);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _CategoryBar(
+          categories: _categories,
+          selected: _category,
+          onSelect: (id) {
+            if (id == _category) return;
+            setState(() {
+              _category = id;
+              _items = null;
+            });
+            _load();
+          },
+        ),
+        Expanded(child: _grid()),
+      ],
+    );
+  }
+
+  Widget _grid() {
     final items = _items;
     if (items == null) return const _Loading();
-    if (items.isEmpty) return const _Empty('Nothing here yet.');
+    if (items.isEmpty) {
+      return _Empty(
+        _category == null
+            ? 'Nothing here yet.'
+            : 'Nothing in this group.',
+      );
+    }
 
     // Three columns on a phone, more as the screen widens. Counted from the
     // available width rather than switched at a breakpoint, so a foldable and
