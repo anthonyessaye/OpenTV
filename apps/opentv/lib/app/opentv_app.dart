@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/native.dart';
@@ -317,8 +318,35 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         _sources = sources;
         _source = sources.isEmpty ? null : sources.first;
       });
+
+      unawaited(_fillMissingRegions(db));
     } on Object catch (error) {
       if (mounted) setState(() => _failure = '$error');
+    }
+  }
+
+  /// Records regions for a catalogue that was imported before they were read.
+  ///
+  /// The column arrived in schema 4 and was filled by the migration, but a
+  /// catalogue imported by a build that had the column and did not write it
+  /// ends up all nulls — and then the region picker is empty, the bulk
+  /// actions are hidden because there is nothing to act on, and hiding a
+  /// region does nothing. Which is exactly what it looked like.
+  ///
+  /// Telling somebody to re-read their catalogue is a poor answer to a
+  /// problem the app made, so it heals itself. Off the first frame, checked
+  /// with one existence query per table so a catalogue that is already filled
+  /// pays nothing, and idempotent so running it again is free.
+  Future<void> _fillMissingRegions(OpenTvDatabase db) async {
+    try {
+      if (!await db.needsRegionBackfill()) return;
+      final filled = await db.backfillRegions();
+      // Rebuild, so a settings screen already open stops saying there are
+      // none.
+      if (filled > 0 && mounted) setState(() {});
+    } on Object {
+      // A catalogue that cannot be read is a problem the rest of the app will
+      // report; there is nothing useful to say about it from here.
     }
   }
 

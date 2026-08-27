@@ -734,6 +734,16 @@ class _LiveTab extends StatefulWidget {
 class _LiveTabState extends State<_LiveTab> {
   List<Channel>? _channels;
 
+  /// The provider's own groupings, and which one is being shown.
+  ///
+  /// A few hundred channels in one column is not a list anybody scrolls to the
+  /// end of — the television has always grouped them and the phone was showing
+  /// the lot. Null means everything, which stays first because somebody who
+  /// knows the channel's name would rather search one list than guess which
+  /// group it was filed under.
+  List<Category> _categories = const [];
+  String? _category;
+
   /// The last channel watched, playing at the top of the list.
   ///
   /// The television has one for a reason that holds here too: a still frame of
@@ -751,10 +761,16 @@ class _LiveTabState extends State<_LiveTab> {
   @override
   void initState() {
     super.initState();
+    _loadCategories();
     _loadResume();
+    _loadChannels();
+  }
+
+  void _loadChannels() {
     widget.db
         .channelsIn(
           widget.source.id,
+          categoryRemoteId: _category,
           limit: 400,
           hiddenRegions: widget.hiddenRegions,
         )
@@ -766,6 +782,20 @@ class _LiveTabState extends State<_LiveTab> {
             if (!widget.locked.contains(channel.categoryRemoteId)) channel,
         ];
       });
+    });
+  }
+
+  Future<void> _loadCategories() async {
+    final rows = await widget.db.categoriesFor(
+      widget.source.id,
+      ItemKind.live,
+    );
+    if (!mounted) return;
+    setState(() {
+      _categories = [
+        for (final category in rows)
+          if (!widget.locked.contains(category.remoteId)) category,
+      ];
     });
   }
 
@@ -804,6 +834,58 @@ class _LiveTabState extends State<_LiveTab> {
     final resume = _resume;
     final resumeUrl = _resumeUrl;
 
+    return Column(
+      children: [
+        if (_categories.isNotEmpty)
+          SizedBox(
+            height: 44,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: OpenTvTouchSpace.page,
+              itemCount: _categories.length + 1,
+              separatorBuilder: (_, _) =>
+                  const SizedBox(width: OpenTvTouchSpace.sm),
+              itemBuilder: (context, i) {
+                final category = i == 0 ? null : _categories[i - 1];
+                final selected = category?.remoteId == _category;
+                return TouchTile(
+                  onTap: () {
+                    setState(() {
+                      _category = category?.remoteId;
+                      _channels = null;
+                    });
+                    _loadChannels();
+                  },
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: OpenTvTouchSpace.lg,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? OpenTvColors.tally
+                          : OpenTvColors.surface,
+                      borderRadius: OpenTvRadius.tile,
+                    ),
+                    child: Text(
+                      category?.name ?? 'All',
+                      style: OpenTvTouchType.section.copyWith(
+                        color: selected
+                            ? OpenTvColors.ground
+                            : OpenTvColors.ink,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        Expanded(child: _list(channels, resume, resumeUrl)),
+      ],
+    );
+  }
+
+  Widget _list(List<Channel> channels, Channel? resume, String? resumeUrl) {
     return ListView.builder(
       // One extra row for the preview, when there is one.
       itemCount: channels.length + (resumeUrl == null ? 0 : 1),

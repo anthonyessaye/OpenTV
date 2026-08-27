@@ -1109,11 +1109,17 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// well-kept catalogue has none, and rewriting those to null is work with
   /// no result.
   ///
-  /// Public so the sync can call it after an import, and so a test can.
-  Future<void> backfillRegions() async {
+  /// Public so the sync can call it after an import, the app on opening a
+  /// catalogue that predates the column being written, and a test.
+  ///
+  /// Returns how many rows gained one, so a caller can say whether anything
+  /// happened.
+  Future<int> backfillRegions() async {
+    var filled = 0;
     for (final table in ['channels', 'movies', 'series_entries']) {
-      await _backfillRegionsIn(table);
+      filled += await _backfillRegionsIn(table);
     }
+    return filled;
   }
 
   /// One table's worth, addressed by name.
@@ -1121,14 +1127,21 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// Raw SQL rather than the generated API: three tables with three different
   /// row types would need three near-identical passes, and the only thing
   /// that differs between them is a name.
-  Future<void> _backfillRegionsIn(String table) async {
-    const window = 2000;
-    var offset = 0;
+  ///
+  /// Only rows that have no region yet, and all of a batch's updates in one
+  /// transaction. The first version rewrote every row one statement at a
+  /// time, which on a few hundred thousand of them is a few hundred thousand
+  /// round trips to SQLite — slow enough that nobody would run it twice.
+  /// Restricting to nulls also makes it idempotent, so it can be run whenever
+  /// it might be needed rather than only during a migration.
+  Future<int> _backfillRegionsIn(String table) async {
+    const window = 5000;
+    var filled = 0;
 
     while (true) {
       final rows = await customSelect(
         'SELECT rowid AS rid, name FROM $table '
-        'ORDER BY rowid LIMIT $window OFFSET $offset',
+        'WHERE region IS NULL ORDER BY rowid LIMIT $window',
       ).get();
       if (rows.isEmpty) break;
 
@@ -1140,15 +1153,44 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         }
       }
 
-      for (final update in updates) {
-        await customStatement(
-          'UPDATE $table SET region = ? WHERE rowid = ?',
-          [update.value, update.key],
-        );
+      if (updates.isEmpty) {
+        // Everything left is genuinely unlabelled. Stopping here rather than
+        // paging on, because the query only ever returns nulls and none of
+        // them will ever produce a region.
+        break;
       }
 
-      offset += rows.length;
+      await transaction(() async {
+        for (final update in updates) {
+          await customStatement(
+            'UPDATE $table SET region = ? WHERE rowid = ?',
+            [update.value, update.key],
+          );
+        }
+      });
+      filled += updates.length;
+
+      // A page where only some rows had a prefix would otherwise be asked for
+      // again for ever, since the unlabelled ones stay null.
+      if (updates.length < rows.length) break;
     }
+
+    return filled;
+  }
+
+  /// Whether any row could carry a region and does not.
+  ///
+  /// Cheap: one indexed-ish existence check per table, not a scan of the
+  /// catalogue. Used to decide whether the backfill is worth running at all,
+  /// so an install that is already filled pays nothing.
+  Future<bool> needsRegionBackfill() async {
+    for (final table in ['channels', 'movies', 'series_entries']) {
+      final row = await customSelect(
+        'SELECT EXISTS(SELECT 1 FROM $table WHERE region IS NULL) AS missing',
+      ).getSingle();
+      if (row.read<int>('missing') == 1) return true;
+    }
+    return false;
   }
 
   /// Every region present in one kind, with how many rows carry it.
