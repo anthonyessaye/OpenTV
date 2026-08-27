@@ -342,7 +342,8 @@ class _MobileHomeState extends State<MobileHome> {
       return [
         for (final id in ids)
           if (byId[id] case final film?
-              when !_locked.contains(film.categoryRemoteId))
+              when !_locked.contains(film.categoryRemoteId) &&
+                  !_regions.isHidden(ItemKind.movie, film.region))
             (
               title: TitleCleaner.clean(film.name).title,
               imageUrl: film.iconUrl,
@@ -357,7 +358,8 @@ class _MobileHomeState extends State<MobileHome> {
     return [
       for (final id in ids)
         if (byId[id] case final show?
-            when !_locked.contains(show.categoryRemoteId))
+            when !_locked.contains(show.categoryRemoteId) &&
+                !_regions.isHidden(ItemKind.series, show.region))
           (
             title: TitleCleaner.clean(show.name).title,
             imageUrl: show.coverUrl,
@@ -589,7 +591,8 @@ class _MobileHomeState extends State<MobileHome> {
             final byId = {for (final f in films) f.remoteId: f};
             return [
               for (final state in states)
-                if (byId[state.itemRemoteId] case final film?)
+                if (byId[state.itemRemoteId] case final film?
+                    when !_regions.isHidden(ItemKind.movie, film.region))
                   (
                     title: TitleCleaner.clean(film.name).title,
                     imageUrl: film.iconUrl,
@@ -634,7 +637,8 @@ class _MobileHomeState extends State<MobileHome> {
             final byId = {for (final s in shows) s.remoteId: s};
             return [
               for (final row in rows)
-                if (byId[row.seriesRemoteId] case final show?)
+                if (byId[row.seriesRemoteId] case final show?
+                    when !_regions.isHidden(ItemKind.series, show.region))
                   (
                     title: TitleCleaner.clean(show.name).title,
                     imageUrl: show.coverUrl,
@@ -666,6 +670,7 @@ class _MobileHomeState extends State<MobileHome> {
           db: widget.db,
           source: widget.source,
           locked: _locked,
+          regions: _regions,
           onChannel: (c) => _play(Playable.channel(c)),
           onFilm: _openFilm,
           onSeries: _openSeries,
@@ -1212,6 +1217,7 @@ class _SearchTab extends StatefulWidget {
     required this.db,
     required this.source,
     required this.locked,
+    required this.regions,
     required this.onChannel,
     required this.onFilm,
     required this.onSeries,
@@ -1223,6 +1229,10 @@ class _SearchTab extends StatefulWidget {
   /// Locked categories, filtered out of results. A lock that only applied to
   /// browsing would be one search away from useless.
   final Set<String> locked;
+
+  /// And regions, for the same reason: something hidden from every shelf and
+  /// still findable by typing its name is not hidden.
+  final RegionFilter regions;
   final ValueChanged<Channel> onChannel;
   final ValueChanged<Movie> onFilm;
   final ValueChanged<SeriesEntry> onSeries;
@@ -1274,15 +1284,21 @@ class _SearchTabState extends State<_SearchTab> {
     setState(() {
       _channels = [
         for (final row in results[0] as List<Channel>)
-          if (!widget.locked.contains(row.categoryRemoteId)) row,
+          if (!widget.locked.contains(row.categoryRemoteId) &&
+              !widget.regions.isHidden(ItemKind.live, row.region))
+            row,
       ];
       _movies = [
         for (final row in results[1] as List<Movie>)
-          if (!widget.locked.contains(row.categoryRemoteId)) row,
+          if (!widget.locked.contains(row.categoryRemoteId) &&
+              !widget.regions.isHidden(ItemKind.movie, row.region))
+            row,
       ];
       _series = [
         for (final row in results[2] as List<SeriesEntry>)
-          if (!widget.locked.contains(row.categoryRemoteId)) row,
+          if (!widget.locked.contains(row.categoryRemoteId) &&
+              !widget.regions.isHidden(ItemKind.series, row.region))
+            row,
       ];
     });
   }

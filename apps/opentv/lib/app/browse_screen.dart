@@ -225,14 +225,17 @@ class _BrowseScreenState extends State<BrowseScreen> {
       final resolved = switch (_section) {
         TvSection.films => [
           for (final row in await widget.db.moviesByRemoteIds(sourceId, ids))
+            if (!_regions.isHidden(ItemKind.movie, row.region))
             _Item.film(row),
         ],
         TvSection.series => [
           for (final row in await widget.db.seriesByRemoteIds(sourceId, ids))
+            if (!_regions.isHidden(ItemKind.series, row.region))
             _Item.series(row),
         ],
         _ => [
           for (final row in await widget.db.channelsByRemoteIds(sourceId, ids))
+            if (!_regions.isHidden(ItemKind.live, row.region))
             _Item.channel(row),
         ],
       };
@@ -433,16 +436,26 @@ class _BrowseScreenState extends State<BrowseScreen> {
                   // A fortnight rather than a week: a provider that adds
                   // nothing for ten days would show an empty highlight.
                   since: DateTime.now().subtract(const Duration(days: 14)),
+                  hiddenRegions: _regions.forKind(ItemKind.movie),
                 )
               : Future.value(const <Movie>[]),
           films
-              ? widget.db.recentMovies(sourceId)
+              ? widget.db.recentMovies(
+                  sourceId,
+                  hiddenRegions: _regions.forKind(ItemKind.movie),
+                )
               : Future.value(const <Movie>[]),
           series
-              ? widget.db.topRatedSeries(sourceId)
+              ? widget.db.topRatedSeries(
+                  sourceId,
+                  hiddenRegions: _regions.forKind(ItemKind.series),
+                )
               : Future.value(const <SeriesEntry>[]),
           series
-              ? widget.db.recentSeries(sourceId)
+              ? widget.db.recentSeries(
+                  sourceId,
+                  hiddenRegions: _regions.forKind(ItemKind.series),
+                )
               : Future.value(const <SeriesEntry>[]),
           widget.db.continueWatching(sourceId: sourceId, limit: 20),
           widget.db.favouritesOf(sourceId, kind),
@@ -452,7 +465,10 @@ class _BrowseScreenState extends State<BrowseScreen> {
       // Falls back to all time rather than showing three films under a
       // heading that promises twenty.
       final leading = topFilms.length < 5
-          ? await widget.db.topRatedMovies(sourceId)
+          ? await widget.db.topRatedMovies(
+              sourceId,
+              hiddenRegions: _regions.forKind(ItemKind.movie),
+            )
           : topFilms;
       final items = visible(leading.map(_Item.film));
       if (items.isNotEmpty) out.add((label: 'Top rated', items: items));

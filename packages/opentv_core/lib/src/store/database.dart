@@ -535,12 +535,32 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   ///
   /// [since] narrows to recently added, which is what makes it "this week"
   /// rather than a static list of the same twenty films forever.
+  /// The clause that keeps hidden regions out of a shelf.
+  ///
+  /// A row with no region is never hidden by a region rule — most of a
+  /// well-kept catalogue has none, and the alternative loses every unlabelled
+  /// title the moment somebody hides anything.
+  ///
+  /// Written once and used by every shelf, because it was written once and
+  /// used by only three of them: the browsing grids filtered and the shelves
+  /// did not, so on a television — where the shelves *are* the main screen —
+  /// hiding a region appeared to do nothing at all.
+  static Expression<bool> _regionAllowed(
+    GeneratedColumn<String> region,
+    Set<String> hidden,
+  ) =>
+      hidden.isEmpty
+          ? const Constant(true)
+          : region.isNull() | region.isNotIn(hidden.toList());
+
   Future<List<Movie>> topRatedMovies(
     int sourceId, {
     DateTime? since,
     int limit = 20,
+    Set<String> hiddenRegions = const {},
   }) {
     final query = select(movies)
+      ..where((m) => _regionAllowed(m.region, hiddenRegions))
       ..where(
         (m) =>
             m.sourceId.equals(sourceId) &
@@ -560,13 +580,18 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   }
 
   /// The best-rated series, on the same terms as [topRatedMovies].
-  Future<List<SeriesEntry>> topRatedSeries(int sourceId, {int limit = 20}) =>
+  Future<List<SeriesEntry>> topRatedSeries(
+    int sourceId, {
+    int limit = 20,
+    Set<String> hiddenRegions = const {},
+  }) =>
       (select(seriesEntries)
             ..where(
               (e) =>
                   e.sourceId.equals(sourceId) &
                   e.hidden.equals(false) &
                   e.rating.isNotNull() &
+                  _regionAllowed(e.region, hiddenRegions) &
                   e.rating.isBiggerThanValue(0),
             )
             ..orderBy([
@@ -580,13 +605,18 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// `lastModified` rather than an added date, because that is what Xtream
   /// reports for a series and it moves when a new episode lands — which is
   /// the thing a viewer actually wants surfaced.
-  Future<List<SeriesEntry>> recentSeries(int sourceId, {int limit = 20}) =>
+  Future<List<SeriesEntry>> recentSeries(
+    int sourceId, {
+    int limit = 20,
+    Set<String> hiddenRegions = const {},
+  }) =>
       (select(seriesEntries)
             ..where(
               (e) =>
                   e.sourceId.equals(sourceId) &
                   e.hidden.equals(false) &
-                  e.lastModified.isNotNull(),
+                  e.lastModified.isNotNull() &
+                  _regionAllowed(e.region, hiddenRegions),
             )
             ..orderBy([
               (e) => OrderingTerm(
@@ -598,13 +628,18 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           .get();
 
   /// The most recently added films.
-  Future<List<Movie>> recentMovies(int sourceId, {int limit = 20}) =>
+  Future<List<Movie>> recentMovies(
+    int sourceId, {
+    int limit = 20,
+    Set<String> hiddenRegions = const {},
+  }) =>
       (select(movies)
             ..where(
               (m) =>
                   m.sourceId.equals(sourceId) &
                   m.hidden.equals(false) &
-                  m.addedAt.isNotNull(),
+                  m.addedAt.isNotNull() &
+                  _regionAllowed(m.region, hiddenRegions),
             )
             ..orderBy([
               (m) => OrderingTerm(expression: m.addedAt, mode: OrderingMode.desc),
