@@ -1313,6 +1313,27 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   }
 
 
+  /// How many rows of one kind carry no region at all.
+  ///
+  /// Stated on the picker rather than left to be inferred. A viewer who hides
+  /// every region and still sees a full grid is looking at a broken feature
+  /// as far as they can tell, when the truth may be that their provider put a
+  /// prefix on four thousand titles out of ninety thousand — and the picker,
+  /// listing only the regions it found, gave no way to tell those apart.
+  Future<int> unlabelledIn(int sourceId, ItemKind kind) async {
+    final table = switch (kind) {
+      ItemKind.live => 'channels',
+      ItemKind.movie => 'movies',
+      _ => 'series_entries',
+    };
+    final row = await customSelect(
+      'SELECT COUNT(*) AS n FROM $table '
+      'WHERE source_id = ? AND region IS NULL',
+      variables: [Variable<int>(sourceId)],
+    ).getSingle();
+    return row.read<int>('n');
+  }
+
   /// Series that still have somewhere to go, newest activity first.
   ///
   /// Two things make this different from filtering [continueWatching] to

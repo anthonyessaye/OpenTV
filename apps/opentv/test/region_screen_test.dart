@@ -40,8 +40,9 @@ void main() {
 
   tearDown(() => db.close());
 
-  Future<RegionFilter?> tapRegion(WidgetTester tester, String region) async {
-    RegionFilter? handed;
+  RegionFilter? handed;
+
+  Future<void> pumpPicker(WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -64,8 +65,11 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
-
     expect(tester.takeException(), isNull);
+  }
+
+  Future<RegionFilter?> tapRegion(WidgetTester tester, String region) async {
+    await pumpPicker(tester);
     expect(find.text(region), findsOneWidget,
         reason: '"$region" was not listed at all');
 
@@ -108,5 +112,54 @@ void main() {
       hiddenRegions: handed!.forKind(ItemKind.movie),
     );
     expect(shown.map((m) => m.remoteId), ['AR | Three']);
+  });
+
+  testWidgets('it says how many titles carry no prefix at all', (tester) async {
+    // The number that was missing from every report of this feature being
+    // broken. A picker listing two regions looks identical whether the
+    // catalogue is fully labelled or three per cent labelled, and in the
+    // second case hiding both regions leaves the grid essentially full —
+    // which reads as filtering not working.
+    await db.upsertMovies([
+      for (var i = 0; i < 7; i++)
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'plain-$i',
+          name: 'No Prefix $i',
+          searchName: 'no prefix $i',
+        ),
+    ]);
+
+    await pumpPicker(tester);
+
+    expect(find.textContaining('7 of 10 titles here'), findsOneWidget);
+    expect(find.textContaining('carry no region prefix'), findsOneWidget);
+  });
+
+  testWidgets('a fully labelled catalogue says so instead', (tester) async {
+    await pumpPicker(tester);
+    expect(find.textContaining('Every title here carries'), findsOneWidget);
+  });
+
+  testWidgets('reading again fills what the import missed', (tester) async {
+    // The button exists because there was no way to tell, from this screen,
+    // whether the catalogue had ever had its prefixes read.
+    await db.upsertMovies([
+      MoviesCompanion.insert(
+        sourceId: sourceId,
+        remoteId: 'missed',
+        name: 'FR | Imported Before Regions',
+        searchName: 'imported before regions',
+      ),
+    ]);
+
+    await pumpPicker(tester);
+    expect(find.text('FR'), findsNothing);
+
+    await tester.tap(find.text('Read regions again'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('FR'), findsOneWidget);
+    expect(find.textContaining('1 more title.'), findsOneWidget);
   });
 }

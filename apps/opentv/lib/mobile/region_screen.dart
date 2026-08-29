@@ -38,7 +38,15 @@ class _RegionScreenState extends State<RegionScreen> {
   int _tab = 1;
   RegionFilter _filter = const RegionFilter();
   final _regions = <ItemKind, List<({String region, int count})>>{};
+
+  /// How many titles of each kind carry no prefix, and so cannot be hidden.
+  final _unlabelled = <ItemKind, int>{};
+
   bool _loading = true;
+
+  /// What the last manual re-read did, until the screen is left.
+  String? _reread;
+  bool _rereading = false;
 
   @override
   void initState() {
@@ -50,6 +58,7 @@ class _RegionScreenState extends State<RegionScreen> {
     final stored = await widget.db.preference(RegionFilter.preferenceKey);
     for (final kind in _kinds) {
       _regions[kind] = await widget.db.regionsIn(widget.sourceId, kind);
+      _unlabelled[kind] = await widget.db.unlabelledIn(widget.sourceId, kind);
     }
     if (!mounted) return;
     setState(() {
@@ -75,6 +84,35 @@ class _RegionScreenState extends State<RegionScreen> {
     await _write(next);
   }
 
+  /// Reads the prefixes out of the catalogue again, on demand.
+  ///
+  /// The app does this by itself when it opens, and there was no way to tell
+  /// from this screen whether it had — a picker listing five regions looks
+  /// the same whether the catalogue holds five thousand prefixed titles or a
+  /// hundred and eighty thousand. Saying how many rows it filled answers that
+  /// in one tap.
+  Future<void> _readAgain() async {
+    setState(() {
+      _rereading = true;
+      _reread = null;
+    });
+    final filled = await widget.db.backfillRegions();
+    if (!mounted) return;
+    for (final kind in _kinds) {
+      _regions[kind] = await widget.db.regionsIn(widget.sourceId, kind);
+      _unlabelled[kind] = await widget.db.unlabelledIn(widget.sourceId, kind);
+    }
+    if (!mounted) return;
+    setState(() {
+      _rereading = false;
+      _reread = filled == 0
+          ? 'Nothing more to read. Every title that carries a prefix already '
+              'has its region.'
+          : 'Read a region out of $filled more '
+              '${filled == 1 ? 'title' : 'titles'}.';
+    });
+  }
+
   Future<void> _write(RegionFilter next) async {
     setState(() => _filter = next);
     await widget.db.setPreference(RegionFilter.preferenceKey, next.encode());
@@ -86,6 +124,8 @@ class _RegionScreenState extends State<RegionScreen> {
     final kind = _kinds[_tab];
     final regions = _regions[kind] ?? const [];
     final hidden = _filter.forKind(kind);
+    final unlabelled = _unlabelled[kind] ?? 0;
+    final labelled = regions.fold(0, (sum, r) => sum + r.count);
 
     return TouchScaffold(
       title: 'Regions',
@@ -131,7 +171,8 @@ class _RegionScreenState extends State<RegionScreen> {
                 0,
               ),
               child: Text(
-                '${hidden.length} of ${regions.length} hidden',
+                '${hidden.length} of ${regions.length} hidden  ·  '
+                '$labelled titles carry a region',
                 style: OpenTvTouchType.data,
               ),
             ),
@@ -170,15 +211,45 @@ class _RegionScreenState extends State<RegionScreen> {
                                 !shown,
                               ),
                             ),
-                          const Padding(
-                            padding: EdgeInsets.all(OpenTvTouchSpace.gutter),
+                          Padding(
+                            padding: const EdgeInsets.all(
+                              OpenTvTouchSpace.gutter,
+                            ),
                             child: Text(
-                              'Titles with no region prefix are always shown. '
-                              'Most catalogues label only some of what they '
-                              'carry.',
+                              unlabelled == 0
+                                  ? 'Every title here carries a region prefix, '
+                                      'so hiding one hides all of it.'
+                                  : '$unlabelled of '
+                                      '${labelled + unlabelled} titles here '
+                                      'carry no region prefix. Those are '
+                                      'always shown, whatever is hidden '
+                                      'above — most catalogues label only '
+                                      'some of what they carry.',
                               style: OpenTvTouchType.caption,
                             ),
                           ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: OpenTvTouchSpace.gutter,
+                            ),
+                            child: _Bulk(
+                              label: _rereading
+                                  ? 'Reading…'
+                                  : 'Read regions again',
+                              onTap: _rereading ? null : _readAgain,
+                            ),
+                          ),
+                          if (_reread case final result?)
+                            Padding(
+                              padding: const EdgeInsets.all(
+                                OpenTvTouchSpace.gutter,
+                              ),
+                              child: Text(
+                                result,
+                                style: OpenTvTouchType.caption,
+                              ),
+                            ),
+                          const SizedBox(height: OpenTvTouchSpace.gutter),
                         ],
                       ),
           ),
@@ -193,7 +264,10 @@ class _Bulk extends StatelessWidget {
   const _Bulk({required this.label, required this.onTap});
 
   final String label;
-  final VoidCallback onTap;
+
+  /// Null while the action is already running, which TouchTile draws as
+  /// unavailable rather than leaving a tile that looks tappable and is not.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => TouchTile(
