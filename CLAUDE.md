@@ -375,7 +375,12 @@ Do not undo these without a reason:
   guide**. A lock that only covered browsing is one search box away from
   useless, and a guide would print the titles of everything behind it. The
   settings panel that changes or removes it is itself behind the PIN, compared
-  with `SecretMatch.constantTime`. There is deliberately **no prompt to reveal
+  with `SecretMatch.constantTime` — on the phone too, which for a while had
+  the PIN and no way to choose what it locked: a PIN is a keystore secret like
+  the TMDB key, so it fitted the generic secret screen for free and the
+  settings row looked finished. Removing the PIN clears every lock with it on
+  both devices, or a phone-only viewer ends up needing a television to get
+  their own catalogue back. There is deliberately **no prompt to reveal
   locked content while watching** — that panel is the only way back, which is
   why gating it is the whole of the enforcement.
 - No settings screen renders a stored secret back. They say whether one

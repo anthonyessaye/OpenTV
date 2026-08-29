@@ -16,6 +16,7 @@ import 'mobile_player.dart';
 import 'poster_card.dart';
 import 'mobile_account.dart';
 import 'mobile_guide.dart';
+import 'mobile_parental.dart';
 import 'mobile_settings_screens.dart';
 import 'mobile_tunnel.dart';
 import 'region_screen.dart';
@@ -737,17 +738,23 @@ class _MobileHomeState extends State<MobileHome> {
               sourceId: widget.source.id,
             ),
           ),
-          onOpenPin: () => _push(
-            const MobileSecretScreen(
-              title: 'Parental lock',
-              reference: MobileSecretReferences.pin,
-              digitsOnly: true,
-              explanation:
-                  'Categories you lock are removed from browsing entirely '
-                  'rather than greyed out, so nothing advertises what is '
-                  'behind the PIN. Four digits or more.',
-            ),
-          ),
+          // Its own screen rather than the generic secret one. A PIN is a
+          // keystore secret like the TMDB key and fitted that screen for
+          // free, which is how the phone came to have the PIN and no way to
+          // choose what it locked — while the screen's own text spoke of
+          // "categories you lock".
+          onOpenPin: () async {
+            await _push(
+              MobileParentalScreen(
+                db: widget.db,
+                sourceId: widget.source.id,
+              ),
+            );
+            // What is locked has very likely just changed, and the shelves
+            // behind this filter on it.
+            await _loadRegions();
+            _refreshShelves();
+          },
           onOpenAccount: () => _push(
             MobileAccountScreen(
               db: widget.db,
