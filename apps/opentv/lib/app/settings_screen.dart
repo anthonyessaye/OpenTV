@@ -65,6 +65,9 @@ class SettingsScreen extends StatefulWidget {
 
 enum _Panel { sources, account, hidden, regions, metadata, vpn, parental, handover, about }
 
+/// Why a PIN is being typed.
+enum _PinPurpose { set, prove }
+
 class _SettingsScreenState extends State<SettingsScreen> {
   _Panel _panel = _Panel.sources;
 
@@ -74,6 +77,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<({String region, int count})> _regionsForKind = const [];
 
   bool _hasPin = false;
+
+  /// Whether the PIN has been entered since this screen was opened.
+  ///
+  /// The lock was enforced nowhere. The PIN was written to the keystore and
+  /// never once compared against anything, so the panel that removes locks —
+  /// and the button that deletes the PIN along with every lock it holds — sat
+  /// behind no check at all. A child who could find Settings could undo the
+  /// whole feature without knowing a digit of it.
+  ///
+  /// Per visit rather than remembered. Leaving settings re-arms it, because a
+  /// television is a shared device and the next person to pick up the remote
+  /// is the person this exists to stop.
+  bool _pinProved = false;
+
+  /// What is being typed, and what happens when it is finished.
+  _PinPurpose _pinPurpose = _PinPurpose.set;
   Set<String> _locked = const {};
   List<Category> _categories = const [];
   List<_CategoryEntry> _allCategories = const [];
@@ -161,6 +180,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _locked = next);
   }
 
+  /// Checks what was typed against what is stored.
+  ///
+  /// Constant time, through the same helper the setup server has always used.
+  /// Four digits is not much to leak, and there is no reason to leak any of
+  /// them.
+  Future<void> _provePin(String pin) async {
+    final stored = await widget.host.readSecret(SettingsScreen.pinReference);
+    if (!mounted) return;
+    if (!SecretMatch.constantTime(pin, stored)) {
+      setState(() {
+        _entry = null;
+        _note = 'That is not the PIN.';
+      });
+      return;
+    }
+    setState(() {
+      _pinProved = true;
+      _entry = null;
+      _note = null;
+    });
+  }
+
   Future<void> _commitPin(String pin) async {
     if (pin.length < 4) {
       setState(() => _note = 'A PIN needs at least four digits.');
@@ -170,6 +211,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() {
       _hasPin = true;
+      // Whoever just chose it knows it. Locking the panel against them
+      // immediately would be the app arguing with itself.
+      _pinProved = true;
       _entry = null;
       _note = 'PIN set.';
     });
@@ -315,17 +359,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final entry = _entry;
 
     if (entry != null) {
+      final unlocking = _pinPurpose == _PinPurpose.prove;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 700,
             child: TextEntryField(
-              label: 'New PIN',
+              label: unlocking ? 'PIN' : 'New PIN',
               value: entry,
               obscure: true,
               active: true,
-              hint: 'Four digits or more',
+              hint: unlocking ? 'The PIN set on this television' : 'Four digits or more',
               problem: _note,
             ),
           ),
@@ -341,10 +386,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ? entry
                       : entry.substring(0, entry.length - 1);
                 }),
-                doneLabel: 'SET PIN',
-                onDone: entry.length >= 4 ? () => _commitPin(entry) : null,
+                doneLabel: unlocking ? 'UNLOCK' : 'SET PIN',
+                onDone: entry.length >= 4
+                    ? () => unlocking ? _provePin(entry) : _commitPin(entry)
+                    : null,
               ),
             ),
+          ),
+        ],
+      );
+    }
+
+    // Everything below this changes or removes the lock, so everything below
+    // it is behind the PIN once there is one.
+    if (_hasPin && !_pinProved) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'A PIN is set on this television. Enter it to change what is '
+            'locked, or to remove the lock.',
+            style: OpenTvType.bodyMuted,
+          ),
+          if (_note != null) ...[
+            const SizedBox(height: OpenTvSpace.xs),
+            Text(
+              _note!,
+              style: OpenTvType.data.copyWith(color: OpenTvColors.tally),
+            ),
+          ],
+          const SizedBox(height: OpenTvSpace.md),
+          PlayerButton(
+            label: 'ENTER PIN',
+            emphasis: true,
+            autofocus: true,
+            onSelect: () => setState(() {
+              _entry = '';
+              _note = null;
+              _pinPurpose = _PinPurpose.prove;
+            }),
           ),
         ],
       );
@@ -355,8 +435,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         Text(
           _hasPin
-              ? 'A PIN is set. Locked categories are hidden until it is '
-                    'entered.'
+              ? 'A locked category is removed from browsing, from search and '
+                    'from the guide — it is not greyed out and it is not '
+                    'listed, because a list that names what it is hiding '
+                    'tells a child exactly where to look. There is no prompt '
+                    'to reveal it while watching. This screen is the way '
+                    'back, and this screen needs the PIN.'
               : 'No PIN is set. Set one before locking anything, or the lock '
                     'has nothing to enforce it.',
           style: OpenTvType.bodyMuted,
@@ -377,6 +461,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onSelect: () => setState(() {
                 _entry = '';
                 _note = null;
+                _pinPurpose = _PinPurpose.set;
               }),
             ),
             if (_hasPin) ...[
@@ -744,6 +829,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
         const SizedBox(height: OpenTvSpace.sm),
+        // The same reason the phone has them, and the categories panel: a
+        // provider with a dozen regions is not a list anybody works through
+        // one row at a time, and hiding the lot then restoring the two you
+        // watch is the workable order.
+        if (_regionsForKind.isNotEmpty)
+          Row(
+            children: [
+              PlayerButton(
+                label: 'HIDE ALL',
+                onSelect: () => _setAllRegions(hide: true),
+              ),
+              const SizedBox(width: OpenTvSpace.xs),
+              PlayerButton(
+                label: 'SHOW ALL',
+                onSelect: () => _setAllRegions(hide: false),
+              ),
+            ],
+          ),
+        const SizedBox(height: OpenTvSpace.sm),
         Text(
           '${hidden.length} of ${_regionsForKind.length} hidden',
           style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
@@ -783,6 +887,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _regionFilter = RegionFilter.decode(stored);
       _regionsForKind = rows;
     });
+  }
+
+  /// Hide or show every region of the kind being looked at.
+  Future<void> _setAllRegions({required bool hide}) async {
+    var next = _regionFilter;
+    for (final entry in _regionsForKind) {
+      next = next.withRegion(_regionKind, entry.region, hide: hide);
+    }
+    setState(() => _regionFilter = next);
+    await widget.db.setPreference(RegionFilter.preferenceKey, next.encode());
   }
 
   Future<void> _toggleRegion(String region) async {

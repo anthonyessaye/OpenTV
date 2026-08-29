@@ -1,3 +1,4 @@
+import '../secret_match.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -326,19 +327,8 @@ class SetupServer {
     return expected == null || given == null || given == expected;
   }
 
-  /// Compares without leaking where two strings first differ.
-  ///
-  /// A plain `==` returns as soon as it finds a difference, and the time that
-  /// takes is measurable over a network — which turns guessing a token into
-  /// guessing it one character at a time.
-  static bool _matches(String given, String? expected) {
-    if (expected == null) return false;
-    var difference = given.length ^ expected.length;
-    for (var i = 0; i < given.length && i < expected.length; i++) {
-      difference |= given.codeUnitAt(i) ^ expected.codeUnitAt(i);
-    }
-    return difference == 0;
-  }
+  static bool _matches(String given, String? expected) =>
+      SecretMatch.constantTime(given, expected);
 
   static String? _orNull(String? value) {
     final trimmed = value?.trim();

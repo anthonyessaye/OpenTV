@@ -239,14 +239,22 @@ a background. The reported bug was "the cards are too tall"; the cards were
 correct. Wrap in `Align` when a row should keep its own height.
 
 **Reader without writer, and writer without reader.** This has now happened
-five times, in both directions, and it is the single most common failure in
+nine times, in both directions, and it is the single most common failure in
 this codebase. The resume bar read a position column nothing ever wrote. The
 series Continue shelf filtered episode progress for the series kind, which
 matches nothing. The phone's browse screens were handed a `StreamResolver` and
 referenced it zero times, so nothing was tappable. Favourites on an episode
 were written against `ItemKind.episode` while the Series shelf only ever asks
 for `ItemKind.series`, so the heart lit up and the show appeared nowhere. And
-the phone wrote favourites it had no screen to read back.
+the phone wrote favourites it had no screen to read back. The phone recorded
+every live channel as a film, so the live shelf — which asks for
+`ItemKind.live` — matched none of them. Both natives have reported an `error`
+key in every player state snapshot since the contract was written and no
+interface ever read it, so a failed stream was a black screen with nothing to
+say. `episodesSyncedAt` was written to stop a show with no episodes going back
+to the portal, and nothing consulted it. And the parental PIN was written to
+the keystore and never compared against anything, which made the lock
+decorative.
 
 None of these fail. Nothing logs, nothing throws, and each one looks like
 working software in a screenshot. **If a feature is silent, grep both ends
@@ -365,7 +373,11 @@ Do not undo these without a reason:
   `SetupSubmission.toString` does.
 - The parental lock removes categories from **browsing, search and the
   guide**. A lock that only covered browsing is one search box away from
-  useless, and a guide would print the titles of everything behind it.
+  useless, and a guide would print the titles of everything behind it. The
+  settings panel that changes or removes it is itself behind the PIN, compared
+  with `SecretMatch.constantTime`. There is deliberately **no prompt to reveal
+  locked content while watching** — that panel is the only way back, which is
+  why gating it is the whole of the enforcement.
 - No settings screen renders a stored secret back. They say whether one
   exists, never what it is.
 

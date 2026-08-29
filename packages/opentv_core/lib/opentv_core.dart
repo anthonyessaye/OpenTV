@@ -6,6 +6,7 @@
 library;
 
 export 'src/epg/epg_models.dart';
+export 'src/secret_match.dart';
 export 'src/epg/xmltv_parser.dart';
 export 'src/legacy/legacy_import.dart';
 export 'src/metadata/title_cleaner.dart';
