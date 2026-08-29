@@ -45,8 +45,18 @@ class LivePreview extends StatefulWidget {
   State<LivePreview> createState() => _LivePreviewState();
 }
 
-class _LivePreviewState extends State<LivePreview> {
+class _LivePreviewState extends State<LivePreview>
+    with WidgetsBindingObserver, RouteAware, ReleasesWhenUnseen {
   MethodChannel? _channel;
+
+  @override
+  MethodChannel? get previewChannel => _channel;
+
+  @override
+  String get previewUrl => widget.url;
+
+  @override
+  Map<String, String> get previewOptions => widget.streamOptions;
 
   void _onCreated(int id) {
     _channel = MethodChannel('opentv/player/$id');

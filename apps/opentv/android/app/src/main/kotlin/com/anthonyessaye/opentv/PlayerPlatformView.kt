@@ -3,6 +3,7 @@ package com.anthonyessaye.opentv
 import android.content.Context
 import android.graphics.Color
 import android.view.Gravity
+import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
@@ -145,6 +146,42 @@ class PlayerPlatformView(
         // browse screen, sitting behind a failure banner. This background is
         // inside the hole, which is the only place that can fill it.
         container.setBackgroundColor(BLACK)
+
+        // And black inside the SurfaceView's own buffer, which is a separate
+        // thing again.
+        //
+        // A SurfaceView does not draw into the window. It gets its own
+        // surface behind the window and punches a transparent hole through
+        // everything in front of it — the container's background included, so
+        // the line above covers only the margins around the video and never
+        // the video's own rectangle. Until the decoder writes its first
+        // frame that rectangle shows whatever is behind the window, which
+        // under Flutter's hybrid composition is the screen the viewer just
+        // left. That is the player's controls apparently floating over the
+        // previous screen, and no amount of painting on the Flutter side can
+        // reach it: the hole is punched through Flutter too.
+        //
+        // Filling the buffer once, the moment it exists, is the only place
+        // black can be put that the hole does not remove.
+        surface.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                val canvas = holder.lockCanvas() ?: return
+                try {
+                    canvas.drawColor(BLACK)
+                } finally {
+                    holder.unlockCanvasAndPost(canvas)
+                }
+            }
+
+            override fun surfaceChanged(
+                holder: SurfaceHolder,
+                format: Int,
+                width: Int,
+                height: Int,
+            ) = Unit
+
+            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
+        })
 
         // Never takes Android focus, on either view.
         //

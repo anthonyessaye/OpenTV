@@ -225,3 +225,98 @@ mixin PauseWhenBackgrounded<T extends StatefulWidget> on State<T>
     }
   }
 }
+
+/// Watches route changes so a preview can release its stream when covered.
+///
+/// Registered on the app's navigator. Without it nothing tells a preview that
+/// something has been pushed over it, and a preview is a player: it goes on
+/// decoding, goes on holding a connection, and goes on making sound behind
+/// whatever the viewer opened.
+final playerRouteObserver = RouteObserver<ModalRoute<void>>();
+
+/// A preview that gives its stream up whenever nobody can see it.
+///
+/// Two ways to become invisible and both were unhandled. A route pushed over
+/// the screen leaves the preview mounted and playing, so opening a channel
+/// from the list gave two streams at once — audible, and on a provider
+/// allowing one connection the second one is refused outright. And sending
+/// the app to the background left it decoding to nothing, which is the
+/// "playback carries on in the background" that pausing the full player did
+/// not fix, because the full player was never the thing still playing.
+///
+/// Stopped rather than paused, which is the opposite of the choice the full
+/// player makes. A preview is decoration; holding a scarce connection open
+/// for one is exactly the wrong trade, where holding it for the film somebody
+/// is actually watching is the right one.
+mixin ReleasesWhenUnseen<T extends StatefulWidget> on State<T>
+    implements RouteAware, WidgetsBindingObserver {
+  MethodChannel? get previewChannel;
+
+  /// What to reopen with when the preview becomes visible again.
+  String get previewUrl;
+  Map<String, String> get previewOptions => const {};
+
+  ModalRoute<void>? _route;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is ModalRoute<void> && route != _route) {
+      if (_route != null) playerRouteObserver.unsubscribe(this);
+      _route = route;
+      playerRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (_route != null) playerRouteObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  Future<void> releasePreview() =>
+      previewChannel?.invokeMethod<void>('stop') ?? Future<void>.value();
+
+  Future<void> resumePreview() =>
+      previewChannel?.invokeMethod<void>('play', {
+        'url': previewUrl,
+        'options': previewOptions,
+      }) ??
+      Future<void>.value();
+
+  @override
+  void didPushNext() => releasePreview();
+
+  @override
+  void didPopNext() => resumePreview();
+
+  @override
+  void didPush() {}
+
+  @override
+  void didPop() {}
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        releasePreview();
+      case AppLifecycleState.resumed:
+        // Only when this is still the screen on top. Coming back to the app
+        // with a player open must not start a second stream underneath it.
+        if (_route?.isCurrent ?? false) resumePreview();
+      case AppLifecycleState.inactive:
+        break;
+    }
+  }
+}

@@ -60,6 +60,10 @@ class OpenTvApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return WidgetsApp(
       navigatorKey: _navigator,
+      // So a preview knows when something has been pushed over it. Nothing
+      // else told it, and a preview that is not told goes on playing behind
+      // whatever the viewer opened.
+      navigatorObservers: [playerRouteObserver],
       color: OpenTvColors.ground,
       // English only for now, and the machinery to add more without touching
       // a screen. A language is an .arb file beside app_en.arb and its code

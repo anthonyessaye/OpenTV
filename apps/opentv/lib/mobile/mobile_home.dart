@@ -983,8 +983,18 @@ class _MiniPlayer extends StatefulWidget {
   State<_MiniPlayer> createState() => _MiniPlayerState();
 }
 
-class _MiniPlayerState extends State<_MiniPlayer> {
+class _MiniPlayerState extends State<_MiniPlayer>
+    with WidgetsBindingObserver, RouteAware, ReleasesWhenUnseen {
   MethodChannel? _channel;
+
+  @override
+  MethodChannel? get previewChannel => _channel;
+
+  @override
+  String get previewUrl => widget.url;
+
+  @override
+  Map<String, String> get previewOptions => widget.streamOptions;
 
   void _onCreated(int id) => _channel = MethodChannel('opentv/player/$id');
 
