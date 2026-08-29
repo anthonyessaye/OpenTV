@@ -163,7 +163,11 @@ class _BrowseScreenState extends State<BrowseScreen> {
       _category = null;
     });
 
-    final categories = await widget.db.categoriesFor(widget.source.id, _kind);
+    final categories = await widget.db.categoriesFor(
+      widget.source.id,
+      _kind,
+      hiddenRegions: _regions.forKind(_kind),
+    );
     final counts = await widget.db.countsByCategory(widget.source.id, _kind);
     // A locked category is absent rather than shown greyed out. A list that
     // advertises what it is hiding tells a child exactly where to look, and

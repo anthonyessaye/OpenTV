@@ -299,7 +299,11 @@ class _MobileHomeState extends State<MobileHome> {
   /// bar that still listed it would name what is behind the PIN, which is the
   /// same mistake as greying a category out instead of removing it.
   Future<List<Category>> _categoriesFor(ItemKind kind) async {
-    final rows = await widget.db.categoriesFor(widget.source.id, kind);
+    final rows = await widget.db.categoriesFor(
+      widget.source.id,
+      kind,
+      hiddenRegions: _regions.forKind(kind),
+    );
     return [
       for (final category in rows)
         if (!_locked.contains(category.remoteId)) category,
@@ -811,6 +815,7 @@ class _LiveTabState extends State<_LiveTab> {
     final rows = await widget.db.categoriesFor(
       widget.source.id,
       ItemKind.live,
+      hiddenRegions: widget.hiddenRegions,
     );
     if (!mounted) return;
     setState(() {

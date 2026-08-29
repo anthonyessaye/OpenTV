@@ -181,14 +181,50 @@ class OpenTvDatabase extends _$OpenTvDatabase {
 
   // --- catalogue reads --------------------------------------------------
 
-  Future<List<Category>> categoriesFor(int sourceId, ItemKind kind) =>
-      (select(categories)
-            ..where(
-              (c) => c.sourceId.equals(sourceId) & c.kind.equalsValue(kind),
-            )
-            ..where((c) => c.hidden.equals(false))
-            ..orderBy([(c) => OrderingTerm(expression: c.sortOrder)]))
-          .get();
+  /// The provider's groupings for one kind.
+  ///
+  /// Region-filtered like everything else it groups. Hiding UK and then
+  /// finding a bar full of `UK |` categories is the feature plainly not
+  /// working, whatever the rows behind them do — and it was the state of it,
+  /// because the filter was applied to rows and never to the groups those
+  /// rows are shown under.
+  ///
+  /// Read off the category's own name rather than a stored column. There are
+  /// a few hundred of these where there are a few hundred thousand rows, so
+  /// the reason the rows need a column — it has to appear in a `WHERE` before
+  /// a `LIMIT` — does not apply, and a fourth table in the schema means a
+  /// migration and a handover that 1.1 devices refuse.
+  Future<List<Category>> categoriesFor(
+    int sourceId,
+    ItemKind kind, {
+    Set<String> hiddenRegions = const {},
+  }) async {
+    final rows = await (select(categories)
+          ..where(
+            (c) => c.sourceId.equals(sourceId) & c.kind.equalsValue(kind),
+          )
+          ..where((c) => c.hidden.equals(false))
+          ..orderBy([(c) => OrderingTerm(expression: c.sortOrder)]))
+        .get();
+    if (hiddenRegions.isEmpty) return rows;
+    return [
+      for (final category in rows)
+        // Unprefixed categories are kept, the same rule the rows follow.
+        if (!hiddenRegions.contains(TitleCleaner.clean(category.name).region))
+          category,
+    ];
+  }
+
+  /// Every category of one kind, hidden ones included.
+  ///
+  /// [categoriesFor] is the browsing view and leaves out what a viewer has
+  /// put away; filling regions has to see all of them, or a row in a hidden
+  /// category keeps a null region for ever and reappears the moment that
+  /// category is restored.
+  Future<List<Category>> _allCategories(int sourceId, ItemKind kind) =>
+      (select(categories)..where(
+        (c) => c.sourceId.equals(sourceId) & c.kind.equalsValue(kind),
+      )).get();
 
   Future<List<Channel>> channelsIn(
     int sourceId, {
@@ -1154,16 +1190,88 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     for (final table in _regionTables) {
       filled += await _backfillRegionsIn(table);
     }
+    // Titles first, then groups for whatever the titles did not answer.
+    for (final source in await allSources()) {
+      filled += await fillRegionsFromCategories(source.id);
+    }
     // The pass reached the end of all three tables, so every null still there
     // is a title the provider never put a prefix on. Recording the size of
     // the catalogue it finished on is what stops the next launch reading a
     // hundred thousand names to learn the same thing again.
-    await setPreference(_regionMarkKey, '${await _catalogueRows()}');
+    await setPreference(
+      _regionMarkKey,
+      '$_regionPassVersion:${await _catalogueRows()}',
+    );
+    return filled;
+  }
+
+  /// A row with no prefix of its own takes its category's.
+  ///
+  /// This is the half the feature was missing, and it is why hiding a region
+  /// could remove almost nothing on a catalogue that plainly had regions in
+  /// it. Providers put the prefix wherever they please: some on every title,
+  /// some — very commonly — only on the group, so a category reads
+  /// `UK | Sports` and the channels inside it are `Sky Sports Main Event` and
+  /// `BT Sport 1`, with nothing in the name to read. Those rows were left
+  /// null, and a null row is deliberately never hidden, so hiding UK left the
+  /// UK channels exactly where they were.
+  ///
+  /// The row's own prefix still wins where it has one. A category is a
+  /// weaker signal: providers file titles under a group they do not match far
+  /// more often than they mislabel a title.
+  ///
+  /// Written as one statement per region rather than per row, for the reason
+  /// the rest of this pass is: SQLite runs on the app's main isolate.
+  Future<int> fillRegionsFromCategories(int sourceId) async {
+    var filled = 0;
+
+    for (final (kind, table) in const [
+      (ItemKind.live, 'channels'),
+      (ItemKind.movie, 'movies'),
+      (ItemKind.series, 'series_entries'),
+    ]) {
+      final byRegion = <String, List<String>>{};
+      for (final category in await _allCategories(sourceId, kind)) {
+        final region = TitleCleaner.clean(category.name).region;
+        if (region != null) {
+          (byRegion[region] ??= <String>[]).add(category.remoteId);
+        }
+      }
+      if (byRegion.isEmpty) continue;
+
+      for (final entry in byRegion.entries) {
+        for (var i = 0; i < entry.value.length; i += _idsPerStatement) {
+          final chunk = entry.value.skip(i).take(_idsPerStatement).toList();
+          final placeholders = List.filled(chunk.length, '?').join(',');
+          filled += await customUpdate(
+            'UPDATE $table SET region = ? '
+            'WHERE source_id = ? AND region IS NULL '
+            'AND category_remote_id IN ($placeholders)',
+            variables: [
+              Variable<String>(entry.key),
+              Variable<int>(sourceId),
+              for (final id in chunk) Variable<String>(id),
+            ],
+            updates: {},
+          );
+        }
+      }
+    }
+
     return filled;
   }
 
   static const _regionTables = ['channels', 'movies', 'series_entries'];
   static const _regionMarkKey = 'regions-backfilled-rows';
+
+  /// Bumped whenever a pass learns to fill something it did not fill before.
+  ///
+  /// Without this the mark is a promise the old pass made about the new one.
+  /// Version 1 read prefixes off titles only; a device that finished it would
+  /// have been told there was no work left, and version 2 — which also takes
+  /// a region off the row's category — would never have run on the one
+  /// catalogue that needed it most.
+  static const _regionPassVersion = 2;
 
   Future<int> _catalogueRows() async {
     var total = 0;
@@ -1281,8 +1389,10 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     // never seen is noticed. A flag would be a promise about every future
     // import path, and this codebase's most common failure is exactly that
     // kind of promise going unkept on one side.
-    final mark = int.tryParse(await preference(_regionMarkKey) ?? '');
-    return mark == null || mark != await _catalogueRows();
+    final parts = (await preference(_regionMarkKey) ?? '').split(':');
+    if (parts.length != 2) return true;
+    if (int.tryParse(parts.first) != _regionPassVersion) return true;
+    return int.tryParse(parts.last) != await _catalogueRows();
   }
 
   /// Every region present in one kind, with how many rows carry it.
