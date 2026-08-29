@@ -135,4 +135,36 @@ void main() {
       );
     }
   });
+
+  test('the video surface is never drawn into with a Canvas', () {
+    // `lockCanvas` on the SurfaceView looks like the obvious way to put black
+    // behind a stream that has not started, and it breaks playback outright:
+    // the first lock puts that surface into software rendering permanently,
+    // and MediaCodec can then not use it as an output surface at all. Every
+    // stream fails with ERROR_CODE_DECODERS_INIT_FAILED — which reads as a
+    // codec problem and has nothing to do with codecs.
+    //
+    // Shipped once. The black belongs in a shutter View above the surface,
+    // which is what Media3's own PlayerView does.
+    // Comments only, stripped: the paragraph above the shutter names the
+    // trap, and a check that its own explanation trips is a check nobody can
+    // keep.
+    final code = [
+      for (final line in android.readAsStringSync().split('\n'))
+        if (!RegExp(r'^\s*(\*|//|/\*)').hasMatch(line)) line,
+    ].join('\n');
+
+    expect(
+      code,
+      isNot(contains('lockCanvas')),
+      reason: 'locking the video surface for a Canvas stops every decoder '
+          'from initialising on it',
+    );
+    expect(
+      code,
+      contains('shutter'),
+      reason: 'without it the surface punches a hole through to the screen '
+          'the viewer just left',
+    );
+  });
 }

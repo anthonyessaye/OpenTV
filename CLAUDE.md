@@ -277,6 +277,20 @@ is deliberate — see the README — but it means anything `PlayerView` would ha
 done for free has to be done by hand. Subtitles were decoded and thrown away
 for months because nothing was drawing the cues.
 
+The shutter is the other one. A `SurfaceView` does not draw into the window;
+it takes its own surface behind the window and punches a transparent hole
+through everything in front of it, the container's own background included.
+Until the decoder writes a frame that rectangle shows what is behind the
+window, which under hybrid composition is the screen the viewer just left —
+reported as the player's controls floating over the previous screen. **Do not
+fix that with `lockCanvas`.** The first lock puts the surface into software
+rendering for good and MediaCodec then cannot use it as an output surface at
+all: every stream fails with `ERROR_CODE_DECODERS_INIT_FAILED`, which reads as
+a codec problem and has nothing to do with codecs. This shipped once. A plain
+black `View` above the surface, hidden on `onRenderedFirstFrame`, is what
+`PlayerView` itself does, and `player_contract_test` now fails if `lockCanvas`
+comes back.
+
 ## The handover
 
 Two devices exchange a whole setup over the local network. `opentv_core`

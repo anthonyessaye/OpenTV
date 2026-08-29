@@ -3,7 +3,6 @@ package com.anthonyessaye.opentv
 import android.content.Context
 import android.graphics.Color
 import android.view.Gravity
-import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
@@ -72,6 +71,27 @@ class PlayerPlatformView(
      */
     private val container = FrameLayout(context)
     private val surface = SurfaceView(context)
+
+    /**
+     * Black over the picture until there is a picture.
+     *
+     * A SurfaceView does not draw into the window. It takes its own surface
+     * behind the window and punches a transparent hole through everything in
+     * front of it, the container's own background included — so until the
+     * decoder writes a frame, that rectangle shows whatever is behind the
+     * window, which under Flutter's hybrid composition is the screen the
+     * viewer just left. That is the player's controls apparently floating
+     * over the previous screen.
+     *
+     * A plain View above the SurfaceView is the only thing that covers it.
+     * Filling the surface's own buffer would be the obvious alternative and
+     * is a trap: `lockCanvas` puts the surface into software rendering for
+     * good, and MediaCodec then cannot use it as an output surface at all —
+     * every stream fails with DECODERS_INIT_FAILED, which is worse than any
+     * flash of the wrong screen. Media3's own PlayerView solves it exactly
+     * this way, with a shutter.
+     */
+    private val shutter = View(context)
 
     /**
      * Where subtitles are drawn.
@@ -147,42 +167,6 @@ class PlayerPlatformView(
         // inside the hole, which is the only place that can fill it.
         container.setBackgroundColor(BLACK)
 
-        // And black inside the SurfaceView's own buffer, which is a separate
-        // thing again.
-        //
-        // A SurfaceView does not draw into the window. It gets its own
-        // surface behind the window and punches a transparent hole through
-        // everything in front of it — the container's background included, so
-        // the line above covers only the margins around the video and never
-        // the video's own rectangle. Until the decoder writes its first
-        // frame that rectangle shows whatever is behind the window, which
-        // under Flutter's hybrid composition is the screen the viewer just
-        // left. That is the player's controls apparently floating over the
-        // previous screen, and no amount of painting on the Flutter side can
-        // reach it: the hole is punched through Flutter too.
-        //
-        // Filling the buffer once, the moment it exists, is the only place
-        // black can be put that the hole does not remove.
-        surface.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                val canvas = holder.lockCanvas() ?: return
-                try {
-                    canvas.drawColor(BLACK)
-                } finally {
-                    holder.unlockCanvasAndPost(canvas)
-                }
-            }
-
-            override fun surfaceChanged(
-                holder: SurfaceHolder,
-                format: Int,
-                width: Int,
-                height: Int,
-            ) = Unit
-
-            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
-        })
-
         // Never takes Android focus, on either view.
         //
         // The Dart side already keeps this out of Flutter's traversal, and
@@ -216,6 +200,12 @@ class PlayerPlatformView(
         // Lifted clear of the bottom edge, where the transport controls sit.
         subtitles.setBottomPaddingFraction(0.08f)
         container.addView(subtitles)
+
+        // Added last of the three so it sits above the picture, and below
+        // nothing that matters — subtitles cannot arrive before a frame does.
+        shutter.setBackgroundColor(BLACK)
+        container.addView(shutter)
+
         player.setVideoSurfaceView(surface)
 
         channel.setMethodCallHandler(::handle)
@@ -309,6 +299,10 @@ class PlayerPlatformView(
     private fun play(url: String, startAtMs: Long = 0L) {
         framesSeen = false
         lastError = null
+        // Back over the picture for the new stream. Without this, switching
+        // channels shows the last frame of the previous one for as long as
+        // the next takes to open.
+        shutter.visibility = View.VISIBLE
         player.setMediaItem(MediaItem.fromUri(url), startAtMs)
         player.prepare()
         player.playWhenReady = true
@@ -535,8 +529,27 @@ class PlayerPlatformView(
 
     // MARK: Player.Listener
 
+    /**
+     * The precise signal, and the one the shutter is really waiting for.
+     *
+     * A video size arrives when the container has been parsed, which is not
+     * the same moment as a picture existing. This is.
+     */
+    override fun onRenderedFirstFrame() {
+        shutter.visibility = View.GONE
+    }
+
+    override fun onPlayerErrorChanged(error: PlaybackException?) {
+        // Nothing is coming, so the black stops being a wait and starts being
+        // the answer. Left up, with whatever the Dart side draws over it.
+        if (error != null) shutter.visibility = View.VISIBLE
+    }
+
     override fun onVideoSizeChanged(videoSize: VideoSize) {
-        if (videoSize.width > 0) framesSeen = true
+        if (videoSize.width > 0) {
+            framesSeen = true
+            shutter.visibility = View.GONE
+        }
         applyAspect()
         channel.invokeMethod("state", snapshot())
     }
