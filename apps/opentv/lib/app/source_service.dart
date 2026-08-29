@@ -37,6 +37,82 @@ class SourceService {
     await db.removeSource(source.id);
   }
 
+  /// A show's episodes, fetched from the portal the first time they are
+  /// asked for.
+  ///
+  /// Xtream does not ship episodes with the series list. Getting them during
+  /// a sync would be one request per show — four thousand of them before the
+  /// app could display anything — so they are fetched when a viewer opens a
+  /// show and kept from then on.
+  ///
+  /// Here rather than on a screen because there are two screens. The
+  /// television had this and the phone had only the database read, so every
+  /// series on a phone opened with no episodes and nothing to play — the
+  /// reader without the writer, again.
+  ///
+  /// [Source.credentialRef] and the password behind it never leave this
+  /// class, which is the whole reason this seam exists.
+  Future<({List<Episode> episodes, String? problem})> episodesFor(
+    Source source,
+    SeriesEntry series,
+  ) async {
+    final stored = await db.episodesOf(source.id, series.remoteId);
+
+    // Asked for once. `episodesSyncedAt` was written here and read by
+    // nothing, so a show the provider genuinely has no episodes for went
+    // back to the portal every single time it was opened.
+    final asked = series.episodesSyncedAt != null;
+    if (stored.isNotEmpty || asked || source.kind != SourceKind.xtream) {
+      return (episodes: stored, problem: null);
+    }
+
+    final reference = source.credentialRef;
+    final username = source.username;
+    if (reference == null || username == null) {
+      return (episodes: stored, problem: null);
+    }
+
+    final password = await host.readSecret(reference);
+    if (password == null) {
+      return (
+        episodes: stored,
+        problem: 'The account password could not be read back, so the '
+            'episode list cannot be fetched.',
+      );
+    }
+
+    final transport = HttpTransport();
+    try {
+      final fetcher = XtreamCatalogueFetcher(
+        credentials: XtreamCredentials(
+          host: source.url,
+          username: username,
+          password: password,
+        ),
+        transport: transport,
+      );
+      final rows = await fetcher.fetchEpisodes(source.id, series.remoteId);
+      await db.upsertEpisodes(rows);
+      await db.markEpisodesSynced(source.id, series.remoteId, DateTime.now());
+
+      // Awaited rather than returned: the finally below closes the transport,
+      // and returning the future would close it mid-read.
+      return (
+        episodes: await db.episodesOf(source.id, series.remoteId),
+        problem: null,
+      );
+    } on TransportException catch (error) {
+      return (
+        episodes: stored,
+        problem: 'The episode list could not be fetched. ${error.message}',
+      );
+    } on FatalSyncException catch (error) {
+      return (episodes: stored, problem: error.message);
+    } finally {
+      transport.close();
+    }
+  }
+
   /// What the sync is doing, for the progress line onboarding shows.
   final progress = ValueNotifier<String>('Contacting the provider…');
 

@@ -91,6 +91,14 @@ class _MobileHomeState extends State<MobileHome> {
       return;
     }
 
+    // Recorded on open rather than only on progress, as the television does.
+    // A live channel reports no position to speak of, so waiting for progress
+    // meant it was never recorded at all — and the live screen's preview,
+    // which asks for the last live thing watched, therefore had nothing to
+    // show and drew no preview on a phone at all.
+    await _record(item);
+    if (!mounted) return;
+
     await Navigator.of(context).push(
       PageRouteBuilder<void>(
         // Opaque black rather than the slide the rest of the app uses: a
@@ -133,19 +141,54 @@ class _MobileHomeState extends State<MobileHome> {
                     Navigator.of(context).pop();
                     _play(_nextIn(queue, item)!, queue: queue);
                   },
-            onProgress: (position, duration) => widget.db.recordPlayback(
-              sourceId: widget.source.id,
-              kind: item.kind == XtreamStreamKind.series
-                  ? ItemKind.episode
-                  : ItemKind.movie,
-              remoteId: item.remoteId,
-              at: DateTime.now(),
-              positionMs: position.inMilliseconds,
-              durationMs: duration?.inMilliseconds,
+            onProgress: (position, duration) => _record(
+              item,
+              position: position,
+              duration: duration,
             ),
           ),
         ),
       ),
+    );
+    // Coming back from the player has changed what every shelf reads: the
+    // live preview, Continue, and how far through something is. A channel
+    // played straight from the live list never went through a detail screen,
+    // so nothing else was going to do this.
+    _refreshShelves();
+  }
+
+  /// Writes what was watched, under the kind the shelves ask for.
+  ///
+  /// [Playable.itemKind] rather than a mapping written out here. The one
+  /// written out here sorted series into episodes and *everything else* into
+  /// films, so every live channel was filed as a film — and the live screen,
+  /// which asks for `ItemKind.live`, matched none of them. The television had
+  /// been using `itemKind` all along.
+  ///
+  /// [Playable.parentRemoteId] matters as much: the series Continue shelf
+  /// groups episodes by their show, and an episode written without one
+  /// belongs to nothing and appears nowhere.
+  Future<void> _record(
+    Playable item, {
+    Duration? position,
+    Duration? duration,
+  }) {
+    // Near enough to the end is finished, on the television's terms: sitting
+    // through the credits is not required to have watched something.
+    final done = position != null &&
+        duration != null &&
+        duration > Duration.zero &&
+        position >= duration - const Duration(seconds: 90);
+
+    return widget.db.recordPlayback(
+      sourceId: widget.source.id,
+      kind: item.itemKind,
+      remoteId: item.remoteId,
+      at: DateTime.now(),
+      positionMs: position?.inMilliseconds,
+      durationMs: duration?.inMilliseconds,
+      completed: done,
+      parentRemoteId: item.parentRemoteId,
     );
   }
 
@@ -232,10 +275,14 @@ class _MobileHomeState extends State<MobileHome> {
   }
 
   Future<void> _openSeries(SeriesEntry series) async {
-    final episodes = await widget.db.episodesOf(
-      widget.source.id,
-      series.remoteId,
-    );
+    // Fetched from the portal on first open, exactly as the television does
+    // it. Xtream ships no episodes with the series list, and this screen only
+    // ever read the database — so every show on a phone opened empty with
+    // nothing to play, and said so as though the provider carried none.
+    final loaded = await widget.service.episodesFor(widget.source, series);
+    final episodes = loaded.episodes;
+    if (!mounted) return;
+    if (loaded.problem case final problem?) _say(problem);
     // The show, not the episode. An episode-level favourite was orphaned:
     // the Series shelf only ever asks for series favourites.
     final favourite = await widget.db.isFavourite(
@@ -577,9 +624,10 @@ class _MobileHomeState extends State<MobileHome> {
           ),
           onCatchUp: _playCatchUp,
         ),
-      2 => _WithContinue(
-          key: ValueKey('films-c:$_generation:'
+      2 => _GridTab(
+          key: ValueKey('films:$_generation:'
               '${_regions.forKind(ItemKind.movie).join(',')}'),
+          shelves: _Shelves(
           load: () async {
             final states = await widget.db.continueWatching(
               sourceId: widget.source.id,
@@ -609,9 +657,7 @@ class _MobileHomeState extends State<MobileHome> {
             ];
           },
           favourites: () => _favouriteItems(ItemKind.movie),
-          child: _GridTab(
-          key: ValueKey('films:$_generation:'
-              '${_regions.forKind(ItemKind.movie).join(',')}'),
+          ),
           categories: () => _categoriesFor(ItemKind.movie),
           load: (category) async => [
             for (final film in await widget.db.moviesIn(
@@ -625,11 +671,11 @@ class _MobileHomeState extends State<MobileHome> {
           titleOf: (m) => TitleCleaner.clean((m as Movie).name).title,
           imageOf: (m) => (m as Movie).iconUrl,
           onOpen: (m) => _openFilm(m as Movie),
-          ),
         ),
-      3 => _WithContinue(
-          key: ValueKey('series-c:$_generation:'
+      3 => _GridTab(
+          key: ValueKey('series:$_generation:'
               '${_regions.forKind(ItemKind.series).join(',')}'),
+          shelves: _Shelves(
           load: () async {
             // The series shelf, which keeps a show while it still has
             // somewhere to go — including after an episode is finished.
@@ -652,9 +698,7 @@ class _MobileHomeState extends State<MobileHome> {
             ];
           },
           favourites: () => _favouriteItems(ItemKind.series),
-          child: _GridTab(
-          key: ValueKey('series:$_generation:'
-              '${_regions.forKind(ItemKind.series).join(',')}'),
+          ),
           categories: () => _categoriesFor(ItemKind.series),
           load: (category) async => [
             for (final show in await widget.db.seriesIn(
@@ -668,7 +712,6 @@ class _MobileHomeState extends State<MobileHome> {
           titleOf: (s) => TitleCleaner.clean((s as SeriesEntry).name).title,
           imageOf: (s) => (s as SeriesEntry).coverUrl,
           onOpen: (s) => _openSeries(s as SeriesEntry),
-          ),
         ),
       4 => _SearchTab(
           db: widget.db,
@@ -1103,22 +1146,22 @@ class _CategoryBar extends StatelessWidget {
 class _GridTab extends StatefulWidget {
   const _GridTab({
     super.key,
-    required this.load,
     required this.categories,
+    required this.load,
     required this.titleOf,
     required this.imageOf,
     required this.onOpen,
+    this.shelves,
   });
 
-  /// Given the chosen grouping, or null for everything.
-  final Future<List<Object>> Function(String?) load;
-
-  /// The provider's own groupings for this kind, already stripped of anything
-  /// a PIN hides.
   final Future<List<Category>> Function() categories;
+  final Future<List<Object>> Function(String?) load;
   final String Function(Object) titleOf;
   final String? Function(Object) imageOf;
   final void Function(Object) onOpen;
+
+  /// Continue and Favourites, drawn above the grid and scrolling with it.
+  final Widget? shelves;
 
   @override
   State<_GridTab> createState() => _GridTabState();
@@ -1146,40 +1189,15 @@ class _GridTabState extends State<_GridTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _CategoryBar(
-          categories: _categories,
-          selected: _category,
-          onSelect: (id) {
-            if (id == _category) return;
-            setState(() {
-              _category = id;
-              _items = null;
-            });
-            _load();
-          },
-        ),
-        Expanded(child: _grid()),
-      ],
-    );
-  }
-
-  Widget _grid() {
-    final items = _items;
-    if (items == null) return const _Loading();
-    if (items.isEmpty) {
-      return _Empty(
-        _category == null
-            ? 'Nothing here yet.'
-            : 'Nothing in this group.',
-      );
-    }
-
-    // Three columns on a phone, more as the screen widens. Counted from the
-    // available width rather than switched at a breakpoint, so a foldable and
-    // a tablet in either orientation all get a sensible number instead of the
-    // two the nearest breakpoint would have picked.
+    // One scroll view for the whole tab rather than shelves stacked above a
+    // scrolling grid. Pinned, the two shelves and the category bar took about
+    // four hundred pixels of a phone before a single poster — most of the
+    // screen spent on things the viewer has already seen, with the catalogue
+    // they came for in the gap underneath.
+    //
+    // The category bar stays pinned, and only it: it is a control rather than
+    // content, and scrolling three screens back up to change group is the
+    // thing a bar like this exists to avoid.
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = (constraints.maxWidth / 130).floor().clamp(3, 8);
@@ -1191,24 +1209,101 @@ class _GridTabState extends State<_GridTab> {
                 OpenTvTouchSpace.gutter * 2 -
                 OpenTvTouchSpace.md * (columns - 1)) /
             columns;
-        return GridView.builder(
-          padding: const EdgeInsets.all(OpenTvTouchSpace.gutter),
+
+        return CustomScrollView(
+          slivers: [
+            if (widget.shelves case final shelves?)
+              SliverToBoxAdapter(child: shelves),
+            if (_categories.isNotEmpty)
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _CategoryBarHeader(
+                  child: Container(
+                    color: OpenTvColors.ground,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: OpenTvTouchSpace.sm,
+                    ),
+                    child: _CategoryBar(
+                      categories: _categories,
+                      selected: _category,
+                      onSelect: (id) {
+                        if (id == _category) return;
+                        setState(() {
+                          _category = id;
+                          _items = null;
+                        });
+                        _load();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ..._body(cardWidth, columns),
+          ],
+        );
+      },
+    );
+  }
+
+  List<Widget> _body(double cardWidth, int columns) {
+    final items = _items;
+    if (items == null) {
+      return const [SliverFillRemaining(hasScrollBody: false, child: _Loading())];
+    }
+    if (items.isEmpty) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: _Empty(
+            _category == null ? 'Nothing here yet.' : 'Nothing in this group.',
+          ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.all(OpenTvTouchSpace.gutter),
+        sliver: SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: OpenTvTouchSpace.md,
             mainAxisSpacing: OpenTvTouchSpace.lg,
             mainAxisExtent: PosterCard.heightFor(cardWidth),
           ),
-          itemCount: items.length,
-          itemBuilder: (context, i) => PosterCard(
-            title: widget.titleOf(items[i]),
-            imageUrl: widget.imageOf(items[i]),
-            onTap: () => widget.onOpen(items[i]),
+          delegate: SliverChildBuilderDelegate(
+            (context, i) => PosterCard(
+              title: widget.titleOf(items[i]),
+              imageUrl: widget.imageOf(items[i]),
+              onTap: () => widget.onOpen(items[i]),
+            ),
+            childCount: items.length,
           ),
-        );
-      },
-    );
+        ),
+      ),
+    ];
   }
+}
+
+/// Holds the category bar at the top once the shelves have scrolled past it.
+class _CategoryBarHeader extends SliverPersistentHeaderDelegate {
+  const _CategoryBarHeader({required this.child});
+
+  final Widget child;
+
+  static const _height = 44.0 + OpenTvTouchSpace.sm * 2;
+
+  @override
+  double get minExtent => _height;
+
+  @override
+  double get maxExtent => _height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) =>
+      SizedBox(height: _height, child: child);
+
+  @override
+  bool shouldRebuild(_CategoryBarHeader old) => old.child != child;
 }
 
 /// One field, and results from all three kinds at once.
@@ -1632,23 +1727,23 @@ typedef _ContinueItem = ({
   VoidCallback onTap,
 });
 
-class _WithContinue extends StatefulWidget {
-  const _WithContinue({
-    super.key,
-    required this.load,
-    required this.favourites,
-    required this.child,
-  });
+/// Continue and Favourites, above a grid and scrolling with it.
+///
+/// Handed to [_GridTab] as a sliver header rather than stacked above it in a
+/// Column. Pinned, these two shelves plus the category bar took roughly four
+/// hundred pixels before the first poster — most of a phone screen spent on
+/// what the viewer has already seen.
+class _Shelves extends StatefulWidget {
+  const _Shelves({required this.load, required this.favourites});
 
   final Future<List<_ContinueItem>> Function() load;
   final Future<List<_ContinueItem>> Function() favourites;
-  final Widget child;
 
   @override
-  State<_WithContinue> createState() => _WithContinueState();
+  State<_Shelves> createState() => _ShelvesState();
 }
 
-class _WithContinueState extends State<_WithContinue> {
+class _ShelvesState extends State<_Shelves> {
   List<_ContinueItem> _items = const [];
   List<_ContinueItem> _favourites = const [];
 
@@ -1668,16 +1763,14 @@ class _WithContinueState extends State<_WithContinue> {
     // Absent rather than empty when there is nothing in them. A heading over
     // no tiles is a first run looking like a fault, which is why the
     // television puts its own shelves behind the same condition.
-    if (_items.isEmpty && _favourites.isEmpty) return widget.child;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         if (_items.isNotEmpty)
           _Strip(label: 'CONTINUE WATCHING', items: _items),
         if (_favourites.isNotEmpty)
           _Strip(label: 'FAVOURITES', items: _favourites),
-        Expanded(child: widget.child),
       ],
     );
   }

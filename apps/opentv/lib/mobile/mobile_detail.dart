@@ -9,7 +9,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 /// know what it is and whether they already started it. What differs is only
 /// the shape — a phone puts the artwork above the text rather than beside it,
 /// because a column is what a portrait screen has.
-class MobileDetail extends StatelessWidget {
+class MobileDetail extends StatefulWidget {
   const MobileDetail({
     super.key,
     required this.title,
@@ -48,20 +48,47 @@ class MobileDetail extends StatelessWidget {
   /// and putting it first pushes the thing they came for off the screen.
   final List<String> cast;
 
+  @override
+  State<MobileDetail> createState() => _MobileDetailState();
+}
+
+class _MobileDetailState extends State<MobileDetail> {
+  /// The heart's own state, flipped on tap.
+  ///
+  /// The screen drew whatever it was handed at construction, so the heart did
+  /// not change until the viewer left and came back — which reads as the tap
+  /// not having worked, and invites a second tap that undoes the first.
+  ///
+  /// Flipped before the write rather than after it. The write is a row in a
+  /// local SQLite file, so there is no meaningful failure to wait for, and
+  /// the screen that pushed this one re-reads on pop regardless.
+  late bool _favourite = widget.isFavourite;
+
+  @override
+  void didUpdateWidget(MobileDetail old) {
+    super.didUpdateWidget(old);
+    if (old.isFavourite != widget.isFavourite) _favourite = widget.isFavourite;
+  }
+
+  void _toggleFavourite() {
+    setState(() => _favourite = !_favourite);
+    widget.onToggleFavourite?.call();
+  }
+
   static String _clock(Duration d) =>
       '${d.inHours}:${d.inMinutes.remainder(60).toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
     return TouchScaffold(
-      title: title,
+      title: widget.title,
       onBack: () => Navigator.of(context).maybePop(),
-      action: onToggleFavourite == null
+      action: widget.onToggleFavourite == null
           ? null
           : TouchTile(
-              onTap: onToggleFavourite,
+              onTap: _toggleFavourite,
               semanticLabel:
-                  isFavourite ? 'Remove from favourites' : 'Add to favourites',
+                  _favourite ? 'Remove from favourites' : 'Add to favourites',
               child: SizedBox(
                 width: OpenTvTouchSpace.tapTarget,
                 height: OpenTvTouchSpace.tapTarget,
@@ -69,8 +96,8 @@ class MobileDetail extends StatelessWidget {
                   child: GlyphIcon(
                     Glyph.heart,
                     size: 20,
-                    filled: isFavourite,
-                    color: isFavourite
+                    filled: _favourite,
+                    color: _favourite
                         ? OpenTvColors.tally
                         : OpenTvColors.inkMuted,
                   ),
@@ -80,7 +107,7 @@ class MobileDetail extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: OpenTvTouchSpace.xxl),
         children: [
-          if (imageUrl != null)
+          if (widget.imageUrl != null)
             Padding(
               padding: OpenTvTouchSpace.page,
               child: ClipRRect(
@@ -94,7 +121,7 @@ class MobileDetail extends StatelessWidget {
                         color: OpenTvColors.artworkPlaceholder,
                       ),
                       Image.network(
-                        imageUrl!,
+                        widget.imageUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => const SizedBox(),
                       ),
@@ -113,29 +140,29 @@ class MobileDetail extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: OpenTvTouchType.hero),
-                if (subtitle != null) ...[
+                Text(widget.title, style: OpenTvTouchType.hero),
+                if (widget.subtitle != null) ...[
                   const SizedBox(height: OpenTvTouchSpace.xs),
-                  Text(subtitle!, style: OpenTvTouchType.bodyMuted),
+                  Text(widget.subtitle!, style: OpenTvTouchType.bodyMuted),
                 ],
                 const SizedBox(height: OpenTvTouchSpace.lg),
                 _Primary(
-                  label: resumeAt == null
+                  label: widget.resumeAt == null
                       ? 'Play'
-                      : 'Resume from ${_clock(resumeAt!)}',
-                  onTap: onPlay,
+                      : 'Resume from ${_clock(widget.resumeAt!)}',
+                  onTap: widget.onPlay,
                 ),
-                if (synopsis != null) ...[
+                if (widget.synopsis != null) ...[
                   const SizedBox(height: OpenTvTouchSpace.xl),
-                  Text(synopsis!, style: OpenTvTouchType.body),
+                  Text(widget.synopsis!, style: OpenTvTouchType.body),
                 ],
-                if (facts.isNotEmpty) ...[
+                if (widget.facts.isNotEmpty) ...[
                   const SizedBox(height: OpenTvTouchSpace.xl),
                   Wrap(
                     spacing: OpenTvTouchSpace.xl,
                     runSpacing: OpenTvTouchSpace.md,
                     children: [
-                      for (final (label, value) in facts)
+                      for (final (label, value) in widget.facts)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
@@ -158,7 +185,7 @@ class MobileDetail extends StatelessWidget {
               ],
             ),
           ),
-          if (episodes.isNotEmpty) ...[
+          if (widget.episodes.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.fromLTRB(
                 OpenTvTouchSpace.gutter,
@@ -168,9 +195,9 @@ class MobileDetail extends StatelessWidget {
               ),
               child: Text('EPISODES', style: OpenTvTouchType.label),
             ),
-            for (final episode in episodes)
+            for (final episode in widget.episodes)
               TouchTile(
-                onTap: onEpisode == null ? null : () => onEpisode!(episode),
+                onTap: widget.onEpisode == null ? null : () => widget.onEpisode!(episode),
                 minHeight: 56,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -199,7 +226,7 @@ class MobileDetail extends StatelessWidget {
                 ),
               ),
           ],
-          if (cast.isNotEmpty) ...[
+          if (widget.cast.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.fromLTRB(
                 OpenTvTouchSpace.gutter,
@@ -215,7 +242,7 @@ class MobileDetail extends StatelessWidget {
                 spacing: OpenTvTouchSpace.sm,
                 runSpacing: OpenTvTouchSpace.sm,
                 children: [
-                  for (final name in cast)
+                  for (final name in widget.cast)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: OpenTvTouchSpace.md,

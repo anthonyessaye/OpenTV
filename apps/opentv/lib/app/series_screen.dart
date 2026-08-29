@@ -2,8 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
-import '../http_transport.dart';
 import 'host.dart';
+import 'source_service.dart';
 import 'stream_resolver.dart';
 
 /// One series: its seasons, and the episodes in the season being looked at.
@@ -20,6 +20,7 @@ class SeriesScreen extends StatefulWidget {
     required this.source,
     required this.series,
     required this.resolver,
+    required this.service,
     required this.onPlay,
     this.host = const Host(),
   });
@@ -28,6 +29,9 @@ class SeriesScreen extends StatefulWidget {
   final Source source;
   final SeriesEntry series;
   final StreamResolver resolver;
+
+  /// Owns the portal fetch, and the password it needs.
+  final SourceService service;
 
   /// Hands a chosen episode back to whoever owns navigation.
   /// Called with the chosen episode and the season in the order it is drawn.
@@ -63,18 +67,16 @@ class _SeriesScreenState extends State<SeriesScreen> {
   }
 
   Future<void> _load() async {
-    var episodes = await widget.db.episodesOf(
-      widget.source.id,
-      widget.series.remoteId,
+    // The fetch lives in SourceService because the phone needs it too, and
+    // because the password it has to read back belongs on that side of the
+    // seam rather than on a screen.
+    final loaded = await widget.service.episodesFor(
+      widget.source,
+      widget.series,
     );
-
-    // Nothing stored yet, and this is an Xtream source: ask the portal once.
-    if (episodes.isEmpty && widget.source.kind == SourceKind.xtream) {
-      final fetched = await _fetchEpisodes();
-      if (fetched != null) episodes = fetched;
-    }
-
+    final episodes = loaded.episodes;
     if (!mounted) return;
+    if (loaded.problem != null) setState(() => _problem = loaded.problem);
 
     final seasons =
         episodes.map((e) => e.season ?? 1).toSet().toList(growable: false)
@@ -110,70 +112,6 @@ class _SeriesScreenState extends State<SeriesScreen> {
       _season = seasons.isEmpty ? null : (lastWatched?.season ?? seasons.first);
       _loading = false;
     });
-  }
-
-  Future<List<Episode>?> _fetchEpisodes() async {
-    final reference = widget.source.credentialRef;
-    final username = widget.source.username;
-    if (reference == null || username == null) return null;
-
-    final password = await widget.host.readSecret(reference);
-    if (password == null) {
-      if (mounted) {
-        setState(() {
-          _problem =
-              'The account password could not be read back, so the '
-              'episode list cannot be fetched.';
-        });
-      }
-      return null;
-    }
-
-    final transport = HttpTransport();
-    try {
-      final fetcher = XtreamCatalogueFetcher(
-        credentials: XtreamCredentials(
-          host: widget.source.url,
-          username: username,
-          password: password,
-        ),
-        transport: transport,
-      );
-      final rows = await fetcher.fetchEpisodes(
-        widget.source.id,
-        widget.series.remoteId,
-      );
-      await widget.db.upsertEpisodes(rows);
-
-      // Recorded so a series with genuinely no episodes is not re-fetched on
-      // every open.
-      await widget.db.markEpisodesSynced(
-        widget.source.id,
-        widget.series.remoteId,
-        DateTime.now(),
-      );
-
-      // Awaited, not returned: the finally below closes the transport, and
-      // returning the future would close it mid-read.
-      return await widget.db.episodesOf(
-        widget.source.id,
-        widget.series.remoteId,
-      );
-    } on TransportException catch (error) {
-      if (mounted) {
-        setState(
-          () => _problem =
-              'The episode list could not be fetched. '
-              '${error.message}',
-        );
-      }
-      return null;
-    } on FatalSyncException catch (error) {
-      if (mounted) setState(() => _problem = error.message);
-      return null;
-    } finally {
-      transport.close();
-    }
   }
 
   /// How far through an episode the viewer is, or null when it is untouched.

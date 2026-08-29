@@ -160,6 +160,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('FR'), findsOneWidget);
+
+    // The result sits below the button, and a lazy ListView does not build
+    // what is off screen.
+    await tester.scrollUntilVisible(
+      find.textContaining('1 more title.'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.textContaining('1 more title.'), findsOneWidget);
   });
 }

@@ -569,6 +569,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
             source: widget.source,
             series: entry,
             resolver: widget.resolver,
+            service: widget.service,
             onPlay: (episode, queue) => _play(episode, queue: queue),
           ),
         ),

@@ -90,6 +90,23 @@ class _MobilePlayerState extends State<MobilePlayer> {
   /// the contract — Dart never learns which one is underneath.
   bool _ended = false;
 
+  /// What the engine says went wrong, when it says anything.
+  ///
+  /// Both natives have reported this in every state snapshot since the
+  /// contract was written, and neither interface has ever read it. A stream
+  /// that fails therefore produced a black screen with a title bar over it
+  /// and no explanation — indistinguishable, to a viewer, from the app having
+  /// done nothing at all when they tapped.
+  String? _failure;
+
+  /// Whether a picture has ever arrived.
+  ///
+  /// A stream can fail without the engine calling it an error: the connection
+  /// opens, nothing decodes, and the player sits on black for ever. Saying so
+  /// after a few seconds is better than a screen that says nothing.
+  bool _sawVideo = false;
+  DateTime? _openedAt;
+
   DateTime _lastReport = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
@@ -113,6 +130,7 @@ class _MobilePlayerState extends State<MobilePlayer> {
 
   void _onCreated(int id) {
     _channel = MethodChannel('opentv/player/$id');
+    _openedAt = DateTime.now();
     _poll = Timer.periodic(const Duration(milliseconds: 500), (_) => _read());
     // Once the stream has had a moment to open. Asked immediately the engine
     // reports nothing, because it has not parsed the container yet.
@@ -139,6 +157,10 @@ class _MobilePlayerState extends State<MobilePlayer> {
       final h = state['height'];
       if (w is int) _width = w;
       if (h is int) _height = h;
+      if ((w is int && w > 0) || state['hasVideoOut'] == true) _sawVideo = true;
+
+      final reported = state['error'];
+      _failure = reported is String && reported.isNotEmpty ? reported : null;
 
       // The end of a film is the end of it; the end of an episode is the
       // moment the next one is most wanted, and until now the phone simply
@@ -247,12 +269,33 @@ class _MobilePlayerState extends State<MobilePlayer> {
     _restartHide();
   }
 
+  /// What to tell the viewer, or null while there is nothing wrong.
+  ///
+  /// The engine's own message where there is one. Failing that, a stream that
+  /// has been open for a while with no picture and no sound is reported as
+  /// what it is, because the alternative is a black screen that never
+  /// explains itself.
+  String? get _trouble {
+    if (_failure case final reported?) return reported;
+    final opened = _openedAt;
+    if (opened == null || _sawVideo || _playing) return null;
+    if (DateTime.now().difference(opened) < const Duration(seconds: 12)) {
+      return null;
+    }
+    return 'Nothing is coming through from this stream. The provider may be '
+        'out of connections, or this channel may be off the air.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final length = _length;
 
     return ColoredBox(
-      color: OpenTvColors.sunken,
+      // Black, always. The platform view punches a hole through everything
+      // Flutter paints under it, so on a stream that never produces a frame
+      // this is the whole screen — and it must read as a player that is open
+      // and has nothing, rather than as a tap that did nothing.
+      color: OpenTvColors.ground,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _toggleChrome,
@@ -277,6 +320,11 @@ class _MobilePlayerState extends State<MobilePlayer> {
               startAt: widget.startAt,
               onCreated: _onCreated,
             ),
+            if (_trouble case final trouble?)
+              _Trouble(
+                message: trouble,
+                onBack: () => Navigator.of(context).maybePop(),
+              ),
             // The chrome is faded rather than removed. A surface that comes
             // and goes from the tree re-lays-out the platform view under it,
             // and on Android that is a visible flicker of the hole punched
@@ -945,6 +993,63 @@ class _EndCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What the engine said, over the black it would otherwise leave.
+///
+/// Stated rather than hidden, which is the same rule the tunnel screen and
+/// the aspect note follow. A provider out of connections and a channel off
+/// the air both look exactly like a broken app otherwise, and the viewer has
+/// no way to tell the difference or to know the tap registered at all.
+class _Trouble extends StatelessWidget {
+  const _Trouble({required this.message, required this.onBack});
+
+  final String message;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: OpenTvColors.ground,
+        child: SafeArea(
+          child: Padding(
+            padding: OpenTvTouchSpace.page,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('NOTHING IS PLAYING', style: OpenTvTouchType.label),
+                const SizedBox(height: OpenTvTouchSpace.sm),
+                Text(message, style: OpenTvTouchType.body),
+                const SizedBox(height: OpenTvTouchSpace.lg),
+                TouchTile(
+                  onTap: onBack,
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: OpenTvTouchSpace.md,
+                      horizontal: OpenTvTouchSpace.xl,
+                    ),
+                    decoration: BoxDecoration(
+                      color: OpenTvColors.tally,
+                      borderRadius: OpenTvRadius.tile,
+                    ),
+                    child: Text(
+                      'Go back',
+                      style: OpenTvTouchType.body.copyWith(
+                        color: OpenTvColors.ground,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

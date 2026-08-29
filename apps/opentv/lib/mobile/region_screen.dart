@@ -31,6 +31,21 @@ class RegionScreen extends StatefulWidget {
   State<RegionScreen> createState() => _RegionScreenState();
 }
 
+/// What this cannot do, said on the screen rather than discovered.
+///
+/// The same rule the tunnel screen follows in telling a viewer that a tunnel
+/// moves who can see their traffic rather than making it private. A region is
+/// not a fact the provider reports; it is a guess read out of the text it
+/// puts in front of a title or a group, and every part of that guess can be
+/// wrong in a way the viewer would otherwise have to work out alone.
+const _caveat =
+    'Regions are read out of the text a provider puts in front of its titles '
+    'and groups — there is no field for them, so this is a guess. It misses '
+    'anything written in an unexpected shape (Arabic | rather than AR |), it '
+    'cannot tell a language from a country from a label like 4K or VIP, and '
+    'a title filed under the wrong group inherits the wrong region. Anything '
+    'it cannot read is left visible on purpose.';
+
 class _RegionScreenState extends State<RegionScreen> {
   static const _kinds = [ItemKind.live, ItemKind.movie, ItemKind.series];
   static const _labels = ['Live', 'Films', 'Series'];
@@ -176,6 +191,15 @@ class _RegionScreenState extends State<RegionScreen> {
                 style: OpenTvTouchType.data,
               ),
             ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                OpenTvTouchSpace.gutter,
+                OpenTvTouchSpace.sm,
+                OpenTvTouchSpace.gutter,
+                0,
+              ),
+              child: Text(_caveat, style: OpenTvTouchType.caption),
+            ),
           ],
           Expanded(
             child: _loading
@@ -223,8 +247,7 @@ class _RegionScreenState extends State<RegionScreen> {
                                       '${labelled + unlabelled} titles here '
                                       'carry no region prefix. Those are '
                                       'always shown, whatever is hidden '
-                                      'above — most catalogues label only '
-                                      'some of what they carry.',
+                                      'above.',
                               style: OpenTvTouchType.caption,
                             ),
                           ),
