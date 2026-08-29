@@ -83,7 +83,11 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen>
+    with WidgetsBindingObserver, PauseWhenBackgrounded {
+  @override
+  MethodChannel? get playerChannel => _channel;
+
   MethodChannel? _channel;
   Timer? _poll;
   PlaybackStatus _status = const PlaybackStatus(phase: PlaybackPhase.opening);
@@ -159,11 +163,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _restartIdleTimer();
   }
 
   @override
+  void onBackgroundPause() {
+    // The controls come back with the pause. A television left on a frozen
+    // frame with no chrome gives a viewer nothing to press and no clue why.
+    if (mounted) _showChrome();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     _idle?.cancel();
     // The last thing recorded, and the one that matters most: a viewer who

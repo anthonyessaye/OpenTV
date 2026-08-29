@@ -185,3 +185,43 @@ class _NoEngine extends StatelessWidget {
     );
   }
 }
+
+/// Stops playback when the app leaves the foreground.
+///
+/// A stream carrying on behind another app is the one behaviour nobody asks
+/// for: on a phone it plays audio over whatever the viewer switched to, on a
+/// television it holds the provider's single allowed connection open while
+/// nothing is watching, and on both it spends bandwidth on a picture no one
+/// can see.
+///
+/// Paused rather than stopped. Stopping releases the connection, which sounds
+/// tidier until coming back has to open a new one — and a provider allowing
+/// one connection will often refuse it, so returning to the app would break
+/// the thing that had been working.
+///
+/// [AppLifecycleState.inactive] is deliberately ignored, for the reason the
+/// tunnel ignores it: it fires for a volume overlay or a system toast, and
+/// pausing a film for one of those would be maddening.
+mixin PauseWhenBackgrounded<T extends StatefulWidget> on State<T>
+    implements WidgetsBindingObserver {
+  /// The channel to pause, or null before the engine exists.
+  MethodChannel? get playerChannel;
+
+  /// Called after a background pause, so the chrome can come back with it.
+  /// A player paused with its controls hidden is a frozen picture.
+  void onBackgroundPause() {}
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        playerChannel?.invokeMethod<void>('pause');
+        onBackgroundPause();
+      case AppLifecycleState.resumed:
+      case AppLifecycleState.inactive:
+        break;
+    }
+  }
+}

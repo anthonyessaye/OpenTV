@@ -920,37 +920,47 @@ class _LiveTabState extends State<_LiveTab> {
             _loadChannels();
           },
         ),
-        Expanded(child: _list(channels, resume, resumeUrl)),
-      ],
-    );
-  }
-
-  Widget _list(List<Channel> channels, Channel? resume, String? resumeUrl) {
-    return ListView.builder(
-      // One extra row for the preview, when there is one.
-      itemCount: channels.length + (resumeUrl == null ? 0 : 1),
-      itemBuilder: (context, index) {
-        if (resumeUrl != null && index == 0) {
-          return _MiniPlayer(
+        // Above the list rather than the first row of it.
+        //
+        // A platform view is a real SurfaceView composited into the window,
+        // not something Flutter paints — so it does not move with a scroll
+        // the way the rows around it do. Inside the list it lagged its own
+        // position by a frame and smeared the rows it passed, which is the
+        // bug reported as the preview showing content behind it. Nothing
+        // Flutter can do inside a scrollable fixes that; taking it out of
+        // the scrollable does.
+        //
+        // It reads better here anyway: this is what is playing, and what is
+        // playing should not be something the viewer scrolls away from.
+        if (resumeUrl != null && resume != null)
+          _MiniPlayer(
             url: resumeUrl,
-            title: resume!.name,
+            title: resume.name,
             streamOptions: widget.optionsFor(Playable.channel(resume)),
             onSelect: () => widget.onPlay(
               Playable.channel(resume),
               channels,
             ),
-          );
-        }
-        final i = resumeUrl == null ? index : index - 1;
-        return ChannelRow(
-        name: channels[i].name,
-        number: channels[i].number?.toString(),
-        logoUrl: channels[i].iconUrl,
+          ),
+        Expanded(child: _list(channels)),
+      ],
+    );
+  }
+
+  Widget _list(List<Channel> channels) {
+    return ListView.builder(
+      itemCount: channels.length,
+      itemBuilder: (context, index) => ChannelRow(
+        name: channels[index].name,
+        number: channels[index].number?.toString(),
+        logoUrl: channels[index].iconUrl,
         // The whole visible list travels with it, so a flick in the player
         // moves to the next channel of what was being browsed.
-          onTap: () => widget.onPlay(Playable.channel(channels[i]), channels),
-        );
-      },
+        onTap: () => widget.onPlay(
+          Playable.channel(channels[index]),
+          channels,
+        ),
+      ),
     );
   }
 }

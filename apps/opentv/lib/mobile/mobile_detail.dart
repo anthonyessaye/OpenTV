@@ -64,6 +64,39 @@ class _MobileDetailState extends State<MobileDetail> {
   /// the screen that pushed this one re-reads on pop regardless.
   late bool _favourite = widget.isFavourite;
 
+  /// Which season is being looked at, or null when the show has only one.
+  ///
+  /// Opened on the season the viewer was last in where that is known, the way
+  /// the television does it. Without a chooser a show with nine seasons was a
+  /// single list of two hundred rows, and getting to season six meant
+  /// scrolling past five of them.
+  late int? _season = _seasons.isEmpty ? null : _seasons.first;
+
+  List<int> get _seasons {
+    final seen = <int>{for (final e in widget.episodes) e.season ?? 1};
+    return seen.toList()..sort();
+  }
+
+  List<Episode> get _inSeason {
+    if (_season == null) return widget.episodes;
+    return [
+      for (final e in widget.episodes)
+        if ((e.season ?? 1) == _season) e,
+    ];
+  }
+
+  /// What to call one episode.
+  ///
+  /// Providers name these as file paths — every episode of a show begins with
+  /// the same fifty characters — so the part after the S01E01 marker is what
+  /// gets the width. Numbered where there is nothing after it, because
+  /// "Episode 4" is a better label than a path.
+  String _labelFor(Episode episode) =>
+      TitleCleaner.episodeName(episode.title) ??
+      (episode.episodeNumber == null
+          ? episode.title
+          : 'Episode ${episode.episodeNumber}');
+
   @override
   void didUpdateWidget(MobileDetail old) {
     super.didUpdateWidget(old);
@@ -195,7 +228,45 @@ class _MobileDetailState extends State<MobileDetail> {
               ),
               child: Text('EPISODES', style: OpenTvTouchType.label),
             ),
-            for (final episode in widget.episodes)
+            if (_seasons.length > 1)
+              SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: OpenTvTouchSpace.page,
+                  itemCount: _seasons.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(width: OpenTvTouchSpace.sm),
+                  itemBuilder: (context, i) {
+                    final season = _seasons[i];
+                    final selected = season == _season;
+                    return TouchTile(
+                      onTap: () => setState(() => _season = season),
+                      child: Container(
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: OpenTvTouchSpace.lg,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? OpenTvColors.tally
+                              : OpenTvColors.surface,
+                          borderRadius: OpenTvRadius.tile,
+                        ),
+                        child: Text(
+                          'Season $season',
+                          style: OpenTvTouchType.section.copyWith(
+                            color: selected
+                                ? OpenTvColors.ground
+                                : OpenTvColors.ink,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            for (final episode in _inSeason)
               TouchTile(
                 onTap: widget.onEpisode == null ? null : () => widget.onEpisode!(episode),
                 minHeight: 56,
@@ -215,7 +286,7 @@ class _MobileDetailState extends State<MobileDetail> {
                       ),
                       Expanded(
                         child: Text(
-                          episode.title,
+                          _labelFor(episode),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: OpenTvTouchType.body,

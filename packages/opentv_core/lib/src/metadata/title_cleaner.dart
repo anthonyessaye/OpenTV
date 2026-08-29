@@ -137,6 +137,48 @@ class TitleCleaner {
     '\u1D2C-\u1D6A\u02B0-\u02FF\u2070-\u209F]',
   );
 
+  /// The episode's own name, out of what the provider called the file.
+  ///
+  /// Providers name episodes as paths rather than as titles:
+  /// `4K-A+ - Acapulco (2021) (US) - S01E01 - Pilot` is one row of a real
+  /// catalogue. Every episode of a show therefore begins with the same fifty
+  /// characters, and a list of them is a column of identical text — which is
+  /// what both interfaces were drawing, because both showed the raw string.
+  ///
+  /// The marker is the seam. Everything before `S01E01` is the show, the
+  /// year, the region and the quality — all of it repeated on every row and
+  /// all of it already known from the series the viewer opened. Everything
+  /// after it is the part that differs, which is the only part worth the
+  /// width.
+  ///
+  /// Null when there is nothing after the marker, or no marker at all.
+  /// A caller then has a real choice to make — "Episode 4" is a better label
+  /// than a file path, and only the caller knows the number.
+  static String? episodeName(String raw) {
+    final match = _seasonEpisode.firstMatch(raw);
+    if (match == null) return null;
+
+    var rest = raw.substring(match.end);
+    // Providers separate with a dash, an en dash, a colon or a full stop, and
+    // occasionally with more than one of them.
+    rest = rest.replaceFirst(RegExp(r'^[\s\-–—:.\|_]+'), '');
+    rest = rest.replaceAll(_fancy, ' ').replaceAll(_decoration, ' ');
+
+    // Quality and language trail these as much as they trail a film.
+    var tokens = rest.split(RegExp(r'[\s\.\-_|]+')).where((t) => t.isNotEmpty).toList();
+    while (tokens.isNotEmpty) {
+      final last = tokens.last.toUpperCase().replaceAll(RegExp(r'[^\w]'), '');
+      if (_qualities.contains(last) || _languages.contains(last)) {
+        tokens.removeLast();
+      } else {
+        break;
+      }
+    }
+
+    final name = tokens.join(' ').trim();
+    return name.isEmpty ? null : name;
+  }
+
   static CleanedTitle clean(String raw) {
     var working = raw;
     String? region;

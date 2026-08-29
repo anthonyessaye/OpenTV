@@ -257,7 +257,13 @@ class _SeriesScreenState extends State<SeriesScreen> {
                           final episode = inSeason[index];
                           final state = _progress[episode.remoteId];
                           return EpisodeTile(
-                            title: episode.title,
+                            // The provider's own string is a file path that
+                            // repeats the show, the year and the region on
+                            // every row, so a season reads as one sentence
+                            // written out twenty times.
+                            title: TitleCleaner.episodeName(episode.title) ??
+                                'Episode '
+                                    '${episode.episodeNumber ?? index + 1}',
                             season: episode.season ?? 1,
                             episodeNumber: episode.episodeNumber ?? index + 1,
                             synopsis: episode.plot,

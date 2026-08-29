@@ -62,10 +62,39 @@ class MobilePlayer extends StatefulWidget {
   State<MobilePlayer> createState() => _MobilePlayerState();
 }
 
-class _MobilePlayerState extends State<MobilePlayer> {
+class _MobilePlayerState extends State<MobilePlayer>
+    with WidgetsBindingObserver, PauseWhenBackgrounded {
+  @override
+  MethodChannel? get playerChannel => _channel;
+
+  @override
+  void onBackgroundPause() {
+    // The controls come back with the pause. A frozen frame with no chrome
+    // over it gives the viewer nothing to press and no clue why it stopped.
+    if (!mounted) return;
+    setState(() {
+      _playing = false;
+      _chrome = true;
+    });
+    _hide?.cancel();
+  }
+
   MethodChannel? _channel;
   Timer? _poll;
   Timer? _hide;
+
+  /// Whether the video surface has been put into the tree yet.
+  ///
+  /// Held back until the route has finished animating in. A platform view is
+  /// not painted by Flutter — on Android it is a real SurfaceView composited
+  /// into the window — so it does not fade with everything else, and creating
+  /// one mid-transition puts an unfaded, empty surface over a screen that is
+  /// still half visible. What that looks like is the player's controls
+  /// floating on top of the previous screen, which is exactly what it was.
+  ///
+  /// Two hundred milliseconds later than before, and only on opening.
+  bool _ready = false;
+  bool _awaitingRoute = false;
 
   bool _chrome = true;
   bool _playing = true;
@@ -110,8 +139,29 @@ class _MobilePlayerState extends State<MobilePlayer> {
   DateTime _lastReport = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_ready || _awaitingRoute) return;
+
+    final animation = ModalRoute.of(context)?.animation;
+    if (animation == null || animation.isCompleted) {
+      _ready = true;
+      return;
+    }
+    _awaitingRoute = true;
+    void listen(AnimationStatus status) {
+      if (!status.isCompleted) return;
+      animation.removeStatusListener(listen);
+      if (mounted) setState(() => _ready = true);
+    }
+    animation.addStatusListener(listen);
+  }
+
+  @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Landscape is not forced. A phone held upright showing a 16:9 stream in
     // the top third is a legitimate way to watch something while doing
     // something else, and taking the choice away to make the picture bigger
@@ -121,6 +171,7 @@ class _MobilePlayerState extends State<MobilePlayer> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     _hide?.cancel();
     _flush();
@@ -314,12 +365,13 @@ class _MobilePlayerState extends State<MobilePlayer> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            PlayerSurface(
-              url: widget.url,
-              streamOptions: widget.streamOptions,
-              startAt: widget.startAt,
-              onCreated: _onCreated,
-            ),
+            if (_ready)
+              PlayerSurface(
+                url: widget.url,
+                streamOptions: widget.streamOptions,
+                startAt: widget.startAt,
+                onCreated: _onCreated,
+              ),
             if (_trouble case final trouble?)
               _Trouble(
                 message: trouble,
