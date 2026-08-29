@@ -1151,10 +1151,28 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// happened.
   Future<int> backfillRegions() async {
     var filled = 0;
-    for (final table in ['channels', 'movies', 'series_entries']) {
+    for (final table in _regionTables) {
       filled += await _backfillRegionsIn(table);
     }
+    // The pass reached the end of all three tables, so every null still there
+    // is a title the provider never put a prefix on. Recording the size of
+    // the catalogue it finished on is what stops the next launch reading a
+    // hundred thousand names to learn the same thing again.
+    await setPreference(_regionMarkKey, '${await _catalogueRows()}');
     return filled;
+  }
+
+  static const _regionTables = ['channels', 'movies', 'series_entries'];
+  static const _regionMarkKey = 'regions-backfilled-rows';
+
+  Future<int> _catalogueRows() async {
+    var total = 0;
+    for (final table in _regionTables) {
+      final row =
+          await customSelect('SELECT COUNT(*) AS n FROM $table').getSingle();
+      total += row.read<int>('n');
+    }
+    return total;
   }
 
   /// One table's worth, addressed by name.
@@ -1172,46 +1190,69 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   Future<int> _backfillRegionsIn(String table) async {
     const window = 5000;
     var filled = 0;
+    var after = 0;
 
     while (true) {
       final rows = await customSelect(
         'SELECT rowid AS rid, name FROM $table '
-        'WHERE region IS NULL ORDER BY rowid LIMIT $window',
+        'WHERE region IS NULL AND rowid > ? ORDER BY rowid LIMIT $window',
+        variables: [Variable<int>(after)],
       ).get();
       if (rows.isEmpty) break;
 
-      final updates = <MapEntry<int, String>>[];
+      // The cursor advances on every page, whether or not the page wrote
+      // anything. An earlier version paged on `region IS NULL` alone and
+      // stopped as soon as a page held one unlabelled row, on the reasoning
+      // that the same page would otherwise be asked for for ever — true, and
+      // it meant the backfill gave up a few thousand rows into a catalogue of
+      // a hundred and eighty thousand. Every test used fewer rows than one
+      // page, where stopping after the first page is indistinguishable from
+      // finishing, so all of them passed while hiding a region on a real
+      // provider removed almost nothing.
+      after = rows.last.read<int>('rid');
+
+      // Grouped by region and written a chunk of rowids at a time, rather
+      // than one statement per row. The app opens SQLite on the main isolate,
+      // so a hundred and eighty thousand round trips are not slow, they are a
+      // frozen app — which on Android is an ANR and on a television is a
+      // black screen nobody can explain. Grouping turns the same work into
+      // roughly a hundred statements.
+      final byRegion = <String, List<int>>{};
       for (final row in rows) {
         final region = TitleCleaner.clean(row.read<String>('name')).region;
         if (region != null) {
-          updates.add(MapEntry(row.read<int>('rid'), region));
+          (byRegion[region] ??= <int>[]).add(row.read<int>('rid'));
         }
       }
 
-      if (updates.isEmpty) {
-        // Everything left is genuinely unlabelled. Stopping here rather than
-        // paging on, because the query only ever returns nulls and none of
-        // them will ever produce a region.
-        break;
+      if (byRegion.isNotEmpty) {
+        await transaction(() async {
+          for (final entry in byRegion.entries) {
+            // The rowids are SQLite's own and the region crosses as a
+            // variable, so nothing a provider typed is interpolated here.
+            for (var i = 0; i < entry.value.length; i += _idsPerStatement) {
+              final chunk = entry.value.skip(i).take(_idsPerStatement);
+              await customStatement(
+                'UPDATE $table SET region = ? '
+                'WHERE rowid IN (${chunk.join(',')})',
+                [entry.key],
+              );
+            }
+          }
+        });
+        filled += byRegion.values.fold(0, (sum, ids) => sum + ids.length);
       }
 
-      await transaction(() async {
-        for (final update in updates) {
-          await customStatement(
-            'UPDATE $table SET region = ? WHERE rowid = ?',
-            [update.value, update.key],
-          );
-        }
-      });
-      filled += updates.length;
-
-      // A page where only some rows had a prefix would otherwise be asked for
-      // again for ever, since the unlabelled ones stay null.
-      if (updates.length < rows.length) break;
+      // Back to the event queue between pages. Microtasks alone would not let
+      // a frame through, and this runs while the app is on screen.
+      await Future<void>.delayed(Duration.zero);
     }
 
     return filled;
   }
+
+  /// Rowids per UPDATE, kept clear of SQLite's limit on an expression's size.
+  static const _idsPerStatement = 900;
 
   /// Whether any row could carry a region and does not.
   ///
@@ -1219,13 +1260,29 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// catalogue. Used to decide whether the backfill is worth running at all,
   /// so an install that is already filled pays nothing.
   Future<bool> needsRegionBackfill() async {
-    for (final table in ['channels', 'movies', 'series_entries']) {
+    var missing = false;
+    for (final table in _regionTables) {
       final row = await customSelect(
         'SELECT EXISTS(SELECT 1 FROM $table WHERE region IS NULL) AS missing',
       ).getSingle();
-      if (row.read<int>('missing') == 1) return true;
+      if (row.read<int>('missing') == 1) {
+        missing = true;
+        break;
+      }
     }
-    return false;
+    if (!missing) return false;
+
+    // Nulls on their own do not mean there is work: most of a well-kept
+    // catalogue carries no prefix at all, so a finished pass leaves plenty of
+    // them and asking again would re-read every one on every launch.
+    //
+    // Compared against the row count the last completed pass finished on
+    // rather than a plain "done" flag, so a sync that brings in rows this has
+    // never seen is noticed. A flag would be a promise about every future
+    // import path, and this codebase's most common failure is exactly that
+    // kind of promise going unkept on one side.
+    final mark = int.tryParse(await preference(_regionMarkKey) ?? '');
+    return mark == null || mark != await _catalogueRows();
   }
 
   /// Every region present in one kind, with how many rows carry it.
