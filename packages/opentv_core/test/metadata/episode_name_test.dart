@@ -49,4 +49,56 @@ void main() {
       '99 Problems',
     );
   });
+
+  group('the show behind the episode', () {
+    test('it is everything before the marker, cleaned', () {
+      // The `4K-A+` prefix goes, the year goes, and the country tag stays.
+      // Trailing `(US)` is kept on purpose: it is a provider's routing tag
+      // about as often as it is part of the real name — "The Office (US)"
+      // and "Shameless (US)" are what those shows are actually called — and
+      // dropping it would search for the wrong show half the time.
+      expect(
+        TitleCleaner.showName('4K-A+ - Acapulco (2021) (US) - S01E01 - Pilot'),
+        'Acapulco (US)',
+      );
+    });
+
+    test('the separator does not survive into the search', () {
+      // A trailing dash makes the query a phrase that matches nothing.
+      expect(TitleCleaner.showName('Supernatural - S04E01 - Lazarus'),
+          'Supernatural');
+      expect(TitleCleaner.showName('Supernatural.S04E01.Lazarus'),
+          'Supernatural');
+    });
+
+    test('a region prefix is stripped like any other title', () {
+      expect(TitleCleaner.showName('AR | Breaking Bad S01E01'), 'Breaking Bad');
+    });
+
+    test('no marker means this was never an episode', () {
+      expect(TitleCleaner.showName('Casino Royale (2006)'), isNull);
+    });
+
+    test('a marker with nothing before it gives nothing', () {
+      expect(TitleCleaner.showName('S04E01'), isNull);
+    });
+  });
+
+  group('provider prefixes with punctuation in them', () {
+    test('a plus and a hyphen in the tag are still a tag', () {
+      // `4K-A+ - Acapulco` kept its prefix on every screen while
+      // `EX-YU | Acapulco` lost it, because the hyphenated shape had been
+      // added to two of the three alternatives and not the third.
+      final cleaned = TitleCleaner.clean('4K-A+ - Acapulco (2021)');
+      expect(cleaned.region, '4K-A+');
+      expect(cleaned.title, 'Acapulco');
+    });
+
+    test('a title that merely starts with capitals is left alone', () {
+      // The reason the separator is required at all: without it this loses
+      // its first word.
+      expect(TitleCleaner.clean('MAD Detective').region, isNull);
+      expect(TitleCleaner.clean('MAD Detective').title, 'MAD Detective');
+    });
+  });
 }

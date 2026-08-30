@@ -114,6 +114,13 @@ void main() {
     expect(find.textContaining('themoviedb.org'), findsWidgets);
 
     await activate(tester, 'SKIP — NAMES ONLY');
+
+    // Subtitles, which is a key from a second website and therefore carries
+    // its own instructions for the same reason TMDB's step does.
+    expect(find.text('SUBTITLES'), findsOneWidget);
+    expect(find.textContaining('opensubtitles.com'), findsWidgets);
+
+    await activate(tester, 'SKIP');
     expect(find.text('A PIN for the things you lock'), findsOneWidget);
 
     await activate(tester, 'SKIP — NO PIN');

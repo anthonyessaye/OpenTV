@@ -91,7 +91,13 @@ class _MobileHomeState extends State<MobileHome> {
     if (given != null) return given;
     if (item.isLive) return null;
     final cleaned = TitleCleaner.clean(item.title);
-    return SubtitleQuery(title: cleaned.title, year: cleaned.year);
+    final show = TitleCleaner.showName(item.title);
+    return SubtitleQuery(
+      title: show ?? cleaned.title,
+      year: cleaned.year,
+      season: cleaned.season,
+      episode: cleaned.episode,
+    );
   }
 
   Future<void> _play(

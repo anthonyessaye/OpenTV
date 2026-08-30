@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
+
+import 'app/subtitle_service.dart';
 
 /// The player chrome over live libVLC output.
 ///
@@ -30,6 +34,8 @@ class PlayerScreen extends StatefulWidget {
     this.nowTitle,
     this.nowStart,
     this.nowEnd,
+    this.subtitleService,
+    this.subtitleQuery,
   });
 
   final String streamUrl;
@@ -78,6 +84,16 @@ class PlayerScreen extends StatefulWidget {
   final String? nowTitle;
   final DateTime? nowStart;
   final DateTime? nowEnd;
+
+  /// Looking a subtitle up, when a key has been stored for it.
+  ///
+  /// Null on a live channel and in tests. Absent rather than present and
+  /// failing, which is the rule the rest of these controls follow.
+  final SubtitleService? subtitleService;
+
+  /// What to search for. Built by whoever opened the player, because the
+  /// player's own title is the provider's file path and matches nothing.
+  final SubtitleQuery? subtitleQuery;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -164,6 +180,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _checkSearchable();
     _restartIdleTimer();
   }
 
@@ -176,6 +193,10 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   @override
   void dispose() {
+    // A downloaded subtitle belongs to the sitting it was fetched for.
+    if (_loadedSubtitle case final file?) {
+      widget.subtitleService?.discard(file);
+    }
     WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     _idle?.cancel();
@@ -389,6 +410,119 @@ class _PlayerScreenState extends State<PlayerScreen>
         : 'Source $width×$height, a different shape from the screen.';
   }
 
+  /// What a search turned up.
+  List<SubtitleCandidate>? _found;
+  bool _searching = false;
+  String? _searchNote;
+  File? _loadedSubtitle;
+  bool _canSearch = false;
+
+  Future<void> _checkSearchable() async {
+    final service = widget.subtitleService;
+    if (service == null || !(widget.subtitleQuery?.isUsable ?? false)) return;
+    final ready = await service.isConfigured;
+    if (mounted) setState(() => _canSearch = ready);
+  }
+
+  Future<void> _search() async {
+    final service = widget.subtitleService;
+    final query = widget.subtitleQuery;
+    if (service == null || query == null) return;
+
+    setState(() {
+      _searching = true;
+      _searchNote = null;
+      _found = null;
+      _sheet = _Sheet.find;
+    });
+
+    try {
+      final found = await service.search(query);
+      if (!mounted) return;
+      setState(() {
+        _found = found;
+        _searching = false;
+        _searchNote =
+            found.isEmpty ? 'Nothing was found for “${query.title}”.' : null;
+      });
+    } on SubtitleServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _found = const [];
+        _searchNote = error.message;
+      });
+    }
+  }
+
+  Future<void> _useSubtitle(SubtitleCandidate candidate) async {
+    final service = widget.subtitleService;
+    if (service == null) return;
+    setState(() {
+      _searching = true;
+      _searchNote = null;
+    });
+
+    try {
+      final file = await service.fetch(candidate);
+      final previous = _loadedSubtitle;
+      _loadedSubtitle = file;
+      if (previous != null) await service.discard(previous);
+
+      await _channel?.invokeMethod<void>('addSubtitle', {
+        'path': file.path,
+        'language': candidate.language,
+      });
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _sheet = null;
+      });
+    } on SubtitleServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _searchNote = error.message;
+      });
+    }
+  }
+
+  /// Nudges the timing of a downloaded subtitle.
+  ///
+  /// The file is rewritten rather than the engine asked, because Media3 has
+  /// no subtitle offset at all — so the only adjustment that works on both
+  /// platforms is one applied to the text.
+  Future<void> _nudgeSubtitle(Duration by) async {
+    final service = widget.subtitleService;
+    if (service == null || !service.canAdjust) return;
+
+    final previous = _loadedSubtitle;
+    final file = await service.reshift(service.delay + by);
+    if (file == null || !mounted) return;
+
+    _loadedSubtitle = file;
+    await _channel?.invokeMethod<void>('addSubtitle', {'path': file.path});
+    // Only once the engine has the new one, or the file is pulled out from
+    // under a player still reading it.
+    if (previous != null) await service.discard(previous);
+    if (mounted) setState(() {});
+  }
+
+  /// Ids for the rows that are actions rather than tracks. Prefixed so they
+  /// cannot collide with a track id the engine invented.
+  static const _findId = 'opentv:find';
+  static const _earlierId = 'opentv:earlier';
+  static const _laterId = 'opentv:later';
+
+  String get _delayLabel {
+    final delay = widget.subtitleService?.delay ?? Duration.zero;
+    final seconds = delay.inMilliseconds / 1000;
+    return seconds == 0
+        ? 'Currently in sync'
+        : 'Currently ${seconds > 0 ? '+' : ''}'
+            '${seconds.toStringAsFixed(1)}s';
+  }
+
   Widget _chooser() {
     switch (_sheet!) {
       case _Sheet.aspect:
@@ -414,6 +548,40 @@ class _PlayerScreenState extends State<PlayerScreen>
           },
         );
 
+      case _Sheet.find:
+        final service = widget.subtitleService;
+        return TrackSheet(
+          title: 'Find subtitles',
+          note: _searching
+              ? 'Looking…'
+              : _searchNote ??
+                  'Best matches first. The release name is what says whether '
+                      'the timing will fit.',
+          options: [
+            for (final candidate in _found ?? const <SubtitleCandidate>[])
+              SheetOption(
+                id: '${candidate.fileId}',
+                label: candidate.release.isEmpty
+                    ? candidate.fileName ?? 'Subtitle'
+                    : candidate.release,
+                detail: [
+                  candidate.language.toUpperCase(),
+                  if (candidate.fromTrusted) 'trusted',
+                  if (candidate.hearingImpaired) 'SDH',
+                  '${candidate.downloads} downloads',
+                ].join('  ·  '),
+                selected: false,
+              ),
+          ],
+          onSelect: (id) {
+            if (id == null || service == null || _searching) return;
+            final candidate = (_found ?? const <SubtitleCandidate>[])
+                .where((c) => '${c.fileId}' == id)
+                .firstOrNull;
+            if (candidate != null) _useSubtitle(candidate);
+          },
+        );
+
       case _Sheet.audio:
       case _Sheet.subtitles:
         final wanted = _sheet == _Sheet.audio ? 'audio' : 'text';
@@ -432,8 +600,44 @@ class _PlayerScreenState extends State<PlayerScreen>
               selected: !tracks.any((t) => t.selected),
             ),
             for (final track in tracks) SheetOption.track(track),
+            // Offered from the subtitles sheet because that is where somebody
+            // looks at the moment they find the subtitles missing or wrong,
+            // which is precisely what this exists for.
+            if (_sheet == _Sheet.subtitles && _canSearch)
+              const SheetOption(
+                id: _findId,
+                label: 'Find online',
+                detail: 'Search OpenSubtitles for this title',
+                selected: false,
+              ),
+            if (_sheet == _Sheet.subtitles &&
+                (widget.subtitleService?.canAdjust ?? false)) ...[
+              const SheetOption(
+                id: _earlierId,
+                label: 'Subtitles earlier',
+                detail: 'Half a second at a time',
+                selected: false,
+              ),
+              SheetOption(
+                id: _laterId,
+                label: 'Subtitles later',
+                detail: _delayLabel,
+                selected: false,
+              ),
+            ],
           ],
           onSelect: (id) {
+            switch (id) {
+              case _findId:
+                _search();
+                return;
+              case _earlierId:
+                _nudgeSubtitle(const Duration(milliseconds: -500));
+                return;
+              case _laterId:
+                _nudgeSubtitle(const Duration(milliseconds: 500));
+                return;
+            }
             _channel?.invokeMethod<void>('selectTrack', {
               'type': wanted,
               'id': id,
@@ -588,7 +792,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 }
 
 /// Which chooser is open over the video.
-enum _Sheet { audio, subtitles, aspect }
+enum _Sheet { audio, subtitles, aspect, find }
 
 /// What is offered when an episode finishes.
 ///

@@ -4,7 +4,10 @@ import 'package:opentv_ui/opentv_ui.dart';
 
 import '../app/host.dart';
 import '../app/settings_screen.dart';
+import '../app/subtitle_service.dart';
+import 'mobile_parental.dart';
 import 'mobile_settings_screens.dart';
+import 'mobile_subtitles.dart';
 
 /// The three questions asked once, straight after a provider's catalogue
 /// lands.
@@ -39,6 +42,7 @@ class MobileSetupScreen extends StatefulWidget {
 class _MobileSetupScreenState extends State<MobileSetupScreen> {
   bool _hasPin = false;
   bool _hasTmdb = false;
+  bool _hasSubtitleKey = false;
   int _lockedCount = 0;
   int _hiddenCount = 0;
 
@@ -51,6 +55,8 @@ class _MobileSetupScreenState extends State<MobileSetupScreen> {
   Future<void> _read() async {
     final pin = await widget.host.readSecret(SettingsScreen.pinReference);
     final tmdb = await widget.host.readSecret(SettingsScreen.tmdbReference);
+    final subtitles =
+        await widget.host.readSecret(SubtitleService.keyReference);
     final locked = await widget.db.lockedCategories(widget.source.id);
     final categories = await widget.db.allCategoriesFor(
       widget.source.id,
@@ -60,6 +66,7 @@ class _MobileSetupScreenState extends State<MobileSetupScreen> {
     setState(() {
       _hasPin = pin != null;
       _hasTmdb = tmdb != null;
+      _hasSubtitleKey = subtitles != null;
       _lockedCount = locked.length;
       _hiddenCount = categories.where((c) => c.hidden).length;
     });
@@ -80,8 +87,8 @@ class _MobileSetupScreenState extends State<MobileSetupScreen> {
         padding: const EdgeInsets.all(OpenTvTouchSpace.gutter),
         children: [
           const Text(
-            'Three things worth setting now. All of them can wait, and all of '
-            'them can be changed later in settings.',
+            'A few things worth setting now. All of them can wait, and all '
+            'of them can be changed later in settings.',
             style: OpenTvTouchType.bodyMuted,
           ),
           const SizedBox(height: OpenTvTouchSpace.xl),
@@ -111,17 +118,26 @@ class _MobileSetupScreenState extends State<MobileSetupScreen> {
                 : 'A PIN removes chosen categories from browsing entirely, '
                     'rather than greying them out.',
             done: _hasPin,
+            // The real panel rather than the generic secret screen. That
+            // screen could set a PIN and offered nothing that locked a
+            // category with it, while its own words spoke of "categories you
+            // lock" — the settings row was pointed at the panel and this was
+            // left behind.
             onTap: () => _push(
-              const MobileSecretScreen(
-                title: 'Parental lock',
-                reference: SettingsScreen.pinReference,
-                digitsOnly: true,
-                explanation:
-                    'Categories you lock are removed from browsing entirely '
-                    'rather than greyed out, so nothing advertises what is '
-                    'behind the PIN. Four digits or more.',
+              MobileParentalScreen(
+                db: widget.db,
+                sourceId: widget.source.id,
               ),
             ),
+          ),
+          _Step(
+            title: 'Subtitles',
+            detail: _hasSubtitleKey
+                ? 'A key is stored. The player can look subtitles up.'
+                : 'Providers often ship none, or ones timed for another cut. '
+                    'A free OpenSubtitles key lets the player find others.',
+            done: _hasSubtitleKey,
+            onTap: () => _push(const MobileSubtitlesScreen()),
           ),
           _Step(
             title: 'Anything you would rather not see',

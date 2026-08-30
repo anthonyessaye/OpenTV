@@ -60,12 +60,20 @@ class TitleCleaner {
   /// it: the pattern took the hyphen as its separator and stopped. Harmless
   /// while the region was only used to strip a prefix off a title, and wrong
   /// the moment it became a label somebody chooses from.
+  /// A tag is letters and digits, and providers join several with hyphens
+  /// and plus signs: `EX-YU`, `4K-A+`, `VIP+`. Written once here because all
+  /// three alternatives below need the same shape, and they drifted apart
+  /// once already — the hyphenated form was added to the first two and not
+  /// the third, so `4K-A+ - Acapulco` kept its prefix on every screen while
+  /// `EX-YU | Acapulco` lost it.
+  static const _tag = r'[A-Z0-9]{2,5}(?:[-+][A-Z0-9]{1,5})*\+?';
+
   static final _region = RegExp(
-    r'^\s*(?:'
-    r'[\[\(]\s*([A-Z0-9]{2,5}(?:-[A-Z0-9]{2,5})?)\s*[\]\)]'
-    r'|([A-Z0-9]{2,5}(?:-[A-Z0-9]{2,5})?)\s*[|:–]'
-    r'|([A-Z0-9]{2,5})\s*-\s+'
-    r')\s*',
+    '^\\s*(?:'
+    '[\\[\\(]\\s*($_tag)\\s*[\\]\\)]'
+    '|($_tag)\\s*[|:–]'
+    '|($_tag)\\s*-\\s+'
+    ')\\s*',
   );
 
   /// A four-digit year in brackets, or trailing and clearly a year.
@@ -177,6 +185,29 @@ class TitleCleaner {
 
     final name = tokens.join(' ').trim();
     return name.isEmpty ? null : name;
+  }
+
+  /// The show's name, out of an episode's file name.
+  ///
+  /// The mirror of [episodeName]: everything *before* the S01E01 marker,
+  /// cleaned of the prefix, the year and the quality the way any title is.
+  /// `4K-A+ - Acapulco (2021) (US) - S01E01 - Pilot` gives `Acapulco`.
+  ///
+  /// Needed because searching a subtitle service wants the show and two
+  /// numbers, and the only thing a player is handed is the provider's string.
+  /// Null when there is no marker, which means this was never an episode.
+  static String? showName(String raw) {
+    final match = _seasonEpisode.firstMatch(raw);
+    if (match == null) return null;
+
+    var head = raw.substring(0, match.start);
+    // Providers separate the show from the marker with a dash or a dot, and
+    // leaving it makes the search a phrase that matches nothing.
+    head = head.replaceFirst(RegExp(r'[\s\-–—:.\|_]+$'), '');
+    if (head.trim().isEmpty) return null;
+
+    final cleaned = clean(head);
+    return cleaned.title.trim().isEmpty ? null : cleaned.title;
   }
 
   static CleanedTitle clean(String raw) {

@@ -4,6 +4,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 
 import 'host.dart';
 import 'settings_screen.dart';
+import 'subtitle_service.dart';
 
 /// The three questions worth asking once, straight after the first import.
 ///
@@ -39,12 +40,13 @@ class SetupScreen extends StatefulWidget {
   State<SetupScreen> createState() => _SetupScreenState();
 }
 
-enum _Step { metadata, parental, hidden }
+enum _Step { metadata, subtitles, parental, hidden }
 
 class _SetupScreenState extends State<SetupScreen> {
   _Step _step = _Step.metadata;
 
   String _tmdbKey = '';
+  String _subtitleKey = '';
   String _pin = '';
   String? _problem;
   bool _busy = false;
@@ -92,7 +94,8 @@ class _SetupScreenState extends State<SetupScreen> {
     setState(() {
       _problem = null;
       _step = switch (_step) {
-        _Step.metadata => _Step.parental,
+        _Step.metadata => _Step.subtitles,
+        _Step.subtitles => _Step.parental,
         _Step.parental => _Step.hidden,
         _Step.hidden => _Step.hidden,
       };
@@ -147,7 +150,7 @@ class _SetupScreenState extends State<SetupScreen> {
               Container(width: 22, height: 2, color: OpenTvColors.tally),
               const SizedBox(width: OpenTvSpace.xs),
               Text(
-                'SETTING UP  ·  ${_step.index + 1} OF 3',
+                'SETTING UP  ·  ${_step.index + 1} OF ${_Step.values.length}',
                 style: OpenTvType.label.copyWith(color: OpenTvColors.tally),
               ),
             ],
@@ -156,6 +159,7 @@ class _SetupScreenState extends State<SetupScreen> {
           Expanded(
             child: switch (_step) {
               _Step.metadata => _metadata(),
+              _Step.subtitles => _subtitles(),
               _Step.parental => _parental(),
               _Step.hidden => _hidden(),
             },
@@ -163,6 +167,86 @@ class _SetupScreenState extends State<SetupScreen> {
         ],
       ),
     );
+  }
+
+  /// Where downloaded subtitles come from.
+  ///
+  /// Every viewer brings their own key, and that is a decision rather than an
+  /// omission: this app ships no credentials of any kind, and a service key
+  /// compiled into an open-source client lasts exactly as long as it takes
+  /// somebody to read the source. Skippable like every other step here — the
+  /// player simply does not offer the control without one.
+  Widget _subtitles() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('SUBTITLES', style: OpenTvType.label),
+          const SizedBox(height: OpenTvSpace.xs),
+          const Text(
+            'Providers often ship none, or ones timed against a different '
+            'cut. With a key the player can look for others and load one '
+            'over the stream. Free, and this takes a couple of minutes.',
+            style: OpenTvType.bodyMuted,
+          ),
+          const SizedBox(height: OpenTvSpace.md),
+          const _Instructions([
+            'Make a free account at opensubtitles.com.',
+            'Open the profile menu and choose "API consumers".',
+            'Create a consumer — any name will do — and copy its API key.',
+            'Type it below, or skip and add it later in settings.',
+          ]),
+          const SizedBox(height: OpenTvSpace.md),
+          SizedBox(
+            width: 900,
+            child: TextEntryField(
+              label: 'OpenSubtitles API key',
+              value: _subtitleKey,
+              hint: 'Paste from opensubtitles.com',
+              active: true,
+              obscure: true,
+              onChanged: (text) => setState(() => _subtitleKey = text),
+              onDone: _saveSubtitleKey,
+            ),
+          ),
+          if (_problem != null) ...[
+            const SizedBox(height: OpenTvSpace.sm),
+            Text(
+              _problem!,
+              style: OpenTvType.data.copyWith(color: OpenTvColors.alert),
+            ),
+          ],
+          const SizedBox(height: OpenTvSpace.md),
+          Row(
+            children: [
+              PlayerButton(
+                label: 'SAVE AND CONTINUE',
+                emphasis: true,
+                autofocus: true,
+                onSelect: _subtitleKey.trim().isEmpty || _busy
+                    ? null
+                    : _saveSubtitleKey,
+              ),
+              const SizedBox(width: OpenTvSpace.sm),
+              // Skipping is a plain choice rather than a small grey word.
+              PlayerButton(label: 'SKIP', onSelect: _next),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveSubtitleKey() async {
+    if (_subtitleKey.trim().isEmpty) return;
+    setState(() => _busy = true);
+    await widget.host.writeSecret(
+      SubtitleService.keyReference,
+      _subtitleKey.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _next();
   }
 
   Widget _metadata() {

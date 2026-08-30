@@ -10,6 +10,7 @@ import 'host.dart';
 import 'search_screen.dart';
 import 'series_screen.dart';
 import 'source_service.dart';
+import 'subtitle_service.dart';
 import 'vpn_service.dart';
 import 'settings_screen.dart';
 import 'stream_resolver.dart';
@@ -558,6 +559,29 @@ class _BrowseScreenState extends State<BrowseScreen> {
     }
   }
 
+  final _subtitles = SubtitleService(host: const Host());
+
+  /// What to search OpenSubtitles with.
+  ///
+  /// Built here because only this screen knows what the thing is called. The
+  /// player's own title is the provider's string, and for an episode that is
+  /// a file path carrying the show, the year, the region and the quality — a
+  /// search with it matches nothing.
+  SubtitleQuery? _subtitleQuery(Playable playable) {
+    if (playable.isLive) return null;
+    final cleaned = TitleCleaner.clean(playable.title);
+    // An episode searches for its show and two numbers. The show is whatever
+    // sits before the S01E01 marker, because the rest of the string is the
+    // provider's routing information and matches nothing.
+    final show = TitleCleaner.showName(playable.title);
+    return SubtitleQuery(
+      title: show ?? cleaned.title,
+      year: cleaned.year,
+      season: cleaned.season,
+      episode: cleaned.episode,
+    );
+  }
+
   Future<void> _openInner(_Item item) async {
     // A series is not a stream; it is a list of them. It gets its own screen,
     // which fetches the episodes the bulk sync deliberately skipped.
@@ -693,6 +717,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
         db: widget.db,
         sourceId: widget.source.id,
         playable: playable,
+        subtitles: _subtitles,
+        subtitleQuery: _subtitleQuery(playable),
         url: url,
         startAt: startAt,
         options: widget.resolver.optionsFor(playable),
@@ -1180,6 +1206,8 @@ class _PlayerRoute extends StatefulWidget {
     required this.db,
     required this.sourceId,
     required this.playable,
+    this.subtitles,
+    this.subtitleQuery,
     required this.url,
     required this.options,
     required this.onZap,
@@ -1191,6 +1219,11 @@ class _PlayerRoute extends StatefulWidget {
   final OpenTvDatabase db;
   final int sourceId;
   final Playable playable;
+
+  /// Looking a subtitle up, and what to look for.
+  final SubtitleService? subtitles;
+  final SubtitleQuery? subtitleQuery;
+
   final String url;
   final Map<String, String> options;
 
@@ -1285,6 +1318,9 @@ class _PlayerRouteState extends State<_PlayerRoute> {
       streamUrl: widget.url,
       streamOptions: widget.options,
       isLive: widget.playable.isLive,
+      // Absent on live: there is nothing to look up for a channel.
+      subtitleService: widget.playable.isLive ? null : widget.subtitles,
+      subtitleQuery: widget.subtitleQuery,
       channelName: widget.playable.title,
       channelNumber: widget.playable.number,
       startAt: widget.startAt,
