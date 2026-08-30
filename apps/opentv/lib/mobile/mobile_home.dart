@@ -773,11 +773,12 @@ class _MobileHomeState extends State<MobileHome> {
           favourites: () => _favouriteItems(ItemKind.movie),
           ),
           categories: () => _categoriesFor(ItemKind.movie),
-          load: (category) async => [
+          load: (category, offset) async => [
             for (final film in await widget.db.moviesIn(
               widget.source.id,
               categoryRemoteId: category,
               limit: 200,
+              offset: offset,
               hiddenRegions: _regions.forKind(ItemKind.movie),
             ))
               if (!_locked.contains(film.categoryRemoteId)) film,
@@ -814,11 +815,12 @@ class _MobileHomeState extends State<MobileHome> {
           favourites: () => _favouriteItems(ItemKind.series),
           ),
           categories: () => _categoriesFor(ItemKind.series),
-          load: (category) async => [
+          load: (category, offset) async => [
             for (final show in await widget.db.seriesIn(
               widget.source.id,
               categoryRemoteId: category,
               limit: 200,
+              offset: offset,
               hiddenRegions: _regions.forKind(ItemKind.series),
             ))
               if (!_locked.contains(show.categoryRemoteId)) show,
@@ -950,6 +952,19 @@ class _LiveTabState extends State<_LiveTab> {
   Channel? _resume;
   String? _resumeUrl;
 
+  /// How many rows are fetched at a time, and whether there are more.
+  ///
+  /// Paged, because the alternative was a hard cap. The list asked for four
+  /// hundred channels out of a catalogue that routinely holds fifty thousand
+  /// and stopped there — so the screen showed 0.7% of a provider and gave no
+  /// sign of it. Worse, it made the region filter look broken: hiding a
+  /// region can only ever change *which* four hundred are shown, never how
+  /// many, so a working filter and a dead one produced the same full list.
+  static const _page = 300;
+  bool _loadingMore = false;
+  int _fetched = 0;
+  bool _atEnd = false;
+
   @override
   void initState() {
     super.initState();
@@ -959,22 +974,55 @@ class _LiveTabState extends State<_LiveTab> {
   }
 
   void _loadChannels() {
+    _atEnd = false;
+    _fetched = 0;
     widget.db
         .channelsIn(
           widget.source.id,
           categoryRemoteId: _category,
-          limit: 400,
+          limit: _page,
           hiddenRegions: widget.hiddenRegions,
         )
         .then((rows) {
       if (!mounted) return;
       setState(() {
+        _atEnd = rows.length < _page;
         _channels = [
           for (final channel in rows)
             if (!widget.locked.contains(channel.categoryRemoteId)) channel,
         ];
       });
     });
+  }
+
+  /// Fetches the next page when the list nears its end.
+  ///
+  /// Offset by the number fetched rather than the number shown: the parental
+  /// filter runs in Dart after the query, so counting what survived it would
+  /// ask for the same rows again and stall the list wherever a locked
+  /// category happened to sit.
+  Future<void> _loadMore() async {
+    if (_loadingMore || _atEnd) return;
+    _loadingMore = true;
+    _fetched += _page;
+
+    final rows = await widget.db.channelsIn(
+      widget.source.id,
+      categoryRemoteId: _category,
+      limit: _page,
+      offset: _fetched,
+      hiddenRegions: widget.hiddenRegions,
+    );
+    if (!mounted) return;
+    setState(() {
+      _atEnd = rows.length < _page;
+      _channels = [
+        ...?_channels,
+        for (final channel in rows)
+          if (!widget.locked.contains(channel.categoryRemoteId)) channel,
+      ];
+    });
+    _loadingMore = false;
   }
 
   Future<void> _loadCategories() async {
@@ -1072,18 +1120,34 @@ class _LiveTabState extends State<_LiveTab> {
 
   Widget _list(List<Channel> channels) {
     return ListView.builder(
-      itemCount: channels.length,
-      itemBuilder: (context, index) => ChannelRow(
+      // One past the end while there is more, so the last row is a note
+      // saying so rather than a list that simply stops.
+      itemCount: channels.length + (_atEnd ? 0 : 1),
+      itemBuilder: (context, index) {
+        if (index >= channels.length) {
+          // Asked for as it comes into view. A button would be a second thing
+          // to press for something the viewer has already asked for by
+          // scrolling to the bottom.
+          _loadMore();
+          return const Padding(
+            padding: EdgeInsets.all(OpenTvTouchSpace.lg),
+            child: Center(
+              child: Text('Loading more…', style: OpenTvTouchType.bodyMuted),
+            ),
+          );
+        }
+        return ChannelRow(
         name: channels[index].name,
         number: channels[index].number?.toString(),
         logoUrl: channels[index].iconUrl,
         // The whole visible list travels with it, so a flick in the player
         // moves to the next channel of what was being browsed.
-        onTap: () => widget.onPlay(
-          Playable.channel(channels[index]),
-          channels,
-        ),
-      ),
+          onTap: () => widget.onPlay(
+            Playable.channel(channels[index]),
+            channels,
+          ),
+        );
+      },
     );
   }
 }
@@ -1298,7 +1362,10 @@ class _GridTab extends StatefulWidget {
   });
 
   final Future<List<Category>> Function() categories;
-  final Future<List<Object>> Function(String?) load;
+  /// One page of a category, from an offset. Paged rather than capped: a
+  /// provider's film list runs to six figures, and a grid that fetched two
+  /// hundred and stopped showed a fraction of one per cent of it.
+  final Future<List<Object>> Function(String? category, int offset) load;
   final String Function(Object) titleOf;
   final String? Function(Object) imageOf;
   final void Function(Object) onOpen;
@@ -1324,10 +1391,38 @@ class _GridTabState extends State<_GridTab> {
     });
   }
 
+  static const _page = 200;
+  bool _loadingMore = false;
+  bool _atEnd = false;
+  int _fetched = 0;
+
   void _load() {
-    widget.load(_category).then((rows) {
-      if (mounted) setState(() => _items = rows);
+    _atEnd = false;
+    _fetched = 0;
+    widget.load(_category, 0).then((rows) {
+      if (!mounted) return;
+      setState(() {
+        _atEnd = rows.length < _page;
+        _items = rows;
+      });
     });
+  }
+
+  /// Offset by what was fetched rather than what is shown: the parental
+  /// filter runs after the query, so counting survivors would ask for the
+  /// same rows again and stall wherever a locked category sat.
+  Future<void> _loadMore() async {
+    if (_loadingMore || _atEnd) return;
+    _loadingMore = true;
+    _fetched += _page;
+
+    final rows = await widget.load(_category, _fetched);
+    if (!mounted) return;
+    setState(() {
+      _atEnd = rows.length < _page;
+      _items = [...?_items, ...rows];
+    });
+    _loadingMore = false;
   }
 
   @override
@@ -1414,11 +1509,17 @@ class _GridTabState extends State<_GridTab> {
             mainAxisExtent: PosterCard.heightFor(cardWidth),
           ),
           delegate: SliverChildBuilderDelegate(
-            (context, i) => PosterCard(
-              title: widget.titleOf(items[i]),
-              imageUrl: widget.imageOf(items[i]),
-              onTap: () => widget.onOpen(items[i]),
-            ),
+            (context, i) {
+              // Asked for as the end comes into view, rather than behind a
+              // button for something the viewer has already asked for by
+              // scrolling this far.
+              if (i >= items.length - 6) _loadMore();
+              return PosterCard(
+                title: widget.titleOf(items[i]),
+                imageUrl: widget.imageOf(items[i]),
+                onTap: () => widget.onOpen(items[i]),
+              );
+            },
             childCount: items.length,
           ),
         ),
