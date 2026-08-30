@@ -157,6 +157,35 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             player.time = VLCTime(int: target)
             result(nil)
 
+        case "addSubtitle":
+            // libVLC takes a subtitle as a slave on the media that is already
+            // playing, so nothing is torn down and the viewer keeps their
+            // place. Media3 has no such thing and has to rebuild the item and
+            // re-prepare, which is why the same feature costs a rebuffer on
+            // Android and nothing here.
+            guard let path = (call.arguments as? [String: Any])?["path"] as? String
+            else {
+                result(FlutterError(
+                    code: "addSubtitle",
+                    message: "no path",
+                    details: nil
+                ))
+                return
+            }
+            // Enforced rather than merely offered: somebody who has just gone
+            // looking for a subtitle, chosen one and waited for it does not
+            // then want to find it switched off in a menu.
+            let added = player.addPlaybackSlave(
+                URL(fileURLWithPath: path),
+                type: .subtitle,
+                enforce: true
+            )
+            result(added ? nil : FlutterError(
+                code: "addSubtitle",
+                message: "the engine refused the subtitle file",
+                details: nil
+            ))
+
         case "setAspect":
             let mode = (call.arguments as? [String: Any])?["mode"] as? String ?? "fit"
             applyAspect(mode)

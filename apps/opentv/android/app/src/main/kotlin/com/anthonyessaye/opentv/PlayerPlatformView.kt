@@ -2,6 +2,7 @@ package com.anthonyessaye.opentv
 
 import android.content.Context
 import android.graphics.Color
+import android.net.Uri
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
@@ -10,6 +11,7 @@ import android.widget.FrameLayout
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.Player
@@ -107,6 +109,11 @@ class PlayerPlatformView(
     private val subtitles = SubtitleView(context)
 
     private val channel = MethodChannel(messenger, "opentv/player/$viewId")
+
+    /** The stream currently open, so a subtitle can be attached to it. */
+    private var currentUrl: String? = null
+    private var subtitlePath: String? = null
+    private var subtitleLanguage: String? = null
 
     private var framesSeen = false
     private var lastError: String? = null
@@ -237,6 +244,16 @@ class PlayerPlatformView(
                 result.success(null)
             }
             "pause" -> { player.pause(); result.success(null) }
+            "addSubtitle" -> {
+                val args = call.arguments as? Map<*, *>
+                val path = args?.get("path") as? String
+                if (path == null) {
+                    result.error("addSubtitle", "no path", null)
+                } else {
+                    addSubtitle(path, args["language"] as? String)
+                    result.success(null)
+                }
+            }
             "stop" -> { player.stop(); result.success(null) }
             "state" -> result.success(snapshot())
 
@@ -297,15 +314,56 @@ class PlayerPlatformView(
      * app having forgotten where the viewer was.
      */
     private fun play(url: String, startAtMs: Long = 0L) {
+        currentUrl = url
+        subtitlePath = null
         framesSeen = false
         lastError = null
         // Back over the picture for the new stream. Without this, switching
         // channels shows the last frame of the previous one for as long as
         // the next takes to open.
         shutter.visibility = View.VISIBLE
-        player.setMediaItem(MediaItem.fromUri(url), startAtMs)
+        player.setMediaItem(itemFor(url), startAtMs)
         player.prepare()
         player.playWhenReady = true
+    }
+
+    /**
+     * The stream, with a downloaded subtitle attached when there is one.
+     *
+     * Media3 takes side-loaded subtitles as part of the MediaItem rather than
+     * as something added to a playing one, so attaching one means building
+     * the item again and re-preparing at the position the viewer was at.
+     * That is a brief rebuffer, and it is the price of the feature on this
+     * engine; libVLC takes a slave on a playing media and does not pay it.
+     */
+    private fun itemFor(url: String): MediaItem {
+        val path = subtitlePath ?: return MediaItem.fromUri(url)
+        val subtitle = MediaItem.SubtitleConfiguration.Builder(
+            Uri.fromFile(java.io.File(path)),
+        )
+            .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+            .setLanguage(subtitleLanguage)
+            // Selected rather than merely present. Somebody who has just gone
+            // looking for a subtitle, chosen one and waited for it does not
+            // then want to find it switched off in a menu.
+            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+            .build()
+        return MediaItem.Builder()
+            .setUri(url)
+            .setSubtitleConfigurations(listOf(subtitle))
+            .build()
+    }
+
+    /** Attaches a subtitle file, keeping the viewer where they were. */
+    private fun addSubtitle(path: String, language: String?) {
+        val url = currentUrl ?: return
+        subtitlePath = path
+        subtitleLanguage = language
+        val resumeAt = player.currentPosition
+        val wasPlaying = player.playWhenReady
+        player.setMediaItem(itemFor(url), resumeAt)
+        player.prepare()
+        player.playWhenReady = wasPlaying
     }
 
     // MARK: tracks

@@ -72,6 +72,11 @@ class HostChannel(private val context: Context) {
             // the catalogue can simply live here.
             "dataDirectory" -> result.success(context.filesDir.absolutePath)
 
+            // cacheDir rather than filesDir: Android may reclaim this when the
+            // device runs short, which is exactly the lifetime a downloaded
+            // subtitle should have.
+            "cacheDirectory" -> result.success(context.cacheDir.absolutePath)
+
             // Asked of UiModeManager rather than measured. An Android TV
             // reports 960x540 logical pixels and a tablet in landscape can
             // report the same shape, so no amount of looking at the screen

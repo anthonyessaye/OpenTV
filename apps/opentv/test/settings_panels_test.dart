@@ -52,6 +52,7 @@ void main() {
     'Hidden categories',
     'Regions',
     'Metadata',
+    'Subtitles',
     'Private tunnel',
     'Parental lock',
     'Another device',

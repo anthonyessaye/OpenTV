@@ -40,6 +40,12 @@ class PlayerContract {
     'seek',
     // How the picture is fitted to the panel.
     'setAspect',
+    // Loads a subtitle file from disk and selects it, for a stream whose own
+    // text tracks are absent or wrong. Named here before either engine had
+    // it, which is the rule this file exists to enforce: a method absent from
+    // this list is a method nobody checks, and that is how `seek` went
+    // missing on both platforms at once.
+    'addSubtitle',
   };
 
   /// Values handed to the native view when it is created.

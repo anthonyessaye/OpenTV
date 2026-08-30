@@ -96,14 +96,22 @@ void main() {
 
     // A settings tile is remote-driven and has no tap handler, so the panel
     // is reached the way a viewer reaches it: down the spine and select.
-    // Providers is index 0 and has autofocus; Parental lock is index 6.
-    for (var i = 0; i < 6; i++) {
+    //
+    // Walked until the panel appears rather than counted to a fixed index.
+    // Counting broke the first time a panel was added above this one, which
+    // is a test failing for a reason unconnected to what it tests.
+    for (var step = 0; step < 12; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      if (find.text('ENTER PIN').evaluate().isNotEmpty ||
+          find.text('SET A PIN').evaluate().isNotEmpty) {
+        return;
+      }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    fail('the parental panel was never reached from the settings spine');
   }
 
   testWidgets('with a PIN set, the panel is closed until it is given',

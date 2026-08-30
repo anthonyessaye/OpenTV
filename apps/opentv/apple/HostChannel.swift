@@ -88,6 +88,30 @@ final class HostChannel {
                                     details: nil))
             }
 
+        // A subdirectory of the same caches root the catalogue uses, rather
+        // than a second search path. On tvOS there is nowhere else to put
+        // anything — an app has no persistent documents directory at all —
+        // and on iOS caches is already the right answer for something meant
+        // to be thrown away.
+        case "cacheDirectory":
+            let paths = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)
+            guard let base = paths.first else {
+                result(FlutterError(code: "no-directory",
+                                    message: "no caches directory",
+                                    details: nil))
+                return
+            }
+            let directory = (base as NSString).appendingPathComponent("opentv-temp")
+            do {
+                try FileManager.default.createDirectory(
+                    atPath: directory, withIntermediateDirectories: true)
+                result(directory)
+            } catch {
+                result(FlutterError(code: "no-directory",
+                                    message: error.localizedDescription,
+                                    details: nil))
+            }
+
         case "writeSecret":
             guard let args = call.arguments as? [String: Any],
                   let reference = args["reference"] as? String,

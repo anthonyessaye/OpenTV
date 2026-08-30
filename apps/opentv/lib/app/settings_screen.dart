@@ -4,6 +4,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 
 import 'host.dart';
 import 'source_service.dart';
+import 'subtitle_service.dart';
 import 'vpn_service.dart';
 
 /// Where a provider is chosen, and where the television is locked.
@@ -63,7 +64,18 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-enum _Panel { sources, account, hidden, regions, metadata, vpn, parental, handover, about }
+enum _Panel {
+  sources,
+  account,
+  hidden,
+  regions,
+  metadata,
+  subtitles,
+  vpn,
+  parental,
+  handover,
+  about,
+}
 
 /// Why a PIN is being typed.
 enum _PinPurpose { set, prove }
@@ -108,6 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _entry;
   String? _note;
   String _tmdbKey = '';
+  String _subtitleKey = '';
 
   XtreamAccount? _account;
   bool _askingPortal = false;
@@ -135,6 +148,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final pin = await widget.host.readSecret(SettingsScreen.pinReference);
     final tmdb = await widget.host.readSecret(SettingsScreen.tmdbReference);
+    final subtitles =
+        await widget.host.readSecret(SubtitleService.keyReference);
     final locked = await widget.db.lockedCategories(widget.active.id);
     final categories = <Category>[
       for (final kind in [ItemKind.live, ItemKind.movie, ItemKind.series])
@@ -167,6 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _counts = counts;
       _hasPin = pin != null && pin.isNotEmpty;
       _tmdbKey = tmdb ?? '';
+      _subtitleKey = subtitles ?? '';
       _locked = locked;
       _categories = categories;
       _allCategories = everything;
@@ -255,6 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Panel.hidden => 'Hidden categories',
                       _Panel.regions => 'Regions',
                       _Panel.metadata => 'Metadata',
+                      _Panel.subtitles => 'Subtitles',
                       _Panel.vpn => 'Private tunnel',
                       _Panel.parental => 'Parental lock',
                       _Panel.handover => 'Another device',
@@ -298,6 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _Panel.hidden => _hidden(),
               _Panel.regions => _regions(),
               _Panel.metadata => _metadata(),
+              _Panel.subtitles => _subtitles(),
               _Panel.vpn => _vpn(),
               _Panel.parental => _parental(),
               _Panel.handover => _handover(),
@@ -1016,6 +1034,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ],
     );
+  }
+
+  /// Where downloaded subtitles come from, and what it costs.
+  ///
+  /// Every viewer brings their own key, and that is a decision rather than an
+  /// omission. This app ships no credentials of any kind — there is no TMDB
+  /// key in it either — and a service key compiled into an open-source client
+  /// is a key that lasts exactly as long as it takes somebody to read the
+  /// source, after which every viewer's daily allowance is spent by
+  /// strangers. Registering takes a couple of minutes and the account is
+  /// free.
+  Widget _subtitles() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Providers often ship no subtitles at all, or ones timed against a '
+          'different cut. With a key, the player can look for others and '
+          'load one over the stream.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        const Text('HOW TO GET A KEY', style: OpenTvType.label),
+        const SizedBox(height: OpenTvSpace.xs),
+        const Text(
+          '1.  Make a free account at opensubtitles.com.\n'
+          '2.  Open the profile menu and choose "API consumers".\n'
+          '3.  Create a consumer — any name will do — and copy its API key.\n'
+          '4.  Paste it below.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        SizedBox(
+          width: 900,
+          child: TextEntryField(
+            label: 'OpenSubtitles API key',
+            value: _subtitleKey,
+            hint: 'Paste from opensubtitles.com',
+            active: true,
+            obscure: true,
+            onChanged: (text) => setState(() => _subtitleKey = text),
+            onDone: _saveSubtitleKey,
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Row(
+          children: [
+            PlayerButton(
+              label: 'SAVE KEY',
+              emphasis: true,
+              onSelect: _subtitleKey.isEmpty ? null : _saveSubtitleKey,
+            ),
+            if (_subtitleKey.isNotEmpty) ...[
+              const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(label: 'REMOVE', onSelect: _clearSubtitleKey),
+            ],
+          ],
+        ),
+        if (_note != null) ...[
+          const SizedBox(height: OpenTvSpace.sm),
+          Text(
+            _note!,
+            style: OpenTvType.data.copyWith(color: OpenTvColors.tally),
+          ),
+        ],
+        const SizedBox(height: OpenTvSpace.lg),
+        const Text(
+          'A free account allows a small number of downloads a day, and '
+          'signing in on the site raises it. Anything downloaded is kept only '
+          'while it is being watched and is deleted afterwards — a subtitle '
+          'is fetched because this stream needed one, and the provider may '
+          'have fixed its own by tomorrow.',
+          style: OpenTvType.bodyMuted,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveSubtitleKey() async {
+    await widget.host.writeSecret(
+      SubtitleService.keyReference,
+      _subtitleKey.trim(),
+    );
+    if (mounted) setState(() => _note = 'Subtitle key saved.');
+  }
+
+  Future<void> _clearSubtitleKey() async {
+    await widget.host.deleteSecret(SubtitleService.keyReference);
+    if (!mounted) return;
+    setState(() {
+      _subtitleKey = '';
+      _note = 'Subtitle key removed.';
+    });
   }
 
   /// The tunnel panel.

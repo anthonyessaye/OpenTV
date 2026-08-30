@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
+
+import '../app/subtitle_service.dart';
 
 /// Watching something, on a screen you can touch.
 ///
@@ -30,6 +34,8 @@ class MobilePlayer extends StatefulWidget {
     this.onNext,
     this.onPreviousChannel,
     this.onNextChannel,
+    this.subtitleService,
+    this.subtitleQuery,
   });
 
   final String url;
@@ -57,6 +63,17 @@ class MobilePlayer extends StatefulWidget {
   /// off a live stream.
   final VoidCallback? onPreviousChannel;
   final VoidCallback? onNextChannel;
+
+  /// Looking a subtitle up, when a key has been stored for it.
+  ///
+  /// Null on a preview and in tests. Absent rather than present and disabled:
+  /// a control that cannot work is worse than no control, which is the same
+  /// rule the audio and subtitle buttons already follow.
+  final SubtitleService? subtitleService;
+
+  /// What to search for. Built by whoever opened the player, because the
+  /// player's own title is the provider's file path and matches nothing.
+  final SubtitleQuery? subtitleQuery;
 
   @override
   State<MobilePlayer> createState() => _MobilePlayerState();
@@ -170,6 +187,7 @@ class _MobilePlayerState extends State<MobilePlayer>
     // what every video app on the platform does and therefore what a thumb
     // already expects.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _checkSearchable();
     // Landscape is not forced. A phone held upright showing a 16:9 stream in
     // the top third is a legitimate way to watch something while doing
     // something else, and taking the choice away to make the picture bigger
@@ -185,6 +203,10 @@ class _MobilePlayerState extends State<MobilePlayer>
       SystemUiMode.edgeToEdge,
       overlays: SystemUiOverlay.values,
     );
+    // A downloaded subtitle belongs to the sitting it was fetched for.
+    if (_loadedSubtitle case final file?) {
+      widget.subtitleService?.discard(file);
+    }
     WidgetsBinding.instance.removeObserver(this);
     _skipNotice?.cancel();
     _poll?.cancel();
@@ -307,6 +329,104 @@ class _MobilePlayerState extends State<MobilePlayer>
     await _channel?.invokeMethod<void>(_playing ? 'pause' : 'play');
     if (mounted) setState(() => _playing = !_playing);
     _restartHide();
+  }
+
+  /// What a search turned up, and what is happening to it.
+  List<SubtitleCandidate>? _found;
+  bool _searching = false;
+  String? _searchNote;
+
+  /// The file handed to the engine, so it can be deleted on the way out.
+  File? _loadedSubtitle;
+
+  /// Whether looking one up is even offered.
+  ///
+  /// Absent rather than present and failing: without a key there is nothing
+  /// behind the control, and a row that opens a sheet saying "no key" is a
+  /// row that wastes a press. Settings is where a key is added and settings
+  /// is where it says so.
+  bool _canSearch = false;
+
+  Future<void> _checkSearchable() async {
+    final service = widget.subtitleService;
+    if (service == null || !(widget.subtitleQuery?.isUsable ?? false)) return;
+    final ready = await service.isConfigured;
+    if (mounted) setState(() => _canSearch = ready);
+  }
+
+  Future<void> _search() async {
+    final service = widget.subtitleService;
+    final query = widget.subtitleQuery;
+    if (service == null || query == null) return;
+
+    setState(() {
+      _searching = true;
+      _searchNote = null;
+      _found = null;
+      _sheet = _Sheet.find;
+      _chrome = true;
+    });
+    _hide?.cancel();
+
+    try {
+      final found = await service.search(query);
+      if (!mounted) return;
+      setState(() {
+        _found = found;
+        _searching = false;
+        _searchNote = found.isEmpty
+            ? 'Nothing was found for “${query.title}”.'
+            : null;
+      });
+    } on SubtitleServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _found = const [];
+        _searchNote = error.message;
+      });
+    }
+  }
+
+  Future<void> _useSubtitle(SubtitleCandidate candidate) async {
+    final service = widget.subtitleService;
+    if (service == null) return;
+
+    setState(() {
+      _searching = true;
+      _searchNote = null;
+    });
+
+    try {
+      final file = await service.fetch(candidate);
+      // The previous one goes as soon as the new one is in hand. Somebody
+      // picking a second subtitle is somebody telling us the first was wrong.
+      final previous = _loadedSubtitle;
+      _loadedSubtitle = file;
+      if (previous != null) await service.discard(previous);
+
+      await _channel?.invokeMethod<void>('addSubtitle', {
+        'path': file.path,
+        'language': candidate.language,
+      });
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _sheet = null;
+      });
+      // The engine has rebuilt its track list, on Android by rebuilding the
+      // whole item. Ask again or the sheet still lists what arrived with the
+      // stream.
+      Timer(const Duration(seconds: 1), () {
+        if (mounted) _readTracks();
+      });
+    } on SubtitleServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _searchNote = error.message;
+      });
+    }
   }
 
   Future<void> _openSheet(_Sheet sheet) async {
@@ -495,6 +615,7 @@ class _MobilePlayerState extends State<MobilePlayer>
                       ? () => _openSheet(_Sheet.subtitles)
                       : null,
                   onPicture: () => _openSheet(_Sheet.picture),
+                  onFindSubtitles: _canSearch ? _search : null,
                   nextLabel: widget.nextLabel,
                   onNext: widget.onNext,
                 ),
@@ -506,10 +627,20 @@ class _MobilePlayerState extends State<MobilePlayer>
                 onNext: widget.onNext!,
                 onBack: () => Navigator.of(context).maybePop(),
               ),
-            if (_sheet != null)
+            if (_sheet == _Sheet.find)
+              _FindPanel(
+                title: widget.subtitleQuery?.title ?? widget.title,
+                searching: _searching,
+                found: _found,
+                note: _searchNote,
+                onChoose: _useSubtitle,
+                onDismiss: _closeSheet,
+              )
+            else if (_sheet != null)
               _SheetPanel(
                 sheet: _sheet!,
                 tracks: _tracks,
+                onFindSubtitles: _canSearch ? _search : null,
                 aspect: _aspect,
                 width: _width,
                 height: _height,
@@ -540,6 +671,7 @@ class _Chrome extends StatelessWidget {
     required this.onAudio,
     required this.onSubtitles,
     required this.onPicture,
+    this.onFindSubtitles,
     this.nextLabel,
     this.onNext,
   });
@@ -559,6 +691,11 @@ class _Chrome extends StatelessWidget {
   final VoidCallback? onAudio;
   final VoidCallback? onSubtitles;
   final VoidCallback onPicture;
+
+  /// Null when no key is stored, so the control is absent rather than
+  /// present and failing.
+  final VoidCallback? onFindSubtitles;
+
   final String? nextLabel;
   final VoidCallback? onNext;
 
@@ -699,6 +836,11 @@ class _Chrome extends StatelessWidget {
                         if (onSubtitles != null)
                           _Control(label: 'SUBTITLES', onTap: onSubtitles!),
                         _Control(label: 'PICTURE', onTap: onPicture),
+                        if (onFindSubtitles != null)
+                          _Control(
+                            label: 'FIND SUBTITLES',
+                            onTap: onFindSubtitles!,
+                          ),
                       ],
                     ),
                   ),
@@ -839,7 +981,7 @@ class _ScrubBar extends StatelessWidget {
 }
 
 /// Which chooser is open.
-enum _Sheet { audio, subtitles, picture }
+enum _Sheet { audio, subtitles, picture, find }
 
 class _Control extends StatelessWidget {
   const _Control({
@@ -895,6 +1037,7 @@ class _SheetPanel extends StatelessWidget {
   const _SheetPanel({
     required this.sheet,
     required this.tracks,
+    this.onFindSubtitles,
     required this.aspect,
     required this.width,
     required this.height,
@@ -905,6 +1048,7 @@ class _SheetPanel extends StatelessWidget {
 
   final _Sheet sheet;
   final List<MediaTrack> tracks;
+  final VoidCallback? onFindSubtitles;
   final AspectMode aspect;
   final int width;
   final int height;
@@ -934,7 +1078,9 @@ class _SheetPanel extends StatelessWidget {
     final type = switch (sheet) {
       _Sheet.audio => 'audio',
       _Sheet.subtitles => 'text',
-      _Sheet.picture => null,
+      // Never reached: the find sheet is drawn by _FindPanel, which is a
+      // different widget with a different shape.
+      _Sheet.picture || _Sheet.find => null,
     };
 
     final rows = <Widget>[];
@@ -970,6 +1116,17 @@ class _SheetPanel extends StatelessWidget {
           title: 'NONE',
           detail: 'This stream carries none',
           selected: false,
+        ));
+      }
+      // Offered here as well as on the control row, because this is where
+      // somebody looks when the subtitles are missing or wrong — which is
+      // precisely the moment the feature exists for.
+      if (sheet == _Sheet.subtitles && onFindSubtitles != null) {
+        rows.add(_Row(
+          title: 'FIND ONLINE',
+          detail: 'Search OpenSubtitles for this title',
+          selected: false,
+          onTap: onFindSubtitles,
         ));
       }
     }
@@ -1015,6 +1172,7 @@ class _SheetPanel extends StatelessWidget {
                             _Sheet.audio => 'Audio',
                             _Sheet.subtitles => 'Subtitles',
                             _Sheet.picture => 'Picture',
+                            _Sheet.find => 'Find subtitles',
                           },
                           style: OpenTvTouchType.title,
                         ),
@@ -1296,6 +1454,147 @@ class _SkipMark extends StatelessWidget {
             child: Text(
               '${seconds < 0 ? '−' : '+'}${seconds.abs()}s',
               style: OpenTvTouchType.section,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The results of a search, and what is happening to them.
+///
+/// Its own panel rather than another case of the track sheet: this one waits,
+/// fails, and lists things with two lines each, and folding that into a sheet
+/// built for four fixed rows would make both worse.
+class _FindPanel extends StatelessWidget {
+  const _FindPanel({
+    required this.title,
+    required this.searching,
+    required this.found,
+    required this.note,
+    required this.onChoose,
+    required this.onDismiss,
+  });
+
+  final String title;
+  final bool searching;
+  final List<SubtitleCandidate>? found;
+  final String? note;
+  final ValueChanged<SubtitleCandidate> onChoose;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final results = found ?? const <SubtitleCandidate>[];
+
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onDismiss,
+        child: ColoredBox(
+          color: const Color(0x99000000),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              // Never the whole screen, so there is always scrim left to tap
+              // and always some picture behind it.
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+              ),
+              padding: EdgeInsets.only(
+                left: OpenTvTouchSpace.gutter,
+                right: OpenTvTouchSpace.gutter,
+                top: OpenTvTouchSpace.lg,
+                bottom: MediaQuery.of(context).padding.bottom +
+                    OpenTvTouchSpace.lg,
+              ),
+              decoration: const BoxDecoration(
+                color: OpenTvColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Subtitles for “$title”',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: OpenTvTouchType.title,
+                        ),
+                      ),
+                      TouchTile(
+                        onTap: onDismiss,
+                        semanticLabel: 'Close',
+                        child: Container(
+                          alignment: Alignment.center,
+                          constraints: const BoxConstraints(
+                            minWidth: OpenTvTouchSpace.tapTarget,
+                            minHeight: OpenTvTouchSpace.tapTarget,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: OpenTvTouchSpace.md,
+                          ),
+                          child: Text(
+                            'DONE',
+                            style: OpenTvTouchType.label.copyWith(
+                              color: OpenTvColors.tally,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (searching) ...[
+                    const SizedBox(height: OpenTvTouchSpace.md),
+                    const TouchProgressBar(),
+                    const SizedBox(height: OpenTvTouchSpace.sm),
+                    const Text(
+                      'Looking…',
+                      style: OpenTvTouchType.bodyMuted,
+                    ),
+                  ],
+                  if (note case final message?) ...[
+                    const SizedBox(height: OpenTvTouchSpace.sm),
+                    Text(message, style: OpenTvTouchType.bodyMuted),
+                  ],
+                  if (results.isNotEmpty) ...[
+                    const SizedBox(height: OpenTvTouchSpace.md),
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: results.length,
+                        itemBuilder: (context, i) {
+                          final candidate = results[i];
+                          return _Row(
+                            title: candidate.release.isEmpty
+                                ? candidate.fileName ?? 'Subtitle'
+                                : candidate.release,
+                            // The two facts that decide whether it will fit:
+                            // what it was ripped from, above, and how many
+                            // people kept it.
+                            detail: [
+                              candidate.language.toUpperCase(),
+                              if (candidate.fromTrusted) 'trusted',
+                              if (candidate.hearingImpaired) 'SDH',
+                              '${candidate.downloads} downloads',
+                            ].join('  ·  '),
+                            selected: false,
+                            onTap: searching
+                                ? null
+                                : () => onChoose(candidate),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),

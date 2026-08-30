@@ -22,6 +22,7 @@ import 'host.dart';
 import 'phone_setup_screen.dart';
 import 'setup_screen.dart';
 import 'source_service.dart';
+import 'subtitle_service.dart';
 import 'stream_resolver.dart';
 import 'vpn_service.dart';
 
@@ -324,6 +325,10 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       });
 
       unawaited(_fillMissingRegions(db));
+      // Anything a crash left behind. The player deletes its own subtitle on
+      // the way out, so this only ever finds something after a kill — which
+      // on a television, usually ended by pulling the power, is routine.
+      unawaited(SubtitleService(host: _host).sweep().catchError((_) => 0));
     } on Object catch (error) {
       if (mounted) setState(() => _failure = '$error');
     }

@@ -7,7 +7,9 @@ import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
 import '../app/app_version.dart';
+import '../app/host.dart';
 import '../app/source_service.dart';
+import '../app/subtitle_service.dart';
 import '../app/stream_resolver.dart';
 import '../app/vpn_service.dart';
 import 'channel_row.dart';
@@ -18,6 +20,7 @@ import 'mobile_account.dart';
 import 'mobile_guide.dart';
 import 'mobile_parental.dart';
 import 'mobile_settings_screens.dart';
+import 'mobile_subtitles.dart';
 import 'mobile_tunnel.dart';
 import 'region_screen.dart';
 import 'zapping.dart';
@@ -76,11 +79,27 @@ class _MobileHomeState extends State<MobileHome> {
   /// stream URL is ever persisted, on this device or the television, because
   /// the username and password are in its path — the same rule, enforced in
   /// the same place, because it is the same resolver.
+  /// What to search OpenSubtitles with, when the viewer asks.
+  ///
+  /// Built here rather than in the player because only this screen knows what
+  /// the thing is called. The player's own title is the provider's string —
+  /// for an episode a file path carrying the show, the year, the region and
+  /// the quality — and a search with that matches nothing.
+  final _subtitles = SubtitleService(host: const Host());
+
+  SubtitleQuery? _queryFor(Playable item, SubtitleQuery? given) {
+    if (given != null) return given;
+    if (item.isLive) return null;
+    final cleaned = TitleCleaner.clean(item.title);
+    return SubtitleQuery(title: cleaned.title, year: cleaned.year);
+  }
+
   Future<void> _play(
     Playable item, {
     Duration? startAt,
     List<Playable> queue = const [],
     List<Channel> channels = const [],
+    SubtitleQuery? subtitles,
   }) async {
     final url = await widget.resolver.urlFor(widget.source, item);
     if (!mounted) return;
@@ -115,6 +134,10 @@ class _MobileHomeState extends State<MobileHome> {
             streamOptions: widget.resolver.optionsFor(item),
             isLive: item.isLive,
             startAt: startAt,
+            // Absent on live: there is nothing to look up for a channel, and
+            // a control that cannot work is worse than none.
+            subtitleService: item.isLive ? null : _subtitles,
+            subtitleQuery: _queryFor(item, subtitles),
             nextLabel: _nextIn(queue, item)?.title,
             onPreviousChannel: zapTo(channels, item, -1) == null
                 ? null
@@ -344,6 +367,15 @@ class _MobileHomeState extends State<MobileHome> {
           onEpisode: (episode) => _play(
             Playable.episode(episode),
             queue: [for (final row in episodes) Playable.episode(row)],
+            // The show's name and the numbers, not the episode's file path.
+            // A search for "4K-A+ - Acapulco (2021) (US) - S01E01 - Pilot"
+            // matches nothing; the show plus 1 and 1 matches the episode.
+            subtitles: SubtitleQuery(
+              title: cleaned.title,
+              year: cleaned.year,
+              season: episode.season ?? 1,
+              episode: episode.episodeNumber,
+            ),
           ),
           // A series has no stream of its own; the button plays the first
           // episode rather than pretending there is something behind it.
@@ -839,6 +871,9 @@ class _MobileHomeState extends State<MobileHome> {
           ),
           onOpenTunnel: () => _push(MobileTunnelScreen(vpn: widget.vpn)),
           onScanHandover: widget.onScanHandover,
+          onOpenSubtitles: () => _push(
+            const MobileSubtitlesScreen(),
+          ),
           onOpenTmdb: () => _push(
             const MobileSecretScreen(
               title: 'TMDB key',
@@ -1590,6 +1625,7 @@ class _SettingsTab extends StatelessWidget {
     required this.onOpenCategories,
     required this.onOpenPin,
     required this.onOpenTmdb,
+    required this.onOpenSubtitles,
     required this.onOpenAccount,
     required this.onOpenTunnel,
     required this.onScanHandover,
@@ -1606,6 +1642,7 @@ class _SettingsTab extends StatelessWidget {
   final VoidCallback onOpenCategories;
   final VoidCallback onOpenPin;
   final VoidCallback onOpenTmdb;
+  final VoidCallback onOpenSubtitles;
   final VoidCallback onOpenAccount;
   final VoidCallback onOpenTunnel;
   final VoidCallback onScanHandover;
@@ -1668,6 +1705,12 @@ class _SettingsTab extends StatelessWidget {
           name: 'TMDB key',
           now: 'Synopses, cast and artwork',
           onTap: onOpenTmdb,
+          artwork: false,
+        ),
+        ChannelRow(
+          name: 'Subtitles',
+          now: 'Find one when the stream has none',
+          onTap: onOpenSubtitles,
           artwork: false,
         ),
         const _Heading('Another device'),

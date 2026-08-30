@@ -32,6 +32,20 @@ class Host {
   /// Callers must treat the catalogue as disposable for that reason. The
   /// sync engine is resumable and checkpointed per stage, which is exactly
   /// what re-filling a purged cache needs.
+  /// Where files that are meant to be thrown away live.
+  ///
+  /// Separate from [dataDirectory] because the platforms treat the two
+  /// differently: on iOS the documents directory is backed up to iCloud, and
+  /// a subtitle downloaded for one sitting has no business surviving a
+  /// restore onto a new phone.
+  Future<String> cacheDirectory() async {
+    final path = await _channel.invokeMethod<String>('cacheDirectory');
+    if (path == null || path.isEmpty) {
+      throw StateError('the host returned no cache directory');
+    }
+    return path;
+  }
+
   Future<String> dataDirectory() async {
     final path = await _channel.invokeMethod<String>('dataDirectory');
     if (path == null) {

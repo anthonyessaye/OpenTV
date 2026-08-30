@@ -17,6 +17,11 @@ class HostContract {
   /// Every method the Dart side may call on `opentv/host`.
   static const methods = <String>[
     'dataDirectory',
+    // Somewhere for files that are meant to be thrown away — a downloaded
+    // subtitle and nothing else so far. Distinct from dataDirectory because
+    // on iOS that is backed up to iCloud, and a temporary file that survives
+    // a restore is not temporary.
+    'cacheDirectory',
     'writeSecret',
     'readSecret',
     'deleteSecret',
