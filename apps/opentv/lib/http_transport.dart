@@ -43,6 +43,50 @@ class HttpTransport implements Transport {
   }
 
   @override
+  Future<Object?> postJson(
+    Uri url, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    try {
+      final request = await _client.postUrl(url);
+      headers?.forEach(request.headers.set);
+      if (body != null) request.write(jsonEncode(body));
+      final response = await request.close();
+
+      // The body is read before the status is judged. A subtitle service
+      // answers a refused key and a spent daily allowance with a JSON message
+      // worth showing, and draining it would throw that away in favour of a
+      // number.
+      final text = await response.transform(utf8.decoder).join();
+      if (response.statusCode != 200) {
+        throw TransportException(
+          _messageIn(text) ?? 'HTTP ${response.statusCode}',
+          statusCode: response.statusCode,
+          url: url,
+        );
+      }
+      return jsonDecode(text);
+    } on TransportException {
+      rethrow;
+    } on Object catch (e) {
+      throw TransportException('$e', url: url);
+    }
+  }
+
+  static String? _messageIn(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['message'] is String) {
+        return decoded['message'] as String;
+      }
+    } on FormatException {
+      // Not JSON. The status alone will have to do.
+    }
+    return null;
+  }
+
+  @override
   Stream<String> getText(Uri url, {Map<String, String>? headers}) async* {
     final request = await _client.getUrl(url);
     headers?.forEach(request.headers.set);

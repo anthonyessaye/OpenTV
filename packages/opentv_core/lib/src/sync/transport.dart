@@ -12,6 +12,18 @@ abstract class Transport {
   /// knowing what client is underneath.
   Future<Object?> getJson(Uri url, {Map<String, String>? headers});
 
+  /// Posts a JSON body and decodes the JSON reply.
+  ///
+  /// Here because OpenSubtitles asks for one: a search is a GET, and turning
+  /// a chosen subtitle into a link somebody can fetch is a POST. Rather than
+  /// give that one client its own private way to reach the network, which is
+  /// the thing this interface exists to prevent.
+  Future<Object?> postJson(
+    Uri url, {
+    Map<String, String>? headers,
+    Object? body,
+  });
+
   /// Fetches a document as a stream of string chunks.
   ///
   /// Used for XMLTV guides, which are far too large to hold in memory. The

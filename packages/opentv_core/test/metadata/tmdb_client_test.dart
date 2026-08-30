@@ -5,6 +5,14 @@ import 'package:test/test.dart';
 
 /// Answers by path, and records what was asked.
 class FakeTransport implements Transport {
+  @override
+  Future<Object?> postJson(
+    Uri url, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async =>
+      throw UnimplementedError('nothing here posts');
+
   FakeTransport({this.responses = const {}, this.failures = const {}});
 
   final Map<String, Object?> responses;

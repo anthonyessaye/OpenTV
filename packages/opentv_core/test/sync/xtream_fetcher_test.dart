@@ -28,6 +28,14 @@ Future<int> _addSource() => db.addSource(
 /// Answers by the `action` query parameter, which is how the portal API
 /// distinguishes its endpoints.
 class FakeTransport implements Transport {
+  @override
+  Future<Object?> postJson(
+    Uri url, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async =>
+      throw UnimplementedError('nothing here posts');
+
   FakeTransport({
     this.responses = const {},
     this.guide = '<tv></tv>',
