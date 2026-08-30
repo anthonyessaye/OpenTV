@@ -8,6 +8,7 @@ library;
 export 'src/epg/epg_models.dart';
 export 'src/secret_match.dart';
 export 'src/subtitles/subtitle_store.dart';
+export 'src/subtitles/subtitle_text.dart';
 export 'src/subtitles/subtitle_models.dart';
 export 'src/subtitles/opensubtitles_client.dart';
 export 'src/store/stale_catalogue.dart';

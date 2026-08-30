@@ -34,6 +34,10 @@ class FakeTransport implements Transport {
   }
 
   @override
+  Future<List<int>> getBytes(Uri url, {Map<String, String>? headers}) async =>
+      const [];
+
+  @override
   Stream<String> getText(Uri url, {Map<String, String>? headers}) =>
       const Stream.empty();
 }

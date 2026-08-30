@@ -24,6 +24,15 @@ abstract class Transport {
     Object? body,
   });
 
+  /// Fetches a document as bytes, undecoded.
+  ///
+  /// Here because a subtitle is frequently not UTF-8 — a large share of the
+  /// corpus predates it — and decoding at the transport throws away the only
+  /// chance to guess the encoding from the bytes and the language. [getText]
+  /// is for documents this app knows are UTF-8, which a guide is and a
+  /// subtitle is not.
+  Future<List<int>> getBytes(Uri url, {Map<String, String>? headers});
+
   /// Fetches a document as a stream of string chunks.
   ///
   /// Used for XMLTV guides, which are far too large to hold in memory. The

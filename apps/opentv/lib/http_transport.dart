@@ -87,6 +87,40 @@ class HttpTransport implements Transport {
   }
 
   @override
+  Future<List<int>> getBytes(Uri url, {Map<String, String>? headers}) async {
+    try {
+      final request = await _client.getUrl(url);
+      headers?.forEach(request.headers.set);
+      final response = await request.close();
+
+      if (response.statusCode != 200) {
+        await response.drain<void>();
+        throw TransportException(
+          'HTTP ${response.statusCode}',
+          statusCode: response.statusCode,
+          url: url,
+        );
+      }
+
+      final bytes = <int>[];
+      await for (final chunk in response) {
+        bytes.addAll(chunk);
+        // Bounded. A subtitle is tens of kilobytes; an unbounded read from a
+        // link this app did not choose is a way to exhaust a television's
+        // memory with one request.
+        if (bytes.length > 8 * 1024 * 1024) {
+          throw TransportException('the file is far too large', url: url);
+        }
+      }
+      return bytes;
+    } on TransportException {
+      rethrow;
+    } on Object catch (e) {
+      throw TransportException('$e', url: url);
+    }
+  }
+
+  @override
   Stream<String> getText(Uri url, {Map<String, String>? headers}) async* {
     final request = await _client.getUrl(url);
     headers?.forEach(request.headers.set);

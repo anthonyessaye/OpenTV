@@ -29,6 +29,10 @@ Future<int> _addSource() => db.addSource(
 /// distinguishes its endpoints.
 class FakeTransport implements Transport {
   @override
+  Future<List<int>> getBytes(Uri url, {Map<String, String>? headers}) async =>
+      throw UnimplementedError('nothing here fetches bytes');
+
+  @override
   Future<Object?> postJson(
     Uri url, {
     Map<String, String>? headers,

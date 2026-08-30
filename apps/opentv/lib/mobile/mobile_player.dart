@@ -429,6 +429,31 @@ class _MobilePlayerState extends State<MobilePlayer>
     }
   }
 
+  /// Nudges the subtitle timing, and reloads the file at the new offset.
+  ///
+  /// The one control that matters most here. Matching is by title and never
+  /// by hash — an IPTV stream is re-muxed by the provider and matches nothing
+  /// in anybody's index — so a subtitle for the right film timed against the
+  /// wrong release is the ordinary case rather than the unlucky one.
+  ///
+  /// Half a second a press: smaller is a control somebody presses eight
+  /// times, larger overshoots the drift that actually occurs.
+  Future<void> _nudgeSubtitle(Duration by) async {
+    final service = widget.subtitleService;
+    if (service == null || !service.canAdjust) return;
+
+    final previous = _loadedSubtitle;
+    final file = await service.reshift(service.delay + by);
+    if (file == null || !mounted) return;
+
+    _loadedSubtitle = file;
+    await _channel?.invokeMethod<void>('addSubtitle', {'path': file.path});
+    // Only once the engine has the new one. Deleting first pulls the file out
+    // from under a player that is still reading it.
+    if (previous != null) await service.discard(previous);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _openSheet(_Sheet sheet) async {
     final raw = await _channel?.invokeListMethod<Object?>('tracks');
     if (!mounted) return;
@@ -641,6 +666,10 @@ class _MobilePlayerState extends State<MobilePlayer>
                 sheet: _sheet!,
                 tracks: _tracks,
                 onFindSubtitles: _canSearch ? _search : null,
+                subtitleDelay: (widget.subtitleService?.canAdjust ?? false)
+                    ? widget.subtitleService!.delay
+                    : null,
+                onNudgeSubtitle: _nudgeSubtitle,
                 aspect: _aspect,
                 width: _width,
                 height: _height,
@@ -1038,6 +1067,8 @@ class _SheetPanel extends StatelessWidget {
     required this.sheet,
     required this.tracks,
     this.onFindSubtitles,
+    this.subtitleDelay,
+    this.onNudgeSubtitle,
     required this.aspect,
     required this.width,
     required this.height,
@@ -1049,6 +1080,11 @@ class _SheetPanel extends StatelessWidget {
   final _Sheet sheet;
   final List<MediaTrack> tracks;
   final VoidCallback? onFindSubtitles;
+
+  /// The offset currently applied, or null when nothing was downloaded — a
+  /// provider's own track cannot be shifted, because the file is theirs.
+  final Duration? subtitleDelay;
+  final ValueChanged<Duration>? onNudgeSubtitle;
   final AspectMode aspect;
   final int width;
   final int height;
@@ -1128,6 +1164,11 @@ class _SheetPanel extends StatelessWidget {
           selected: false,
           onTap: onFindSubtitles,
         ));
+      }
+      if (sheet == _Sheet.subtitles &&
+          subtitleDelay != null &&
+          onNudgeSubtitle != null) {
+        rows.add(_DelayRow(delay: subtitleDelay!, onNudge: onNudgeSubtitle!));
       }
     }
 
@@ -1601,4 +1642,81 @@ class _FindPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Shifting a downloaded subtitle earlier or later.
+///
+/// Only ever offered for a subtitle this app downloaded, because moving one
+/// means rewriting the file: libVLC has a subtitle delay and Media3 has
+/// nothing of the kind, so the only offset that works on both platforms is
+/// applied to the text. A provider's own track cannot be moved at all.
+class _DelayRow extends StatelessWidget {
+  const _DelayRow({required this.delay, required this.onNudge});
+
+  final Duration delay;
+  final ValueChanged<Duration> onNudge;
+
+  static const _step = Duration(milliseconds: 500);
+
+  @override
+  Widget build(BuildContext context) {
+    final seconds = delay.inMilliseconds / 1000;
+    final label = seconds == 0
+        ? 'In sync'
+        : '${seconds > 0 ? '+' : ''}${seconds.toStringAsFixed(1)}s';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: OpenTvTouchSpace.sm),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('TIMING', style: OpenTvTouchType.body),
+                Text(
+                  'Downloaded subtitles are often timed for another cut',
+                  style: OpenTvTouchType.caption,
+                ),
+              ],
+            ),
+          ),
+          _Nudge(label: '\u2212', onTap: () => onNudge(-_step)),
+          SizedBox(
+            width: 76,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: OpenTvTouchType.data,
+            ),
+          ),
+          _Nudge(label: '+', onTap: () => onNudge(_step)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Nudge extends StatelessWidget {
+  const _Nudge({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => TouchTile(
+        onTap: onTap,
+        semanticLabel: label == '+' ? 'Later' : 'Earlier',
+        child: Container(
+          alignment: Alignment.center,
+          width: OpenTvTouchSpace.tapTarget,
+          height: OpenTvTouchSpace.tapTarget,
+          decoration: BoxDecoration(
+            color: OpenTvColors.surfaceLifted,
+            borderRadius: OpenTvRadius.tile,
+          ),
+          child: Text(label, style: OpenTvTouchType.section),
+        ),
+      );
 }

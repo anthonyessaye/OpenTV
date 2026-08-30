@@ -109,30 +109,27 @@ class SubtitleService {
       );
       final link = await client.linkFor(candidate.fileId);
 
-      final buffer = StringBuffer();
-      await for (final chunk in transport.getText(link)) {
-        buffer.write(chunk);
-        // Bounded. A subtitle is tens of kilobytes; anything past a couple of
-        // megabytes is not one, and an unbounded read from a link this app
-        // did not choose is a way to exhaust a television's memory.
-        if (buffer.length > 4 * 1024 * 1024) {
-          throw const SubtitleServiceException(
-            'That subtitle is far larger than a subtitle should be, so it '
-            'has not been loaded.',
-          );
-        }
-      }
-      if (buffer.isEmpty) {
+      // Bytes rather than text. A subtitle is frequently not UTF-8 — the
+      // Turkish, Arabic and Cyrillic files this feature exists for are
+      // routinely in the Windows code page of their language — and decoding
+      // at the transport threw the whole download away with a message about
+      // the network.
+      final bytes = await transport.getBytes(link);
+      if (bytes.isEmpty) {
         throw const SubtitleServiceException('That subtitle came back empty.');
       }
+
+      final text = SubtitleText.toSubRip(
+        SubtitleText.decode(bytes, language: candidate.language),
+      );
+
+      _source = text;
+      _delay = Duration.zero;
 
       final store = await _store();
       // Awaited rather than returned: the finally below closes the transport,
       // and handing back the future would close it mid-write.
-      return await store.write(
-        buffer.toString(),
-        language: candidate.language,
-      );
+      return await store.write(text, language: candidate.language);
     } on TransportException catch (error) {
       throw SubtitleServiceException(
         'The subtitle could not be downloaded. ${error.message}',
@@ -140,6 +137,32 @@ class SubtitleService {
     } finally {
       transport.close();
     }
+  }
+
+  /// The subtitle as it was downloaded, kept so a delay can be reapplied.
+  ///
+  /// Held rather than re-read, and re-shifted from the original rather than
+  /// from the last shift: shifting a shifted file accumulates its own rounding
+  /// and, worse, cannot go back — a viewer who overshoots and corrects would
+  /// otherwise never return to where they started.
+  String? _source;
+  Duration _delay = Duration.zero;
+
+  Duration get delay => _delay;
+
+  bool get canAdjust => _source != null;
+
+  /// Rewrites the file at a new offset and hands back the new one.
+  ///
+  /// The old file is left for the caller to discard once the engine has let
+  /// go of it. Deleting it here would pull it out from under a player that is
+  /// still reading it.
+  Future<File?> reshift(Duration delay, {String language = 'sub'}) async {
+    final source = _source;
+    if (source == null) return null;
+    _delay = delay;
+    final store = await _store();
+    return store.write(SubtitleText.shift(source, delay), language: language);
   }
 
   Future<void> discard(File file) async => (await _store()).discard(file);

@@ -6,6 +6,10 @@ import 'package:test/test.dart';
 /// Answers by path, and records what was asked.
 class FakeTransport implements Transport {
   @override
+  Future<List<int>> getBytes(Uri url, {Map<String, String>? headers}) async =>
+      throw UnimplementedError('nothing here fetches bytes');
+
+  @override
   Future<Object?> postJson(
     Uri url, {
     Map<String, String>? headers,
