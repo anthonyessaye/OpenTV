@@ -1,7 +1,11 @@
 import 'package:flutter/cupertino.dart' show cupertinoTextSelectionHandleControls;
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/gestures.dart' show kLongPressTimeout, kTouchSlop;
 import 'package:flutter/services.dart' show TextInputAction, TextInputType;
-import 'package:flutter/material.dart' show materialTextSelectionHandleControls;
+import 'package:flutter/material.dart'
+    show AdaptiveTextSelectionToolbar, materialTextSelectionHandleControls;
 import 'package:flutter/widgets.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
@@ -114,8 +118,42 @@ class _TouchFieldState extends State<TouchField>
     });
   }
 
+  /// A hold, timed by hand.
+  Timer? _hold;
+  Offset? _holdFrom;
+
+  void _holdStarted(PointerDownEvent event) {
+    _holdFrom = event.position;
+    _hold?.cancel();
+    _hold = Timer(kLongPressTimeout, () {
+      if (!mounted || !widget.enabled) return;
+      _node.requestFocus();
+      // Deferred a frame: requesting focus builds the selection overlay the
+      // toolbar hangs from, and asking for it in the same frame finds nothing
+      // to hang it on.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) editableTextKey.currentState?.showToolbar();
+      });
+    });
+  }
+
+  /// A finger that travels is scrolling the form or dragging a caret, not
+  /// holding.
+  void _holdMoved(PointerMoveEvent event) {
+    final from = _holdFrom;
+    if (from == null) return;
+    if ((event.position - from).distance > kTouchSlop) _holdCancelled();
+  }
+
+  void _holdCancelled() {
+    _hold?.cancel();
+    _hold = null;
+    _holdFrom = null;
+  }
+
   @override
   void dispose() {
+    _hold?.cancel();
     _node.removeListener(_onFocus);
     _node.dispose();
     super.dispose();
@@ -143,9 +181,31 @@ class _TouchFieldState extends State<TouchField>
           // selection gestures inside it reach the text.
           IgnorePointer(
             ignoring: !widget.enabled,
-            child: _gestures.buildGestureDetector(
-            behavior: HitTestBehavior.opaque,
-            child: Container(
+            child: Listener(
+              // Hold to get the context menu, and with it Paste.
+              //
+              // A Listener rather than a GestureDetector, which is the whole
+              // point. The selection builder below registers a long press of
+              // its own and it never fires here: the drag-selection recognizer
+              // beside it claims the pointer on the way down and the arena is
+              // then settled, so a competing long press — the framework's own
+              // or one added above it — never gets a turn. Inside a TextField
+              // that never shows, because TextField arrives with the whole
+              // arrangement tuned around it; a bare EditableText does not, and
+              // the symptom is a field that selects and drags perfectly and
+              // cannot be pasted into.
+              //
+              // Pointer events are delivered before the arena decides and
+              // regardless of who wins it, so this is the one place a hold can
+              // be seen at all. Everything else — the caret, the handles,
+              // dragging a selection — still comes from the builder.
+              onPointerDown: _holdStarted,
+              onPointerMove: _holdMoved,
+              onPointerUp: (_) => _holdCancelled(),
+              onPointerCancel: (_) => _holdCancelled(),
+              child: _gestures.buildGestureDetector(
+              behavior: HitTestBehavior.opaque,
+              child: Container(
               constraints: BoxConstraints(
                 minHeight: widget.multiline ? 110 : OpenTvTouchSpace.tapTarget,
               ),
@@ -207,6 +267,21 @@ class _TouchFieldState extends State<TouchField>
                       // and no way to select a word — which on a phone is most
                       // of what editing text is.
                       selectionControls: _selectionControls,
+                      // And the toolbar has to be supplied as well as the
+                      // handles, which is the part that was missing.
+                      //
+                      // `contextMenuBuilder` has no default on EditableText —
+                      // TextField supplies one, and this app does not use
+                      // TextField. The handle controls above are deliberately
+                      // the `...HandleControls` variants, which draw handles
+                      // and hand the toolbar to this builder; with nothing
+                      // here, holding a field selected a word and offered
+                      // nothing to do with it. Wiring up the long press was
+                      // necessary and was not sufficient.
+                      contextMenuBuilder: (context, editableTextState) =>
+                          AdaptiveTextSelectionToolbar.editableText(
+                        editableTextState: editableTextState,
+                      ),
                       enableInteractiveSelection: true,
                       showCursor: true,
                       // An address is not a sentence: autocorrect capitalises
@@ -217,6 +292,7 @@ class _TouchFieldState extends State<TouchField>
                   ],
                 ),
               ),
+            ),
             ),
             ),
           ),
