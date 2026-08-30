@@ -401,6 +401,40 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     });
   }
 
+  /// Closes a screen this state is holding open, if it is holding one.
+  ///
+  /// A few screens are a flag here rather than a route on the navigator —
+  /// they replace the whole tree instead of sitting on top of it — so there
+  /// is nothing for back to pop and it fell straight through to the quit
+  /// confirmation. Showing a handover code and pressing back to get out of
+  /// it is an ordinary thing to do, and being asked whether to close the app
+  /// is a poor answer to it.
+  ///
+  /// [_settingUp] is deliberately not here. It is a flow with its own skip on
+  /// every step, and backing out of it would leave a provider imported with
+  /// its questions half answered.
+  bool _closeRootScreen() {
+    if (_incoming != null) {
+      setState(() => _incoming = null);
+      return true;
+    }
+    if (_offering) {
+      setState(() => _offering = false);
+      return true;
+    }
+    if (_usingPhone) {
+      setState(() => _usingPhone = false);
+      return true;
+    }
+    // Only when there is something to go back to. On a first run this is the
+    // whole app, and closing it would leave a blank screen.
+    if (_addingSource && _sources.isNotEmpty) {
+      setState(() => _addingSource = false);
+      return true;
+    }
+    return false;
+  }
+
   /// Asks before closing, and gives every screen a chance first.
   ///
   /// This is the only place on Android where the back button can be caught at
@@ -410,6 +444,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   /// is those screens; the panel is what happens when none of them wants it.
   void _onSystemBack() {
     if (BackKeysRegistry.dispatch()) return;
+    if (_closeRootScreen()) return;
 
     // A phone gets the touch sheet. ConfirmPanel is drawn at television type
     // on a 1920x1080 canvas and answers a remote rather than a finger, so on
