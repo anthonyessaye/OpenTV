@@ -636,7 +636,13 @@ class _MobilePlayerState extends State<MobilePlayer>
                   onAudio: _tracks.any((t) => t.kindMatches('audio'))
                       ? () => _openSheet(_Sheet.audio)
                       : null,
-                  onSubtitles: _tracks.any((t) => t.kindMatches('text'))
+                  // Also offered once something has been downloaded, even
+                  // when the stream carries no text track of its own — which
+                  // is the usual case for a stream somebody went looking for
+                  // a subtitle for. Without this the timing control lived
+                  // behind a button that did not exist.
+                  onSubtitles: _tracks.any((t) => t.kindMatches('text')) ||
+                          (widget.subtitleService?.canAdjust ?? false)
                       ? () => _openSheet(_Sheet.subtitles)
                       : null,
                   onPicture: () => _openSheet(_Sheet.picture),
@@ -857,10 +863,21 @@ class _Chrome extends StatelessWidget {
             // FIND SUBTITLES could be seen and never reached. A control that
             // moves is worse than one that stays put; a control that cannot
             // be pressed is worse than either.
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
+            // Full width, or the row centres itself.
+            //
+            // A Column hands its children loose constraints and centres what
+            // does not fill them, and a SingleChildScrollView given a loose
+            // constraint sizes to its content. So the controls sat in the
+            // middle whenever they happened to fit, and only lined up on the
+            // left once there were enough of them to overflow — which is a
+            // layout that moves depending on how many controls a stream
+            // happens to carry.
+            child: SizedBox(
+              width: double.infinity,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
                   if (onAudio != null)
                     _Control(label: 'AUDIO', onTap: onAudio!),
                   if (onSubtitles != null)
@@ -873,17 +890,18 @@ class _Chrome extends StatelessWidget {
                     ),
                   if (onNext != null)
                     ConstrainedBox(
-                      // Capped, because an episode title is as long as the
-                      // provider felt like making it and would otherwise be
-                      // the whole row on its own.
-                      constraints: const BoxConstraints(maxWidth: 200),
-                      child: _Control(
-                        label: nextLabel ?? 'NEXT',
-                        onTap: onNext!,
-                        emphasis: true,
+                        // Capped, because an episode title is as long as the
+                        // provider felt like making it and would otherwise be
+                        // the whole row on its own.
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        child: _Control(
+                          label: nextLabel ?? 'NEXT',
+                          onTap: onNext!,
+                          emphasis: true,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

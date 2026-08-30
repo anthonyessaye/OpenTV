@@ -149,7 +149,14 @@ class _MobileHomeState extends State<MobileHome> {
             // a control that cannot work is worse than none.
             subtitleService: item.isLive ? null : _subtitles,
             subtitleQuery: _queryFor(item, subtitles),
-            nextLabel: _nextIn(queue, item)?.title,
+            // Named, not pathed. The queue holds provider strings, so
+            // without this the NEXT button reads
+            // "4K-A+ - Acapulco (2021) (US) - S01E02 - …" and says nothing
+            // in the width a button has.
+            nextLabel: switch (_nextIn(queue, item)) {
+              null => null,
+              final next => TitleCleaner.episodeName(next.title) ?? next.title,
+            },
             onPreviousChannel: zapTo(channels, item, -1) == null
                 ? null
                 : () {
@@ -497,6 +504,47 @@ class _MobileHomeState extends State<MobileHome> {
     ];
   }
 
+  /// Plays one episode with the rest of its show behind it.
+  ///
+  /// The Continue shelf played an episode with no queue at all, so the one
+  /// place a viewer is most obviously mid-series — the shelf that exists
+  /// because they are — was the one place with no NEXT button.
+  ///
+  /// The whole show rather than the season. `episodesOf` orders by season and
+  /// then by number, so the last episode of one season is followed by the
+  /// first of the next, which is what somebody watching a series means by
+  /// "next".
+  Future<void> _playEpisode(Episode episode) async {
+    final all = await widget.db.episodesOf(
+      widget.source.id,
+      episode.seriesRemoteId,
+    );
+    if (!mounted) return;
+
+    final series = await widget.db.seriesByRemoteIds(
+      widget.source.id,
+      [episode.seriesRemoteId],
+    );
+    if (!mounted) return;
+
+    final show = series.firstOrNull;
+    final cleaned =
+        show == null ? null : TitleCleaner.clean(show.name);
+
+    await _play(
+      Playable.episode(episode),
+      queue: [for (final row in all) Playable.episode(row)],
+      subtitles: cleaned == null
+          ? null
+          : SubtitleQuery(
+              title: cleaned.title,
+              year: cleaned.year,
+              season: episode.season ?? 1,
+              episode: episode.episodeNumber,
+            ),
+    );
+  }
+
   Future<void> _openRegions() async {
     await Navigator.of(context).push(
       PageRouteBuilder<void>(
@@ -813,7 +861,7 @@ class _MobileHomeState extends State<MobileHome> {
                     title: TitleCleaner.clean(show.name).title,
                     imageUrl: show.coverUrl,
                     progress: null,
-                    onTap: () => _play(Playable.episode(row.next)),
+                    onTap: () => _playEpisode(row.next),
                   ),
             ];
           },

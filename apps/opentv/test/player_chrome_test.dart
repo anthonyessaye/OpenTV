@@ -73,4 +73,22 @@ void main() {
     expect(picture, findsOneWidget);
     expect(tester.getTopLeft(picture).dx, lessThan(360));
   });
+
+  testWidgets('the controls start at the edge, however few there are',
+      (tester) async {
+    // A Column hands loose constraints and centres what does not fill them,
+    // and a scroll view given a loose constraint sizes to its content — so
+    // the row sat in the middle whenever it happened to fit and only lined up
+    // on the left once there were enough controls to overflow. A layout that
+    // moves with how many text tracks a stream carries is not a layout.
+    await pump(tester, const Size(430, 900));
+
+    final picture = find.text('PICTURE');
+    expect(picture, findsOneWidget);
+    expect(
+      tester.getTopLeft(picture).dx,
+      lessThan(120),
+      reason: 'the control row is centred rather than starting at the edge',
+    );
+  });
 }
