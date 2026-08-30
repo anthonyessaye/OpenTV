@@ -83,12 +83,51 @@ void main() {
     // moves with how many text tracks a stream carries is not a layout.
     await pump(tester, const Size(430, 900));
 
-    final picture = find.text('PICTURE');
-    expect(picture, findsOneWidget);
+    // The leftmost control, whatever it happens to be — asserting on a named
+    // one bakes in the order of the row, which is not what this is about.
+    final first = find.text('SUBTITLES');
+    expect(first, findsOneWidget);
     expect(
-      tester.getTopLeft(picture).dx,
-      lessThan(120),
+      tester.getTopLeft(first).dx,
+      lessThan(60),
       reason: 'the control row is centred rather than starting at the edge',
     );
+  });
+
+  testWidgets('there is one subtitles control, not two', (tester) async {
+    // It used to be SUBTITLES — shown only when the stream carried a text
+    // track — plus a separate FIND SUBTITLES beside it. That is two controls
+    // for one question, and the wrong one of them went missing exactly when
+    // it was wanted: a stream with no subtitles is the case somebody opens
+    // this for.
+    await pump(tester, const Size(390, 844));
+
+    expect(find.text('SUBTITLES'), findsOneWidget);
+    expect(find.text('FIND SUBTITLES'), findsNothing);
+  });
+
+  testWidgets('a live channel is offered no subtitles control', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      WidgetsApp(
+        color: OpenTvColors.ground,
+        debugShowCheckedModeBanner: false,
+        textStyle: OpenTvTouchType.body,
+        builder: (context, child) => child ?? const SizedBox(),
+        pageRouteBuilder: <T>(settings, builder) => PageRouteBuilder<T>(
+          settings: settings,
+          pageBuilder: (context, _, _) => builder(context),
+        ),
+        home: const MobilePlayer(
+          url: 'http://example.test/stream',
+          title: 'A Channel',
+          isLive: true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('SUBTITLES'), findsNothing);
   });
 }

@@ -636,15 +636,18 @@ class _MobilePlayerState extends State<MobilePlayer>
                   onAudio: _tracks.any((t) => t.kindMatches('audio'))
                       ? () => _openSheet(_Sheet.audio)
                       : null,
-                  // Also offered once something has been downloaded, even
-                  // when the stream carries no text track of its own — which
-                  // is the usual case for a stream somebody went looking for
-                  // a subtitle for. Without this the timing control lived
-                  // behind a button that did not exist.
-                  onSubtitles: _tracks.any((t) => t.kindMatches('text')) ||
-                          (widget.subtitleService?.canAdjust ?? false)
-                      ? () => _openSheet(_Sheet.subtitles)
-                      : null,
+                  // Always there, on anything that is not live.
+                  //
+                  // It used to appear only when the stream carried a text
+                  // track, with a separate FIND SUBTITLES beside it — which
+                  // is two controls for one question, and the wrong one of
+                  // them was missing exactly when it was wanted: a stream
+                  // with no subtitles is precisely the case somebody opens
+                  // this for. The sheet answers the whole question now: what
+                  // the stream brought, then what can be fetched.
+                  onSubtitles: widget.isLive
+                      ? null
+                      : () => _openSheet(_Sheet.subtitles),
                   onPicture: () => _openSheet(_Sheet.picture),
                   onFindSubtitles: _canSearch ? _search : null,
                   nextLabel: widget.nextLabel,
@@ -883,11 +886,6 @@ class _Chrome extends StatelessWidget {
                   if (onSubtitles != null)
                     _Control(label: 'SUBTITLES', onTap: onSubtitles!),
                   _Control(label: 'PICTURE', onTap: onPicture),
-                  if (onFindSubtitles != null)
-                    _Control(
-                      label: 'FIND SUBTITLES',
-                      onTap: onFindSubtitles!,
-                    ),
                   if (onNext != null)
                     ConstrainedBox(
                         // Capped, because an episode title is as long as the
@@ -898,6 +896,7 @@ class _Chrome extends StatelessWidget {
                           label: nextLabel ?? 'NEXT',
                           onTap: onNext!,
                           emphasis: true,
+                          name: nextLabel != null,
                         ),
                       ),
                   ],
@@ -1032,11 +1031,20 @@ class _Control extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.emphasis = false,
+    this.name = false,
   });
 
   final String label;
   final VoidCallback onTap;
   final bool emphasis;
+
+  /// Whether the label is a name rather than a word.
+  ///
+  /// The others are eyebrows — AUDIO, PICTURE — and the label style is
+  /// tracked monospace, which is what makes a short upper-case word read as
+  /// a control. An episode title set in it reads as a different font
+  /// altogether, because it is one.
+  final bool name;
 
   @override
   Widget build(BuildContext context) {
@@ -1058,7 +1066,8 @@ class _Control extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: OpenTvTouchType.label.copyWith(
+            style: (name ? OpenTvTouchType.section : OpenTvTouchType.label)
+                .copyWith(
               color: emphasis ? OpenTvColors.ground : OpenTvColors.ink,
             ),
           ),
@@ -1163,22 +1172,41 @@ class _SheetPanel extends StatelessWidget {
         ));
       }
       if (mine.isEmpty) {
-        rows.add(const _Row(
-          title: 'NONE',
-          detail: 'This stream carries none',
+        rows.add(_Row(
+          title: 'NONE FROM THE PROVIDER',
+          detail: sheet == _Sheet.subtitles
+              ? 'This stream carries no subtitles of its own'
+              : 'This stream carries none',
           selected: false,
         ));
       }
-      // Offered here as well as on the control row, because this is where
-      // somebody looks when the subtitles are missing or wrong — which is
-      // precisely the moment the feature exists for.
-      if (sheet == _Sheet.subtitles && onFindSubtitles != null) {
-        rows.add(_Row(
-          title: 'FIND ONLINE',
-          detail: 'Search OpenSubtitles for this title',
-          selected: false,
-          onTap: onFindSubtitles,
-        ));
+
+      // What the stream brought is above; what can be fetched is below.
+      //
+      // One question, answered in the order somebody asks it: they open this
+      // to pick a subtitle, find the provider sent none or sent a bad one,
+      // and only then want to look elsewhere. A separate control for the
+      // second half made it two questions, and hid the half that matters
+      // behind a button that only appeared when it was least needed.
+      if (sheet == _Sheet.subtitles) {
+        if (onFindSubtitles != null) {
+          rows.add(_Row(
+            title: 'FIND ONLINE',
+            detail: 'Search OpenSubtitles for this title',
+            selected: false,
+            onTap: onFindSubtitles,
+          ));
+        } else {
+          // Said rather than hidden. A control that is simply absent leaves
+          // somebody concluding the app cannot do this at all, when it can
+          // and is one free key away.
+          rows.add(const _Row(
+            title: 'FIND ONLINE',
+            detail: 'Add a free OpenSubtitles key in Settings → Subtitles, '
+                'and this can look one up',
+            selected: false,
+          ));
+        }
       }
       if (sheet == _Sheet.subtitles &&
           subtitleDelay != null &&

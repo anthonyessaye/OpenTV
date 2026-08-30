@@ -1741,6 +1741,27 @@ class _SearchTabState extends State<_SearchTab> {
             ),
           ),
         ),
+        // Something to look at before anything is typed.
+        //
+        // An empty list under an empty field is a screen that looks broken
+        // rather than one waiting, and this is the only tab a viewer arrives
+        // at with nothing on it.
+        if (_controller.text.trim().isEmpty)
+          const Expanded(child: _SearchPrompt())
+        else if (_channels.isEmpty && _movies.isEmpty && _series.isEmpty)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: OpenTvTouchSpace.page,
+                child: Text(
+                  'Nothing matches that.',
+                  style: OpenTvTouchType.bodyMuted,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          )
+        else
         Expanded(
           child: ListView(
             children: [
@@ -2258,6 +2279,48 @@ class _StaleNotice extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// What the search tab shows before anybody has typed.
+///
+/// Deliberately quiet: a glyph, a line, and what it looks through. The point
+/// is to make an empty screen read as ready rather than as broken, not to
+/// fill it — a page of suggestions here would be a second browse screen
+/// nobody asked for.
+class _SearchPrompt extends StatelessWidget {
+  const _SearchPrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: OpenTvTouchSpace.page,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const GlyphIcon(
+              Glyph.search,
+              size: 40,
+              color: OpenTvColors.inkFaint,
+            ),
+            const SizedBox(height: OpenTvTouchSpace.lg),
+            const Text(
+              'Search this provider',
+              style: OpenTvTouchType.section,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: OpenTvTouchSpace.xs),
+            Text(
+              'Channels, films and series at once. Hidden categories and '
+              'anything behind the parental lock stay out of the results.',
+              style: OpenTvTouchType.bodyMuted,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

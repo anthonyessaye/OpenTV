@@ -603,13 +603,25 @@ class _PlayerScreenState extends State<PlayerScreen>
             // Offered from the subtitles sheet because that is where somebody
             // looks at the moment they find the subtitles missing or wrong,
             // which is precisely what this exists for.
-            if (_sheet == _Sheet.subtitles && _canSearch)
-              const SheetOption(
-                id: _findId,
-                label: 'Find online',
-                detail: 'Search OpenSubtitles for this title',
-                selected: false,
-              ),
+            if (_sheet == _Sheet.subtitles)
+              if (_canSearch)
+                const SheetOption(
+                  id: _findId,
+                  label: 'Find online',
+                  detail: 'Search OpenSubtitles for this title',
+                  selected: false,
+                )
+              else
+                // Said rather than hidden. A row that is simply absent leaves
+                // somebody concluding the television cannot do this, when it
+                // can and is one free key away.
+                const SheetOption(
+                  id: null,
+                  label: 'Find online',
+                  detail: 'Add a free OpenSubtitles key in Settings, '
+                      'Subtitles — then this can look one up',
+                  selected: false,
+                ),
             if (_sheet == _Sheet.subtitles &&
                 (widget.subtitleService?.canAdjust ?? false)) ...[
               const SheetOption(
