@@ -848,46 +848,43 @@ class _Chrome extends StatelessWidget {
               horizontal: OpenTvTouchSpace.gutter,
               vertical: OpenTvTouchSpace.xs,
             ),
-            child: Row(
-              children: [
-                // Scrolls rather than clips. The row was a plain Row, so on a
-                // narrower phone the last control was simply cut in half at
-                // the edge with no way to reach it — and the one most likely
-                // to be cut was NEXT, whose label is an episode title and so
-                // is as long as the provider felt like making it.
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        if (onAudio != null)
-                          _Control(label: 'AUDIO', onTap: onAudio!),
-                        if (onSubtitles != null)
-                          _Control(label: 'SUBTITLES', onTap: onSubtitles!),
-                        _Control(label: 'PICTURE', onTap: onPicture),
-                        if (onFindSubtitles != null)
-                          _Control(
-                            label: 'FIND SUBTITLES',
-                            onTap: onFindSubtitles!,
-                          ),
-                      ],
+            // Every control in the one scroll, NEXT included.
+            //
+            // NEXT was pinned outside it at first, on the reasoning that it
+            // is the one control somebody reaches for without looking. That
+            // was wrong in the way that matters: pinned, it sat on top of the
+            // scrolling row and cut the control beside it in half, so
+            // FIND SUBTITLES could be seen and never reached. A control that
+            // moves is worse than one that stays put; a control that cannot
+            // be pressed is worse than either.
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  if (onAudio != null)
+                    _Control(label: 'AUDIO', onTap: onAudio!),
+                  if (onSubtitles != null)
+                    _Control(label: 'SUBTITLES', onTap: onSubtitles!),
+                  _Control(label: 'PICTURE', onTap: onPicture),
+                  if (onFindSubtitles != null)
+                    _Control(
+                      label: 'FIND SUBTITLES',
+                      onTap: onFindSubtitles!,
                     ),
-                  ),
-                ),
-                if (onNext != null)
-                  ConstrainedBox(
-                    // Kept out of the scroll and capped: it is the one
-                    // control somebody reaches for without looking, so it
-                    // stays where it was, and an episode title is not allowed
-                    // to take the whole row to say so.
-                    constraints: const BoxConstraints(maxWidth: 170),
-                    child: _Control(
-                      label: nextLabel ?? 'NEXT',
-                      onTap: onNext!,
-                      emphasis: true,
+                  if (onNext != null)
+                    ConstrainedBox(
+                      // Capped, because an episode title is as long as the
+                      // provider felt like making it and would otherwise be
+                      // the whole row on its own.
+                      constraints: const BoxConstraints(maxWidth: 200),
+                      child: _Control(
+                        label: nextLabel ?? 'NEXT',
+                        onTap: onNext!,
+                        emphasis: true,
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
           if (!isLive && length != null)

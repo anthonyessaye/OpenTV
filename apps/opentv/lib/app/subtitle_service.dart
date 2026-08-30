@@ -4,6 +4,7 @@ import 'package:opentv_core/opentv_core.dart';
 
 import '../http_transport.dart';
 import 'host.dart';
+import 'settings_screen.dart';
 
 /// What a player needs to know to go looking for a subtitle.
 ///
@@ -59,6 +60,32 @@ class SubtitleService {
 
   /// Clears anything a previous run left behind.
   Future<int> sweep() async => (await _store()).sweep();
+
+  /// Tries the stored key against the service and says what happened.
+  ///
+  /// Reported as a sentence rather than a tick, because the three failures
+  /// are different problems with different answers: a refused key is a
+  /// settings screen, a spent allowance is a wait, and an unreachable service
+  /// is neither.
+  Future<String> check() async {
+    final key = await host.readSecret(keyReference);
+    if (key == null || key.trim().isEmpty) {
+      return 'No key is stored on this device yet.';
+    }
+    final transport = HttpTransport();
+    try {
+      return await OpenSubtitlesClient(
+        apiKey: key.trim(),
+        transport: transport,
+      ).check();
+    } on SubtitleServiceException catch (error) {
+      return error.message;
+    } on Object catch (error) {
+      return 'The service could not be reached. $error';
+    } finally {
+      transport.close();
+    }
+  }
 
   Future<List<SubtitleCandidate>> search(
     SubtitleQuery query, {
@@ -166,4 +193,43 @@ class SubtitleService {
   }
 
   Future<void> discard(File file) async => (await _store()).discard(file);
+}
+
+/// Trying the stored TMDB key against TMDB.
+///
+/// Beside the subtitle one because they are the same job: a settings screen
+/// can only ever say that something is stored, and "stored" and "works" are
+/// different facts. The difference used to surface as films with no artwork
+/// and nothing anywhere to say why.
+class TmdbKeyCheck {
+  const TmdbKeyCheck({required this.host});
+
+  final Host host;
+
+  Future<String> call() async {
+    final key = await host.readSecret(SettingsScreen.tmdbReference);
+    if (key == null || key.trim().isEmpty) {
+      return 'No key is stored on this device yet.';
+    }
+    final transport = HttpTransport();
+    try {
+      return await TmdbClient(
+        apiKey: key.trim(),
+        transport: transport,
+      ).check();
+    } on TransportException catch (error) {
+      // The one failure worth naming: TMDB issues a v3 key and a v4 token on
+      // the same page, only one goes in a query string, and the wrong one is
+      // answered with a 401 that said nothing to anybody before now.
+      if (error.isAuthFailure) {
+        return 'TMDB refused this key. Check you pasted the API key or the '
+            'read access token exactly as the site shows it.';
+      }
+      return 'TMDB could not be reached. ${error.message}';
+    } on Object catch (error) {
+      return 'TMDB could not be reached. $error';
+    } finally {
+      transport.close();
+    }
+  }
 }

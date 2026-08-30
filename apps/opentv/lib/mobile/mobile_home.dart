@@ -136,7 +136,12 @@ class _MobileHomeState extends State<MobileHome> {
           child: MobilePlayer(
             url: url,
             title: item.title,
-            subtitle: item.number == null ? null : 'Channel ${item.number}',
+            // Only a channel has a channel number. Playable.number is the
+            // episode number for a series, so this labelled episode one of a
+            // comedy as "Channel 1".
+            subtitle: item.isLive && item.number != null
+                ? 'Channel ${item.number}'
+                : null,
             streamOptions: widget.resolver.optionsFor(item),
             isLive: item.isLive,
             startAt: startAt,
@@ -883,9 +888,10 @@ class _MobileHomeState extends State<MobileHome> {
             const MobileSubtitlesScreen(),
           ),
           onOpenTmdb: () => _push(
-            const MobileSecretScreen(
+            MobileSecretScreen(
               title: 'TMDB key',
               reference: MobileSecretReferences.tmdb,
+              onCheck: const TmdbKeyCheck(host: Host()).call,
               explanation:
                   'Where synopses, cast and artwork come from. TMDB issues '
                   'one per person, free, at themoviedb.org. Either credential '

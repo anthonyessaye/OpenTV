@@ -81,6 +81,25 @@ class OpenSubtitlesClient {
     return out;
   }
 
+  /// Asks the service whether this key works, and says what it found.
+  ///
+  /// A search rather than a download: a download would spend one of the
+  /// handful the free allowance gives per day, and testing a key must not
+  /// cost the viewer the thing they were testing it for.
+  ///
+  /// Worth having because every failure here is silent until somebody needs
+  /// a subtitle in the middle of a film. A key with a typo, a key pasted with
+  /// a trailing space, a consumer that was never activated — all of them look
+  /// identical to a working key on the settings screen, which says only that
+  /// something is stored.
+  Future<String> check() async {
+    final found = await search(query: 'Casablanca', language: 'en');
+    return found.isEmpty
+        ? 'The key works. That search found nothing, which is unusual but not '
+            'a problem with the key.'
+        : 'The key works. That search found ${found.length} subtitles.';
+  }
+
   /// Turns a chosen file into a link that can be fetched.
   ///
   /// A separate call on purpose, on their side and so on ours: this is what

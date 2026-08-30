@@ -121,6 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _note;
   String _tmdbKey = '';
   String _subtitleKey = '';
+  bool _checking = false;
 
   XtreamAccount? _account;
   bool _askingPortal = false;
@@ -1015,6 +1016,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (_tmdbKey.isNotEmpty) ...[
               const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(
+                label: _checking ? 'TESTING…' : 'TEST KEY',
+                onSelect: _checking ? null : _testTmdb,
+              ),
+              const SizedBox(width: OpenTvSpace.sm),
               PlayerButton(label: 'REMOVE', onSelect: _clearKey),
             ],
           ],
@@ -1088,6 +1094,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (_subtitleKey.isNotEmpty) ...[
               const SizedBox(width: OpenTvSpace.sm),
+              PlayerButton(
+                label: _checking ? 'TESTING…' : 'TEST KEY',
+                onSelect: _checking ? null : _testSubtitles,
+              ),
+              const SizedBox(width: OpenTvSpace.sm),
               PlayerButton(label: 'REMOVE', onSelect: _clearSubtitleKey),
             ],
           ],
@@ -1111,6 +1122,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     );
   }
+
+  /// Tries a stored key against whatever issued it.
+  ///
+  /// A settings screen can only say that something is stored, and "stored"
+  /// and "works" are different facts. The difference used to surface much
+  /// later and much less helpfully — as films with no artwork, or as a
+  /// subtitle search that failed in the middle of one.
+  Future<void> _test(Future<String> Function() check) async {
+    setState(() {
+      _checking = true;
+      _note = null;
+    });
+    final answer = await check();
+    if (mounted) {
+      setState(() {
+        _checking = false;
+        _note = answer;
+      });
+    }
+  }
+
+  Future<void> _testTmdb() =>
+      _test(const TmdbKeyCheck(host: Host()).call);
+
+  Future<void> _testSubtitles() =>
+      _test(SubtitleService(host: widget.host).check);
 
   Future<void> _saveSubtitleKey() async {
     await widget.host.writeSecret(

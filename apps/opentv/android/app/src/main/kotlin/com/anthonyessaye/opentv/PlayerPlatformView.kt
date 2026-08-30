@@ -18,6 +18,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -158,8 +159,19 @@ class PlayerPlatformView(
                 if (headers.isNotEmpty()) setDefaultRequestProperties(headers)
             }
 
+        // Wrapped so the player can open a local file as well as a stream.
+        //
+        // A DefaultHttpDataSource.Factory on its own knows http and https and
+        // nothing else, so a side-loaded subtitle at file:///... failed the
+        // moment it was attached — reported as ERROR_CODE_IO_UNSPECIFIED,
+        // which names no cause and points at the network. DefaultDataSource
+        // delegates by scheme and keeps the provider's user agent and
+        // referrer for the stream itself, which is why the http factory is
+        // still built above rather than replaced.
+        val sources = DefaultDataSource.Factory(context, http)
+
         player = ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(http))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(sources))
             .build()
             .also { it.addListener(this) }
 

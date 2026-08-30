@@ -100,6 +100,17 @@ class PlayerSurface extends StatelessWidget {
         creationParams: params,
         creationParamsCodec: const StandardMessageCodec(),
         onPlatformViewCreated: onCreated,
+        // Not hit-testable, and not given any gesture to claim.
+        //
+        // A platform view defaults to opaque, which means it wins the hit
+        // test for every touch inside it — so on iOS the player ignored taps
+        // entirely: the chrome never appeared, and the preview on the live
+        // screen could not be tapped to open. Every control here is a Flutter
+        // widget drawn over the video and the engine needs no touches of its
+        // own, so it takes none. The Android surface below has said exactly
+        // this since it was written; only iOS was left out.
+        hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+        gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
       ),
       _ => const _NoEngine(),
     };

@@ -18,6 +18,7 @@ class MobileSecretScreen extends StatefulWidget {
     required this.explanation,
     this.hint,
     this.digitsOnly = false,
+    this.onCheck,
     this.host = const Host(),
   });
 
@@ -30,6 +31,12 @@ class MobileSecretScreen extends StatefulWidget {
   final String explanation;
   final String? hint;
   final bool digitsOnly;
+
+  /// Tries the stored secret against whatever issued it, and says what came
+  /// back. Absent for a secret nothing can be asked about — a parental PIN
+  /// answers to nobody.
+  final Future<String> Function()? onCheck;
+
   final Host host;
 
   @override
@@ -41,6 +48,7 @@ class _MobileSecretScreenState extends State<MobileSecretScreen> {
   final _focus = FocusNode();
   bool _stored = false;
   String? _note;
+  bool _checking = false;
 
   @override
   void initState() {
@@ -75,6 +83,22 @@ class _MobileSecretScreenState extends State<MobileSecretScreen> {
       setState(() {
         _stored = true;
         _note = 'Saved.';
+      });
+    }
+  }
+
+  Future<void> _check() async {
+    final check = widget.onCheck;
+    if (check == null) return;
+    setState(() {
+      _checking = true;
+      _note = null;
+    });
+    final answer = await check();
+    if (mounted) {
+      setState(() {
+        _checking = false;
+        _note = answer;
       });
     }
   }
@@ -148,6 +172,24 @@ class _MobileSecretScreenState extends State<MobileSecretScreen> {
               ),
             ),
           ),
+          if (_stored && widget.onCheck != null) ...[
+            const SizedBox(height: OpenTvTouchSpace.sm),
+            TouchTile(
+              onTap: _checking ? null : _check,
+              minHeight: 48,
+              child: Container(
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: OpenTvColors.surface,
+                  borderRadius: OpenTvRadius.tile,
+                ),
+                child: Text(
+                  _checking ? 'Testing…' : 'Test this key',
+                  style: OpenTvTouchType.section,
+                ),
+              ),
+            ),
+          ],
           if (_stored) ...[
             const SizedBox(height: OpenTvTouchSpace.sm),
             TouchTile(

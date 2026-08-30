@@ -30,6 +30,7 @@ class _MobileSubtitlesScreenState extends State<MobileSubtitlesScreen> {
   final _controller = TextEditingController();
   bool _stored = false;
   String? _note;
+  bool _checking = false;
 
   @override
   void initState() {
@@ -70,6 +71,24 @@ class _MobileSubtitlesScreenState extends State<MobileSubtitlesScreen> {
       setState(() {
         _stored = false;
         _note = 'Removed.';
+      });
+    }
+  }
+
+  /// Asks the service whether the stored key actually works.
+  ///
+  /// "A key is stored" is not the same as "a key works", and until this
+  /// existed the difference only surfaced in the middle of a film.
+  Future<void> _check() async {
+    setState(() {
+      _checking = true;
+      _note = null;
+    });
+    final answer = await SubtitleService(host: widget.host).check();
+    if (mounted) {
+      setState(() {
+        _checking = false;
+        _note = answer;
       });
     }
   }
@@ -118,6 +137,11 @@ class _MobileSubtitlesScreenState extends State<MobileSubtitlesScreen> {
           _Button(label: 'Save', emphasis: true, onTap: _save),
           if (_stored) ...[
             const SizedBox(height: OpenTvTouchSpace.sm),
+            _Button(
+              label: _checking ? 'Testing…' : 'Test this key',
+              onTap: _checking ? null : _check,
+            ),
+            const SizedBox(height: OpenTvTouchSpace.sm),
             _Button(label: 'Remove key', onTap: _remove),
           ],
           const SizedBox(height: OpenTvTouchSpace.xl),
@@ -143,7 +167,7 @@ class _Button extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool emphasis;
 
   @override

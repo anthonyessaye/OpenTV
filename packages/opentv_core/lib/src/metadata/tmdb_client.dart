@@ -60,6 +60,27 @@ class TmdbClient {
   /// decoration removed — because searching the raw name matches nothing.
   /// When the cleaned title carries a year, results are scored against it,
   /// since "The Thing" is four different films.
+  /// Asks TMDB whether this key works, and says what came back.
+  ///
+  /// A search for a film everybody has, so the answer distinguishes the three
+  /// things that otherwise look alike on a settings screen: a key that works,
+  /// a key TMDB refuses, and a network that is not there. Until now all three
+  /// read as "a key is stored", and the difference only surfaced later as
+  /// films with no artwork and no explanation.
+  ///
+  /// Also the one place the v3-key-versus-v4-token confusion becomes
+  /// visible before it matters: both are offered on the same TMDB page, only
+  /// one goes in the query string, and pasting the wrong one is answered with
+  /// a 401 that nothing was previously showing anybody.
+  Future<String> check() async {
+    final found = await match('Casablanca');
+    if (found == null) {
+      return 'The key works. That search matched nothing, which is unusual '
+          'but not a problem with the key.';
+    }
+    return 'The key works. It matched “${found.name}”.';
+  }
+
   Future<TmdbTitle?> match(String providerTitle, {bool? preferSeries}) async {
     final cleaned = TitleCleaner.clean(providerTitle);
     if (cleaned.title.trim().isEmpty) return null;
