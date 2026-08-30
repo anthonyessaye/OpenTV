@@ -35,3 +35,4 @@ export 'src/touch/touch_scaffold.dart';
 export 'src/touch/touch_tile.dart';
 export 'src/components/qr_code.dart';
 export 'src/touch/touch_confirm.dart';
+export 'src/touch/touch_progress.dart';

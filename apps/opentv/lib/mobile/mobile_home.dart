@@ -224,6 +224,39 @@ class _MobileHomeState extends State<MobileHome> {
   /// phone over, and everything was still there.
   Set<String> _locked = const {};
 
+  /// Whether the stale-catalogue reminder has been waved away this session.
+  ///
+  /// In memory rather than written down, on purpose. "Not now" is an answer
+  /// about this sitting; a stored dismissal would quietly mean never, which
+  /// is the state the reminder exists to get somebody out of.
+  bool _staleDismissed = false;
+
+  /// True while the reminder's own update is running.
+  bool _updating = false;
+
+  bool get _stale => StaleCatalogue.due(
+        lastSyncedAt: widget.source.lastSyncedAt,
+        now: DateTime.now(),
+        dismissed: _staleDismissed || _updating,
+      );
+
+  Future<void> _updateNow() async {
+    setState(() => _updating = true);
+    final failure = await widget.service.refresh(widget.source);
+    if (!mounted) return;
+    setState(() {
+      _updating = false;
+      _staleDismissed = true;
+    });
+    if (failure != null) {
+      _say(failure);
+    } else {
+      // The catalogue underneath every shelf has just been replaced.
+      await _loadRegions();
+      _refreshShelves();
+    }
+  }
+
   /// A line along the bottom, cleared after a few seconds.
   ///
   /// Stated rather than swallowed. The failure it reports — a provider whose
@@ -572,7 +605,49 @@ class _MobileHomeState extends State<MobileHome> {
       onSelect: (i) => setState(() => _tab = i),
       body: Stack(
         children: [
-          Positioned.fill(child: _tabBody()),
+          // Locked while the update runs, which is what the reminder's own
+          // button promises. A sync replaces the rows every shelf is reading;
+          // browsing through that shows a catalogue in two states at once.
+          Positioned.fill(
+            child: AbsorbPointer(absorbing: _updating, child: _tabBody()),
+          ),
+          if (_updating)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: Column(
+                children: [
+                  const TouchProgressBar(),
+                  ValueListenableBuilder<String>(
+                    valueListenable: widget.service.progress,
+                    builder: (context, stage, _) => Container(
+                      width: double.infinity,
+                      color: OpenTvColors.surfaceLifted,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: OpenTvTouchSpace.gutter,
+                        vertical: OpenTvTouchSpace.sm,
+                      ),
+                      child: Text(stage, style: OpenTvTouchType.caption),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (_stale && widget.source.lastSyncedAt != null)
+            Positioned(
+              left: OpenTvTouchSpace.gutter,
+              right: OpenTvTouchSpace.gutter,
+              bottom: OpenTvTouchSpace.gutter,
+              child: _StaleNotice(
+                days: StaleCatalogue.daysSince(
+                  widget.source.lastSyncedAt!,
+                  DateTime.now(),
+                ),
+                onUpdate: _updateNow,
+                onDismiss: () => setState(() => _staleDismissed = true),
+              ),
+            ),
           if (_notice != null)
             Positioned(
               left: OpenTvTouchSpace.gutter,
@@ -1892,4 +1967,94 @@ class _Empty extends StatelessWidget {
           child: Text(message, style: OpenTvTouchType.bodyMuted),
         ),
       );
+}
+
+/// The reminder that a catalogue has not been re-read in a while.
+///
+/// A provider's list moves — channels are renumbered, films are retired — and
+/// a month-old catalogue produces streams that fail for reasons the app
+/// cannot explain and the viewer reads as the app being broken. Saying so is
+/// cheaper than the support question.
+///
+/// Two answers and no third. "Not now" lasts until the app is next started,
+/// which is the honest meaning of the words; a "never" would be a setting for
+/// staying broken.
+class _StaleNotice extends StatelessWidget {
+  const _StaleNotice({
+    required this.days,
+    required this.onUpdate,
+    required this.onDismiss,
+  });
+
+  final int days;
+  final VoidCallback onUpdate;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(OpenTvTouchSpace.md),
+      decoration: BoxDecoration(
+        color: OpenTvColors.surfaceLifted,
+        borderRadius: OpenTvRadius.tile,
+        border: const Border(
+          bottom: BorderSide(color: OpenTvColors.tally, width: 2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'This catalogue was last read $days days ago. Providers move '
+            'channels and retire films, so some of what is listed may no '
+            'longer play.',
+            style: OpenTvTouchType.body,
+          ),
+          const SizedBox(height: OpenTvTouchSpace.md),
+          Row(
+            children: [
+              Expanded(
+                child: TouchTile(
+                  onTap: onUpdate,
+                  minHeight: 44,
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: OpenTvColors.tally,
+                      borderRadius: OpenTvRadius.tile,
+                    ),
+                    child: Text(
+                      'Update now',
+                      style: OpenTvTouchType.section.copyWith(
+                        color: OpenTvColors.ground,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: OpenTvTouchSpace.sm),
+              Expanded(
+                child: TouchTile(
+                  onTap: onDismiss,
+                  minHeight: 44,
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: OpenTvColors.surface,
+                      borderRadius: OpenTvRadius.tile,
+                    ),
+                    child: const Text(
+                      'Not now',
+                      style: OpenTvTouchType.section,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

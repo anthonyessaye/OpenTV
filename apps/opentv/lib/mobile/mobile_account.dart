@@ -143,6 +143,26 @@ class _MobileAccountScreenState extends State<MobileAccountScreen> {
               ),
             ),
           ),
+          if (_refreshing) ...[
+            const SizedBox(height: OpenTvTouchSpace.md),
+            const TouchProgressBar(),
+            const SizedBox(height: OpenTvTouchSpace.sm),
+            ValueListenableBuilder<String>(
+              valueListenable: widget.service.progress,
+              builder: (context, stage, _) => Text(
+                stage,
+                style: OpenTvTouchType.bodyMuted,
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: OpenTvTouchSpace.xs),
+            const Text(
+              'Reading the whole catalogue. A large provider takes a few '
+              'minutes; leaving this screen stops it.',
+              style: OpenTvTouchType.caption,
+              textAlign: TextAlign.center,
+            ),
+          ],
           if (_note != null) ...[
             const SizedBox(height: OpenTvTouchSpace.sm),
             Text(_note!, style: OpenTvTouchType.caption),

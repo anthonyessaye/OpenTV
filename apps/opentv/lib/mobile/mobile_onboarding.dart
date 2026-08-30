@@ -202,18 +202,21 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
             controller: _url,
             keyboardType: TextInputType.url,
             textInputAction: TextInputAction.next,
+            enabled: !_busy,
           ),
           if (xtream) ...[
             TouchField(
               label: 'Username',
               controller: _username,
               textInputAction: TextInputAction.next,
+              enabled: !_busy,
             ),
             TouchField(
               label: 'Password',
               controller: _password,
               obscure: true,
               textInputAction: TextInputAction.next,
+              enabled: !_busy,
             ),
           ],
           TouchField(
@@ -221,6 +224,7 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
             hint: 'What you call this provider',
             controller: _name,
             onSubmitted: (_) => _submit(),
+            enabled: !_busy,
           ),
           if (_problem != null) ...[
             const SizedBox(height: OpenTvTouchSpace.md),
@@ -230,19 +234,29 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
             ),
           ],
           const SizedBox(height: OpenTvTouchSpace.xl),
-          if (_busy && widget.progress != null)
-            ValueListenableBuilder<String>(
-              valueListenable: widget.progress!,
-              builder: (context, stage, _) => Text(
-                stage,
-                style: OpenTvTouchType.bodyMuted,
-                textAlign: TextAlign.center,
+          if (_busy) ...[
+            const TouchProgressBar(),
+            const SizedBox(height: OpenTvTouchSpace.md),
+            if (widget.progress case final progress?)
+              ValueListenableBuilder<String>(
+                valueListenable: progress,
+                builder: (context, stage, _) => Text(
+                  stage,
+                  style: OpenTvTouchType.bodyMuted,
+                  textAlign: TextAlign.center,
+                ),
               ),
-            )
-          else
+            const SizedBox(height: OpenTvTouchSpace.xs),
+            const Text(
+              'Reading the whole catalogue. A large provider takes a few '
+              'minutes; leaving this screen stops it.',
+              style: OpenTvTouchType.caption,
+              textAlign: TextAlign.center,
+            ),
+          ] else
             _Primary(
-              label: _busy ? 'Working…' : 'Add provider',
-              onTap: _ready && !_busy ? _submit : null,
+              label: 'Add provider',
+              onTap: _ready ? _submit : null,
             ),
         ],
       ),

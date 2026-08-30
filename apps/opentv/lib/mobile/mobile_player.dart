@@ -162,6 +162,14 @@ class _MobilePlayerState extends State<MobilePlayer>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // The status bar and the navigation bar go away for the duration.
+    //
+    // A film with the clock and the battery sitting on top of it is not full
+    // screen, whatever the layout says. Sticky rather than plain immersive so
+    // a swipe brings them back for a moment and then returns them, which is
+    // what every video app on the platform does and therefore what a thumb
+    // already expects.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     // Landscape is not forced. A phone held upright showing a 16:9 stream in
     // the top third is a legitimate way to watch something while doing
     // something else, and taking the choice away to make the picture bigger
@@ -171,7 +179,14 @@ class _MobilePlayerState extends State<MobilePlayer>
 
   @override
   void dispose() {
+    // Put back on the way out, or every screen behind this one inherits a
+    // hidden status bar it never asked for.
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.edgeToEdge,
+      overlays: SystemUiOverlay.values,
+    );
     WidgetsBinding.instance.removeObserver(this);
+    _skipNotice?.cancel();
     _poll?.cancel();
     _hide?.cancel();
     _flush();
@@ -187,6 +202,22 @@ class _MobilePlayerState extends State<MobilePlayer>
     // reports nothing, because it has not parsed the container yet.
     Timer(const Duration(seconds: 2), () {
       if (mounted) _readTracks();
+    });
+  }
+
+  /// Re-fits the picture when the window changes shape.
+  ///
+  /// The engine scales the video to the surface when it is told to, and
+  /// rotating the phone is not something it is told about — so the picture
+  /// stayed at the shape it was given in portrait and sat in the middle of a
+  /// landscape window at the wrong size. Sent again on the next frame,
+  /// because the metrics arrive before the platform view has been laid out at
+  /// its new size and fitting to the old one changes nothing.
+  @override
+  void didChangeMetrics() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _channel?.invokeMethod<void>('setAspect', {'mode': _aspect.name});
     });
   }
 
@@ -312,6 +343,35 @@ class _MobilePlayerState extends State<MobilePlayer>
     _closeSheet();
   }
 
+  /// How far a double tap moves. Ten seconds is the figure the platform's
+  /// own players settled on, and a gesture people already have a feel for is
+  /// worth more than a number this app prefers.
+  static const _skip = Duration(seconds: 10);
+
+  /// What a double tap just did, shown briefly so the tap is acknowledged.
+  Duration? _skipped;
+  Timer? _skipNotice;
+
+  Future<void> _seekBy(Duration delta) async {
+    final length = _length;
+    var target = _position + delta;
+    if (target < Duration.zero) target = Duration.zero;
+    if (length != null && target > length) target = length;
+
+    setState(() {
+      _position = target;
+      _skipped = delta;
+    });
+    _skipNotice?.cancel();
+    _skipNotice = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) setState(() => _skipped = null);
+    });
+
+    await _channel?.invokeMethod<void>('seek', {
+      'positionMs': target.inMilliseconds,
+    });
+  }
+
   Future<void> _seekTo(Duration position) async {
     await _channel?.invokeMethod<void>('seek', {
       'positionMs': position.inMilliseconds,
@@ -350,6 +410,21 @@ class _MobilePlayerState extends State<MobilePlayer>
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _toggleChrome,
+        // Which half was tapped decides the direction, which is the gesture
+        // every video app on a phone has taught people. Live is excluded:
+        // there is nothing ahead of live to seek to, and seeking back on a
+        // stream with no buffer is a stall rather than a rewind.
+        onDoubleTapDown: widget.isLive ? null : (details) {
+          _seekBy(
+            details.localPosition.dx <
+                    MediaQuery.of(context).size.width / 2
+                ? -_skip
+                : _skip,
+          );
+        },
+        // Bound because a double tap with no handler is two single taps, and
+        // two single taps is the chrome flashing on and off.
+        onDoubleTap: widget.isLive ? null : () {},
         // Vertical flicks change channel, which is what a thumb does instead
         // of reaching for a d-pad's up and down. Only bound on live, so the
         // gesture does nothing surprising in the middle of a film.
@@ -372,6 +447,8 @@ class _MobilePlayerState extends State<MobilePlayer>
                 startAt: widget.startAt,
                 onCreated: _onCreated,
               ),
+            if (_skipped case final skipped?)
+              _SkipMark(seconds: skipped.inSeconds),
             if (_trouble case final trouble?)
               _Trouble(
                 message: trouble,
@@ -607,17 +684,37 @@ class _Chrome extends StatelessWidget {
             ),
             child: Row(
               children: [
-                if (onAudio != null)
-                  _Control(label: 'AUDIO', onTap: onAudio!),
-                if (onSubtitles != null)
-                  _Control(label: 'SUBTITLES', onTap: onSubtitles!),
-                _Control(label: 'PICTURE', onTap: onPicture),
-                const Spacer(),
+                // Scrolls rather than clips. The row was a plain Row, so on a
+                // narrower phone the last control was simply cut in half at
+                // the edge with no way to reach it — and the one most likely
+                // to be cut was NEXT, whose label is an episode title and so
+                // is as long as the provider felt like making it.
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        if (onAudio != null)
+                          _Control(label: 'AUDIO', onTap: onAudio!),
+                        if (onSubtitles != null)
+                          _Control(label: 'SUBTITLES', onTap: onSubtitles!),
+                        _Control(label: 'PICTURE', onTap: onPicture),
+                      ],
+                    ),
+                  ),
+                ),
                 if (onNext != null)
-                  _Control(
-                    label: nextLabel ?? 'NEXT',
-                    onTap: onNext!,
-                    emphasis: true,
+                  ConstrainedBox(
+                    // Kept out of the scroll and capped: it is the one
+                    // control somebody reaches for without looking, so it
+                    // stays where it was, and an episode title is not allowed
+                    // to take the whole row to say so.
+                    constraints: const BoxConstraints(maxWidth: 170),
+                    child: _Control(
+                      label: nextLabel ?? 'NEXT',
+                      onTap: onNext!,
+                      emphasis: true,
+                    ),
                   ),
               ],
             ),
@@ -773,6 +870,8 @@ class _Control extends StatelessWidget {
           ),
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: OpenTvTouchType.label.copyWith(
               color: emphasis ? OpenTvColors.ground : OpenTvColors.ink,
             ),
@@ -885,6 +984,12 @@ class _SheetPanel extends StatelessWidget {
             alignment: Alignment.bottomCenter,
             child: Container(
               width: double.infinity,
+              // Never the whole screen. Something of the picture stays
+              // visible behind it, which is both the point of a sheet and the
+              // only thing that keeps the scrim tappable.
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+              ),
               padding: EdgeInsets.only(
                 left: OpenTvTouchSpace.gutter,
                 right: OpenTvTouchSpace.gutter,
@@ -902,20 +1007,69 @@ class _SheetPanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    switch (sheet) {
-                      _Sheet.audio => 'Audio',
-                      _Sheet.subtitles => 'Subtitles',
-                      _Sheet.picture => 'Picture',
-                    },
-                    style: OpenTvTouchType.title,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          switch (sheet) {
+                            _Sheet.audio => 'Audio',
+                            _Sheet.subtitles => 'Subtitles',
+                            _Sheet.picture => 'Picture',
+                          },
+                          style: OpenTvTouchType.title,
+                        ),
+                      ),
+                      // A way out that is part of the sheet.
+                      //
+                      // Dismissing was tapping the scrim, which works right up
+                      // until the sheet is tall enough to cover the screen —
+                      // and a stream with a dozen subtitle tracks, or a phone
+                      // held in landscape, does exactly that. Then there is no
+                      // scrim left to tap and no way back to the film.
+                      TouchTile(
+                        onTap: onDismiss,
+                        semanticLabel: 'Close',
+                        child: Container(
+                          alignment: Alignment.center,
+                          constraints: const BoxConstraints(
+                            minWidth: OpenTvTouchSpace.tapTarget,
+                            minHeight: OpenTvTouchSpace.tapTarget,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: OpenTvTouchSpace.md,
+                          ),
+                          child: Text(
+                            'DONE',
+                            // A word rather than a glyph, for the reason the
+                            // controls below are words: there is no shape
+                            // everybody reads as "close", and this app spells
+                            // things out.
+                            style: OpenTvTouchType.label.copyWith(
+                              color: OpenTvColors.tally,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   if (sheet == _Sheet.picture && _pictureNote != null) ...[
                     const SizedBox(height: OpenTvTouchSpace.xs),
                     Text(_pictureNote!, style: OpenTvTouchType.caption),
                   ],
                   const SizedBox(height: OpenTvTouchSpace.md),
-                  ...rows,
+                  // Scrolls, and never grows past half the screen. A provider
+                  // carrying fifteen audio tracks made a list taller than the
+                  // phone, with the bottom of it — and every row past the
+                  // fold — simply unreachable.
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: rows,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1101,6 +1255,47 @@ class _Trouble extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A brief mark saying which way a double tap moved, and by how much.
+///
+/// Without it the only feedback is the scrub bar jumping, and the scrub bar is
+/// hidden whenever the chrome is — so the common case, a double tap on a bare
+/// picture, looked like nothing happened at all.
+class _SkipMark extends StatelessWidget {
+  const _SkipMark({required this.seconds});
+
+  final int seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Align(
+        alignment: seconds < 0
+            ? AlignmentDirectional.centerStart
+            : AlignmentDirectional.centerEnd,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: OpenTvTouchSpace.xxl,
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: OpenTvTouchSpace.md,
+              vertical: OpenTvTouchSpace.sm,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xB3000000),
+              borderRadius: OpenTvRadius.tile,
+            ),
+            child: Text(
+              '${seconds < 0 ? '−' : '+'}${seconds.abs()}s',
+              style: OpenTvTouchType.section,
             ),
           ),
         ),

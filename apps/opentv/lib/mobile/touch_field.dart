@@ -29,6 +29,7 @@ class TouchField extends StatefulWidget {
     this.textInputAction,
     this.onSubmitted,
     this.autofocus = false,
+    this.enabled = true,
   });
 
   final String label;
@@ -41,12 +42,45 @@ class TouchField extends StatefulWidget {
   final ValueChanged<String>? onSubmitted;
   final bool autofocus;
 
+  /// False while something long is running against what was typed.
+  ///
+  /// Editing an address mid-import changes nothing about the import and
+  /// everything about what the screen appears to be doing, so the fields go
+  /// quiet and say so rather than accepting edits that are already too late.
+  final bool enabled;
+
   @override
   State<TouchField> createState() => _TouchFieldState();
 }
 
-class _TouchFieldState extends State<TouchField> {
+class _TouchFieldState extends State<TouchField>
+    implements TextSelectionGestureDetectorBuilderDelegate {
   late final FocusNode _node = FocusNode(debugLabel: widget.label);
+
+  /// Taps, long presses and drags on the text.
+  ///
+  /// A bare EditableText draws a caret and handles a keyboard, and wires up
+  /// none of the gestures that put the caret somewhere or select a word —
+  /// that work lives in TextField, which this app does not use. So there was
+  /// no long press, and with no long press there was no context menu, and
+  /// with no context menu there was no Paste: a viewer with their provider's
+  /// URL on the clipboard had to retype it.
+  ///
+  /// Built from the widgets library rather than Material. The toolbar it
+  /// eventually shows is the platform's own, for the same reason the handles
+  /// are: a selection toolbar is an operating-system affordance, not a design
+  /// decision this app should be making.
+  late final _gestures = TextSelectionGestureDetectorBuilder(delegate: this);
+
+  @override
+  final GlobalKey<EditableTextState> editableTextKey =
+      GlobalKey<EditableTextState>();
+
+  @override
+  bool get forcePressEnabled => false;
+
+  @override
+  bool get selectionEnabled => true;
 
   @override
   void initState() {
@@ -89,7 +123,7 @@ class _TouchFieldState extends State<TouchField> {
 
   @override
   Widget build(BuildContext context) {
-    final focused = _node.hasFocus;
+    final focused = _node.hasFocus && widget.enabled;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: OpenTvTouchSpace.lg),
@@ -103,12 +137,14 @@ class _TouchFieldState extends State<TouchField> {
             ),
           ),
           const SizedBox(height: OpenTvTouchSpace.xs),
-          GestureDetector(
-            // The whole box is the target, not just the text inside it. A
-            // 44-pixel row where only the glyphs accept a tap is a row people
-            // tap twice.
+          // The whole box is the target, not just the text inside it. A
+          // 44-pixel row where only the glyphs accept a tap is a row people
+          // tap twice — so the gesture detector wraps the box, and the
+          // selection gestures inside it reach the text.
+          IgnorePointer(
+            ignoring: !widget.enabled,
+            child: _gestures.buildGestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: _node.requestFocus,
             child: Container(
               constraints: BoxConstraints(
                 minHeight: widget.multiline ? 110 : OpenTvTouchSpace.tapTarget,
@@ -147,6 +183,8 @@ class _TouchFieldState extends State<TouchField> {
                         ),
                       ),
                     EditableText(
+                      key: editableTextKey,
+                      readOnly: !widget.enabled,
                       controller: widget.controller,
                       focusNode: _node,
                       autofocus: widget.autofocus,
@@ -179,6 +217,7 @@ class _TouchFieldState extends State<TouchField> {
                   ],
                 ),
               ),
+            ),
             ),
           ),
         ],
