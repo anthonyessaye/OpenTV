@@ -331,6 +331,13 @@ request to Apple with no guarantee.
 is whether the feature is needed on that platform, not whether the podspec
 mentions it.
 
+**Every keystore secret has to be named in `HandoverService._collect`.**
+Neither platform can enumerate a keystore, so the list is written by hand —
+and the OpenSubtitles key was added without touching it, which produced a
+handover that carried a whole setup in which subtitle search silently did
+nothing. `handover_secrets_test` reads every `...Reference` constant in
+`lib/` and fails if one is not named there.
+
 **Secrets are written before the database is replaced.** The other order
 leaves a device holding a new catalogue it has no passwords for. The `-wal` is
 deleted with the database it belongs to, or SQLite applies the old journal to

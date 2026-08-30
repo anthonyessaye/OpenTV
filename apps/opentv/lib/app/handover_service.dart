@@ -4,6 +4,7 @@ import 'package:opentv_core/opentv_core.dart';
 
 import 'host.dart';
 import 'settings_screen.dart';
+import 'subtitle_service.dart';
 import 'vpn_service.dart';
 
 /// Handing this device's setup to another one, and taking one from it.
@@ -38,6 +39,13 @@ class HandoverService {
   /// platform offers a reliable way to enumerate one, and a handover that
   /// silently omitted a key nobody thought to name would arrive as a device
   /// that works until the first time it needs the thing that was missed.
+  ///
+  /// Which is exactly what happened: the OpenSubtitles key was added as a
+  /// fourth secret and this list was not touched, so a handover carried a
+  /// complete setup in which subtitle search silently did nothing on the new
+  /// device. `handover_secrets_test` now reads this file against every
+  /// reference constant in the app, because the warning above turned out not
+  /// to be enough on its own.
   Future<List<HandoverSecret>> _collect() async {
     final out = <HandoverSecret>[];
 
@@ -54,6 +62,7 @@ class HandoverService {
     }
     await take(SettingsScreen.pinReference);
     await take(SettingsScreen.tmdbReference);
+    await take(SubtitleService.keyReference);
     await take(VpnService.configReference);
 
     return out;
