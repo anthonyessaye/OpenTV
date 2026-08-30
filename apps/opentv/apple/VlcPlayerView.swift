@@ -175,12 +175,16 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             // Enforced rather than merely offered: somebody who has just gone
             // looking for a subtitle, chosen one and waited for it does not
             // then want to find it switched off in a menu.
-            let added = player.addPlaybackSlave(
+            //
+            // Returns libVLC's own status rather than a Bool: zero is
+            // success and anything else is a refusal, which is the C
+            // convention the binding passes straight through.
+            let status = player.addPlaybackSlave(
                 URL(fileURLWithPath: path),
                 type: .subtitle,
                 enforce: true
             )
-            result(added ? nil : FlutterError(
+            result(status == 0 ? nil : FlutterError(
                 code: "addSubtitle",
                 message: "the engine refused the subtitle file",
                 details: nil
