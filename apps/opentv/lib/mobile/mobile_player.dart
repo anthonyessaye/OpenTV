@@ -1144,6 +1144,20 @@ class _SheetPanel extends StatelessWidget {
     };
 
     final rows = <Widget>[];
+
+    // Timing first, above the tracks.
+    //
+    // It belongs to the subtitle already playing rather than to the choosing,
+    // so it reads as a control on this sheet rather than as a fifth thing to
+    // pick — and somebody nudging it half a second at a time should not have
+    // to scroll a track list to reach it again.
+    if (sheet == _Sheet.subtitles &&
+        subtitleDelay != null &&
+        onNudgeSubtitle != null) {
+      rows.add(_DelayRow(delay: subtitleDelay!, onNudge: onNudgeSubtitle!));
+      rows.add(const _SheetDivider());
+    }
+
     if (sheet == _Sheet.picture) {
       for (final mode in AspectMode.values) {
         rows.add(_Row(
@@ -1208,11 +1222,7 @@ class _SheetPanel extends StatelessWidget {
           ));
         }
       }
-      if (sheet == _Sheet.subtitles &&
-          subtitleDelay != null &&
-          onNudgeSubtitle != null) {
-        rows.add(_DelayRow(delay: subtitleDelay!, onNudge: onNudgeSubtitle!));
-      }
+
     }
 
     return Positioned.fill(
@@ -1761,5 +1771,16 @@ class _Nudge extends StatelessWidget {
           ),
           child: Text(label, style: OpenTvTouchType.section),
         ),
+      );
+}
+
+/// A rule with room either side, between a control and the list below it.
+class _SheetDivider extends StatelessWidget {
+  const _SheetDivider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: OpenTvTouchSpace.md),
+        child: Container(height: 1, color: OpenTvColors.rule),
       );
 }

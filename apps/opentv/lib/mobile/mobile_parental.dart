@@ -264,6 +264,12 @@ class _MobileParentalScreenState extends State<MobileParentalScreen> {
           ),
         ),
         if (_hasPin) ...[
+          // Room between changing the PIN and choosing what it hides. They
+          // are two different jobs, and stacked flush against each other the
+          // tabs read as a third row of buttons belonging to the first.
+          const SliverToBoxAdapter(
+            child: SizedBox(height: OpenTvTouchSpace.xl),
+          ),
           SliverPadding(
             padding: const EdgeInsets.symmetric(
               horizontal: OpenTvTouchSpace.gutter,
