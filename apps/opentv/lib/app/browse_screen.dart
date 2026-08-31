@@ -83,6 +83,29 @@ class _BrowseScreenState extends State<BrowseScreen> {
   List<CategoryEntry> _entries = const [];
   List<_Item> _items = const [];
 
+  /// Fills in what is on now, for the live tiles that have somewhere to show
+  /// it.
+  ///
+  /// Bounded to what is on screen. A provider with fifty thousand channels
+  /// would otherwise be fifty thousand queries to fill a grid of forty.
+  Future<List<_Item>> _withNowPlaying(int sourceId, List<_Item> items) async {
+    if (_kind != ItemKind.live) return items;
+
+    final now = DateTime.now();
+    final out = <_Item>[];
+    for (final item in items) {
+      final channel = item.channel;
+      final epgId = channel?.epgChannelId;
+      if (channel == null || epgId == null || out.length > 60) {
+        out.add(item);
+        continue;
+      }
+      final rows = await widget.db.nowAndNext(sourceId, epgId, now, count: 1);
+      out.add(_Item.channel(channel, nowTitle: rows.firstOrNull?.title));
+    }
+    return out;
+  }
+
   /// The shelves shown when no category is chosen.
   ///
   /// A flat grid of everything is a filing cabinet, not a television. With no
@@ -259,7 +282,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
         ? await widget.db.lockedCategories(sourceId)
         : const <String>{};
 
-    final items = switch (_section) {
+    var items = switch (_section) {
       TvSection.films => [
         for (final film in await widget.db.moviesIn(
           sourceId,
@@ -289,6 +312,14 @@ class _BrowseScreenState extends State<BrowseScreen> {
             _Item.channel(channel),
       ],
     };
+
+    // What is on each of those channels now.
+    //
+    // One query per channel and only for the ones actually on screen. The
+    // guide is already imported and the phone has always read it; the
+    // television asked for none of it and printed "No guide data" over a
+    // catalogue that had plenty.
+    items = await _withNowPlaying(sourceId, items);
 
     // Shelves replace the grid when nothing is filtered. Live gets them too:
     // a wall of provider logos says nothing about what to watch, where the
@@ -1138,6 +1169,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
                 name: item.name,
                 number: item.number,
                 logo: RemoteImage(url: item.imageUrl, fit: BoxFit.contain),
+                nowTitle: item.nowTitle,
                 onSelect: () => _open(item),
               );
       },
@@ -1147,7 +1179,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
 /// One thing in the grid, whichever kind it came from.
 class _Item {
-  _Item.channel(Channel row)
+  _Item.channel(Channel row, {this.nowTitle})
     : name = row.name,
       imageUrl = row.iconUrl,
       number = row.number,
@@ -1158,7 +1190,8 @@ class _Item {
       series = null;
 
   _Item.film(Movie row)
-    : name = row.name,
+    : nowTitle = null,
+      name = row.name,
       imageUrl = row.iconUrl,
       number = null,
       categoryId = row.categoryRemoteId,
@@ -1169,7 +1202,8 @@ class _Item {
 
   /// A series has no stream of its own — opening it opens its episode list.
   _Item.series(SeriesEntry row)
-    : name = row.name,
+    : nowTitle = null,
+      name = row.name,
       imageUrl = row.coverUrl,
       number = null,
       categoryId = row.categoryRemoteId,
@@ -1190,6 +1224,14 @@ class _Item {
 
   /// The rows behind the tile, kept so zapping can find a neighbour and a
   /// film can open its own screen.
+  /// What is on this channel now, for a live tile.
+  ///
+  /// ChannelTile has had somewhere to put this since it was written and
+  /// nothing ever filled it, so every tile on the television said "No guide
+  /// data" whatever the guide held — while the phone's guide screen, reading
+  /// the same rows, showed them correctly.
+  final String? nowTitle;
+
   final Channel? channel;
   final Movie? movie;
   final SeriesEntry? series;
