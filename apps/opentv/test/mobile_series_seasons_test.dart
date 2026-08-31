@@ -83,4 +83,23 @@ void main() {
     await pump(tester, [episode(1, 1, 'Pilot'), episode(1, 2, 'Second')]);
     expect(find.textContaining('Season'), findsNothing);
   });
+
+  testWidgets('a name the provider already gave is kept', (tester) async {
+    // Providers do both. One hands over a file path; another hands over
+    // "The Signal", and numbering that away throws out the only useful thing
+    // in the row.
+    await pump(tester, [
+      Episode(
+        sourceId: 1,
+        remoteId: 'e1',
+        seriesRemoteId: 'show',
+        title: 'The Signal',
+        season: 1,
+        episodeNumber: 1,
+      ),
+    ]);
+
+    expect(find.text('The Signal'), findsOneWidget);
+    expect(find.text('Episode 1'), findsNothing);
+  });
 }

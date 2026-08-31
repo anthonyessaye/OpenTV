@@ -114,6 +114,18 @@ class _SeriesScreenState extends State<SeriesScreen> {
     });
   }
 
+  /// What to call one episode. See the phone's copy of this: a provider that
+  /// named the episode has already given us the answer, and only a title
+  /// carrying a marker is a path worth splitting.
+  static String _labelFor(Episode episode, int index) {
+    final raw = episode.title.trim();
+    if (!TitleCleaner.hasEpisodeMarker(raw)) {
+      return raw.isEmpty ? 'Episode ${episode.episodeNumber ?? index + 1}' : raw;
+    }
+    return TitleCleaner.episodeName(raw) ??
+        'Episode ${episode.episodeNumber ?? index + 1}';
+  }
+
   /// How far through an episode the viewer is, or null when it is untouched.
   ///
   /// The provider's runtime is used when there is one, because a playback
@@ -261,9 +273,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
                             // repeats the show, the year and the region on
                             // every row, so a season reads as one sentence
                             // written out twenty times.
-                            title: TitleCleaner.episodeName(episode.title) ??
-                                'Episode '
-                                    '${episode.episodeNumber ?? index + 1}',
+                            title: _labelFor(episode, index),
                             season: episode.season ?? 1,
                             episodeNumber: episode.episodeNumber ?? index + 1,
                             synopsis: episode.plot,

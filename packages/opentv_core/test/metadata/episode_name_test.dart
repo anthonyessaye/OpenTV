@@ -101,4 +101,30 @@ void main() {
       expect(TitleCleaner.clean('MAD Detective').title, 'MAD Detective');
     });
   });
+
+  group('telling a name from a path', () {
+    test('a plain name carries no marker', () {
+      // The case that was being numbered away: a provider that simply called
+      // the episode "The Signal" had already answered the question, and the
+      // app replaced it with "Episode 1".
+      expect(TitleCleaner.hasEpisodeMarker('The Signal'), isFalse);
+      expect(TitleCleaner.hasEpisodeMarker('Low Water'), isFalse);
+    });
+
+    test('a path carries one', () {
+      expect(
+        TitleCleaner.hasEpisodeMarker('Acapulco (2021) - S01E01 - Pilot'),
+        isTrue,
+      );
+      expect(TitleCleaner.hasEpisodeMarker('Supernatural 4x01'), isTrue);
+    });
+
+    test('a marker with nothing after it is still a marker', () {
+      // Which is why this exists at all: episodeName answers null both to
+      // this and to a plain name, and the two want opposite fallbacks — a
+      // number here, and the title itself there.
+      expect(TitleCleaner.hasEpisodeMarker('Supernatural S04E01'), isTrue);
+      expect(TitleCleaner.episodeName('Supernatural S04E01'), isNull);
+    });
+  });
 }

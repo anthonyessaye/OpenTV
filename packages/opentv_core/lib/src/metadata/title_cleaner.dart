@@ -187,6 +187,18 @@ class TitleCleaner {
     return name.isEmpty ? null : name;
   }
 
+  /// Whether this title carries a season and episode marker at all.
+  ///
+  /// The difference between "the provider named this episode" and "the
+  /// provider gave us a file path". `The Signal` is a name and should be
+  /// shown as one; `Show - S01E01 - The Signal` is a path, and only the part
+  /// after the marker is worth the width.
+  ///
+  /// Needed because [episodeName] answers null to both — no marker, and a
+  /// marker with nothing after it — and those two want opposite fallbacks.
+  static bool hasEpisodeMarker(String raw) =>
+      _seasonEpisode.hasMatch(raw);
+
   /// The show's name, out of an episode's file name.
   ///
   /// The mirror of [episodeName]: everything *before* the S01E01 marker,
