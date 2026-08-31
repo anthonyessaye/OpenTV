@@ -382,19 +382,11 @@ class _MobileHomeState extends State<MobileHome> {
           ),
           cast: _castOf(series),
           episodes: episodes,
-          onEpisode: (episode) => _play(
-            Playable.episode(episode),
-            queue: [for (final row in episodes) Playable.episode(row)],
-            // The show's name and the numbers, not the episode's file path.
-            // A search for "4K-A+ - Acapulco (2021) (US) - S01E01 - Pilot"
-            // matches nothing; the show plus 1 and 1 matches the episode.
-            subtitles: SubtitleQuery(
-              title: cleaned.title,
-              year: cleaned.year,
-              season: episode.season ?? 1,
-              episode: episode.episodeNumber,
-            ),
-          ),
+          // Through the same path the Continue shelf uses, so an episode
+          // resumes wherever it is played from. Tapping episode four in a
+          // list and tapping it on a shelf are the same act, and started
+          // from different places until now.
+          onEpisode: _playEpisode,
           // A series has no stream of its own; the button plays the first
           // episode rather than pretending there is something behind it.
           onPlay: episodes.isEmpty
@@ -515,6 +507,19 @@ class _MobileHomeState extends State<MobileHome> {
   /// first of the next, which is what somebody watching a series means by
   /// "next".
   Future<void> _playEpisode(Episode episode) async {
+    // Where the viewer left this episode.
+    //
+    // A film has read this since the resume bar existed and an episode never
+    // did, so a half-watched episode started again from nothing — from
+    // Continue Watching, which is the shelf that exists to carry on with it.
+    // The position was being written correctly; nothing read it back.
+    final progress = await widget.db.playbackStateFor(
+      sourceId: widget.source.id,
+      kind: ItemKind.episode,
+      remoteId: episode.remoteId,
+    );
+    if (!mounted) return;
+
     final all = await widget.db.episodesOf(
       widget.source.id,
       episode.seriesRemoteId,
@@ -533,6 +538,7 @@ class _MobileHomeState extends State<MobileHome> {
 
     await _play(
       Playable.episode(episode),
+      startAt: _resumeFrom(progress),
       queue: [for (final row in all) Playable.episode(row)],
       subtitles: cleaned == null
           ? null
