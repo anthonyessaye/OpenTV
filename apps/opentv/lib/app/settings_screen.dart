@@ -1174,11 +1174,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// giving someone a false idea of their own exposure.
   Widget _vpn() {
     if (!widget.vpn.isSupported) {
-      return const Text(
-        'The tunnel is Android-only for now. Apple TV needs a Network '
-        'Extension, which needs a paid developer account to sign — so rather '
-        'than a button that fails, there is none yet.',
-        style: OpenTvType.bodyMuted,
+      // Same wording as the phone's, and changed for the same reason: the
+      // old one led with the implementation rather than with what somebody
+      // watching television would recognise.
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Coming to Apple TV later', style: OpenTvType.section),
+          SizedBox(height: OpenTvSpace.sm),
+          Text(
+            'Carrying a whole television’s traffic needs a kind of system '
+            'access Apple grants separately, and OpenTV does not have it '
+            'yet. It works on Android TV today, and this panel will offer '
+            'the switch here when it can.',
+            style: OpenTvType.bodyMuted,
+          ),
+        ],
       );
     }
 

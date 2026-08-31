@@ -79,13 +79,28 @@ class _MobileTunnelScreenState extends State<MobileTunnelScreen> {
       return TouchScaffold(
         title: 'Private tunnel',
         onBack: () => Navigator.of(context).maybePop(),
+        // Said in words somebody recognises.
+        //
+        // This used to lead with "Network Extension" and "paid Apple
+        // developer account", which is accurate and is the implementation
+        // talking. The rule this app follows is to state a limitation rather
+        // than hide it — stating it in the reader's language is the other
+        // half of that, and the half this screen was missing.
         body: const Padding(
           padding: EdgeInsets.all(OpenTvTouchSpace.gutter),
-          child: Text(
-            'Not on this platform. A tunnel on iOS needs a Network Extension, '
-            'which needs a paid Apple developer account to sign — so there is '
-            'no switch here rather than one that fails.',
-            style: OpenTvTouchType.bodyMuted,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Coming to iPhone later', style: OpenTvTouchType.section),
+              SizedBox(height: OpenTvTouchSpace.sm),
+              Text(
+                'Carrying a whole phone’s traffic needs a kind of system '
+                'access Apple grants separately, and OpenTV does not have it '
+                'yet. It works on Android today, and this screen will offer '
+                'the switch here when it can.',
+                style: OpenTvTouchType.bodyMuted,
+              ),
+            ],
           ),
         ),
       );
