@@ -134,6 +134,16 @@ class HandoverService {
     final client = HandoverClient(
       compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
     );
+
+    // Ask for the network before using it.
+    //
+    // iOS raises its local-network prompt on the first attempt to reach a
+    // device on the LAN, and that attempt fails while the dialog is up — so
+    // scanning a code asked for permission and reported a failed transfer in
+    // the same breath, and only trying again worked. Which reads as an app
+    // that never works the first time.
+    await client.warmUp(pairing);
+
     // Straight to disk beside the live catalogue, so nothing has to hold it.
     // Sealing and unsealing the whole payload in memory is what put a
     // television box out of heap; a phone with a large catalogue produced an
@@ -167,9 +177,13 @@ class HandoverService {
       secrets: await _collect(),
       sourceCount: (await db.allSources()).length,
     );
-    await HandoverClient(
+    final client = HandoverClient(
       compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
-    ).send(pairing, bundle, onProgress: onProgress);
+    );
+    // Same reason as the pull: a push from a phone is the first thing to
+    // touch the local network too.
+    await client.warmUp(pairing);
+    await client.send(pairing, bundle, onProgress: onProgress);
   }
 
   /// Writes a received bundle over this device's catalogue.

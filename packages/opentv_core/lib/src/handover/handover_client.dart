@@ -40,6 +40,57 @@ class HandoverClient {
   /// from rather than starting the search again.
   static final _reachable = Expando<String>();
 
+  /// Touches the network once so the platform can ask about it, and waits
+  /// for the answer.
+  ///
+  /// iOS raises its local-network prompt on the *first* attempt to reach a
+  /// device on the LAN, and the attempt that raised it fails while the dialog
+  /// is still on screen. So a scan asked for permission and reported a failed
+  /// transfer in the same breath, and only a second attempt worked — which
+  /// reads as an app that does not work the first time, every time.
+  ///
+  /// There is no API to ask whether the permission has been granted, so this
+  /// provokes the question and then keeps trying for as long as somebody
+  /// plausibly takes to answer it. Cheap where the permission is already
+  /// settled: the first probe succeeds and it returns at once.
+  ///
+  /// Harmless on Android and on a television, which prompt for nothing —
+  /// there the first probe connects and this is one extra socket.
+  Future<void> warmUp(
+    HandoverPairing pairing, {
+    Duration patience = const Duration(seconds: 30),
+  }) async {
+    final deadline = DateTime.now().add(patience);
+    var wait = const Duration(milliseconds: 250);
+
+    while (true) {
+      for (final host in pairing.hosts) {
+        try {
+          final socket = await Socket.connect(
+            host,
+            pairing.port,
+            timeout: timeout,
+          );
+          _reachable[pairing] = host;
+          socket.destroy();
+          return;
+        } on Object {
+          // Refused, unreachable, or waiting on a permission dialog. All
+          // three look the same from here, which is why this retries rather
+          // than reporting.
+        }
+      }
+
+      if (DateTime.now().isAfter(deadline)) return;
+      await Future<void>.delayed(wait);
+      // Backed off, because most of this window is somebody reading a dialog
+      // rather than a network being slow.
+      wait = wait * 2 > const Duration(seconds: 2)
+          ? const Duration(seconds: 2)
+          : wait * 2;
+    }
+  }
+
   Future<HandoverManifest> manifest(HandoverPairing pairing) async {
     final body = await _get(pairing, '/manifest');
     late final Object? decoded;
