@@ -341,7 +341,7 @@ class _Masthead extends StatelessWidget {
   }
 }
 
-class _KindStep extends StatelessWidget {
+class _KindStep extends StatefulWidget {
   const _KindStep({
     required this.onChoose,
     this.onCancel,
@@ -355,6 +355,28 @@ class _KindStep extends StatelessWidget {
   final VoidCallback? onTakeFromDevice;
 
   @override
+  State<_KindStep> createState() => _KindStepState();
+}
+
+class _KindStepState extends State<_KindStep> {
+  /// Whether the two phone routes are showing.
+  ///
+  /// One door rather than two buttons. Both routes end with the viewer
+  /// holding their phone, so offering them as siblings of "a provider
+  /// account" made the row read as four unrelated choices — and the two that
+  /// mattered most to somebody holding a remote were the two at the end.
+  ///
+  /// Only the presentation is joined. They remain different acts: one copies
+  /// a setup that already exists, the other is this same form on a keyboard
+  /// with letters on it.
+  bool _showingPhoneRoutes = false;
+
+  ValueChanged<OnboardingSourceKind> get onChoose => widget.onChoose;
+  VoidCallback? get onCancel => widget.onCancel;
+  VoidCallback? get onUsePhone => widget.onUsePhone;
+  VoidCallback? get onTakeFromDevice => widget.onTakeFromDevice;
+
+  @override
   Widget build(BuildContext context) {
     // The notice sits at the foot of the screen rather than in the flow of
     // the question. Two reasons: it reads as a standing statement about the
@@ -364,10 +386,21 @@ class _KindStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Scrolls rather than being trimmed to fit, which is the same
+        // decision the metadata step made after overflowing twice.
+        //
+        // This step overflowed by two hundred and nineteen pixels whenever
+        // the phone options were shown — and shipped that way, because an
+        // overflow only paints its stripes in a debug build. On a television
+        // it simply clipped, so the buttons at the foot were cut off on the
+        // one screen that has nothing else to press.
+        //
+        // No test caught it because every existing test builds this step
+        // without the phone callbacks, which is the one shape that fits.
         Expanded(
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const _Masthead(caption: 'Nothing has been added yet.'),
               const SizedBox(height: OpenTvSpace.lg),
@@ -401,46 +434,63 @@ class _KindStep extends StatelessWidget {
               if (onTakeFromDevice != null || onUsePhone != null) ...[
                 const SizedBox(height: OpenTvSpace.md),
                 Text(
-                  onTakeFromDevice != null
-                      // Two ways to avoid the remote, and they are not the
-                      // same offer. One copies a setup that already exists;
-                      // the other is the same form on a better keyboard.
-                      ? 'Or leave the remote alone. If OpenTV is already set '
-                          'up on your phone, this television can take the '
-                          'whole thing from it — providers, passwords, '
-                          'catalogue and history. Otherwise fill the same '
-                          'questions in on your phone’s browser.'
-                      : 'Or fill this in on your phone instead — the same '
-                          'questions, on a keyboard that has letters.',
+                  _showingPhoneRoutes
+                      ? 'Two ways, and they are not the same offer. One copies '
+                          'a setup that already exists; the other is these '
+                          'same questions on a keyboard that has letters.'
+                      : 'Or leave the remote alone and do it from your phone.',
                   style: OpenTvType.bodyMuted,
                 ),
                 const SizedBox(height: OpenTvSpace.xs),
               ],
-              Row(
-                children: [
-                  // First, and emphasised, because it is the only path here
-                  // that involves no typing anywhere.
-                  if (onTakeFromDevice != null) ...[
+              if (_showingPhoneRoutes)
+                Row(
+                  children: [
+                    // First, and emphasised, because it is the only path here
+                    // that involves no typing anywhere.
+                    if (onTakeFromDevice != null) ...[
+                      PlayerButton(
+                        label: 'TAKE A SETUP I ALREADY HAVE',
+                        emphasis: true,
+                        autofocus: true,
+                        onSelect: onTakeFromDevice,
+                      ),
+                      const SizedBox(width: OpenTvSpace.sm),
+                    ],
+                    if (onUsePhone != null) ...[
+                      PlayerButton(
+                        label: 'FILL THE FORM ON MY PHONE',
+                        emphasis: onTakeFromDevice == null,
+                        autofocus: onTakeFromDevice == null,
+                        onSelect: onUsePhone,
+                      ),
+                      const SizedBox(width: OpenTvSpace.sm),
+                    ],
                     PlayerButton(
-                      label: 'TAKE IT FROM MY PHONE',
-                      emphasis: true,
-                      onSelect: onTakeFromDevice,
+                      label: 'BACK',
+                      onSelect: () =>
+                          setState(() => _showingPhoneRoutes = false),
                     ),
-                    const SizedBox(width: OpenTvSpace.sm),
                   ],
-                  if (onUsePhone != null)
-                    PlayerButton(
-                      label: 'USE MY PHONE',
-                      emphasis: onTakeFromDevice == null,
-                      onSelect: onUsePhone,
-                    ),
-                  if (onUsePhone != null && onCancel != null)
-                    const SizedBox(width: OpenTvSpace.sm),
-                  if (onCancel != null)
-                    PlayerButton(label: 'BACK', onSelect: onCancel),
-                ],
-              ),
+                )
+              else
+                Row(
+                  children: [
+                    if (onTakeFromDevice != null || onUsePhone != null) ...[
+                      PlayerButton(
+                        label: 'USE MY PHONE',
+                        emphasis: true,
+                        onSelect: () =>
+                            setState(() => _showingPhoneRoutes = true),
+                      ),
+                      const SizedBox(width: OpenTvSpace.sm),
+                    ],
+                    if (onCancel != null)
+                      PlayerButton(label: 'BACK', onSelect: onCancel),
+                  ],
+                ),
             ],
+            ),
           ),
         ),
         const ContentDisclaimer(),

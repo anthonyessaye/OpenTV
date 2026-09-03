@@ -9,4 +9,4 @@
 /// eventually disagree — it already had, reporting 1.0.1 into handover
 /// manifests after the app became 1.1.0. `app_version_test.dart` reads the
 /// pubspec and fails when they part.
-const appVersion = '1.1.0';
+const appVersion = '1.1.1';

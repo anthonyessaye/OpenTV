@@ -13,6 +13,8 @@ class SetupSubmission {
     this.username,
     this.password,
     this.tmdbKey,
+    this.subtitleKey,
+    this.parentalPin,
     this.wireGuardConfig,
   });
 
@@ -27,6 +29,12 @@ class SetupSubmission {
   final String? password;
 
   final String? tmdbKey;
+
+  /// Both of these are keystore secrets like the password above, and are
+  /// redacted for the same reason.
+  final String? subtitleKey;
+  final String? parentalPin;
+
   final String? wireGuardConfig;
 
   /// What this looks like in a log or an error, which is the whole point of
@@ -37,6 +45,8 @@ class SetupSubmission {
       'username: ${username == null ? 'none' : 'given'}, '
       'password: ${password == null ? 'none' : 'redacted'}, '
       'tmdbKey: ${tmdbKey == null ? 'none' : 'redacted'}, '
+      'subtitleKey: ${subtitleKey == null ? 'none' : 'redacted'}, '
+      'parentalPin: ${parentalPin == null ? 'none' : 'redacted'}, '
       'tunnel: ${wireGuardConfig == null ? 'none' : 'redacted'})';
 }
 
