@@ -106,6 +106,41 @@ class HandoverFrames {
   ///
   /// Ahead of the database so a receiver has them before the long part
   /// begins, and small enough to be one frame in every real case.
+  /// Reads back what [secretsBlock] wrote.
+  ///
+  /// Beside the writer rather than in one of the two callers, because both
+  /// directions of the handover now need it — and a decoder living inside
+  /// the client is a decoder the server cannot reach without copying it.
+  static List<HandoverSecret> readSecrets(Uint8List block) {
+    if (block.length < 4) {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the secrets block is too short',
+      );
+    }
+    final length = ByteData.sublistView(block, 0, 4).getUint32(0, Endian.big);
+    if (block.length < 4 + length) {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the secrets block is shorter than it claims',
+      );
+    }
+    try {
+      final raw = jsonDecode(
+        utf8.decode(Uint8List.sublistView(block, 4, 4 + length)),
+      ) as List<Object?>;
+      return [
+        for (final entry in raw)
+          HandoverSecret.fromJson(entry! as Map<String, Object?>),
+      ];
+    } on Object {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the secrets block could not be read',
+      );
+    }
+  }
+
   static Uint8List secretsBlock(List<HandoverSecret> secrets) {
     final json = utf8.encode(
       jsonEncode([for (final secret in secrets) secret.toJson()]),

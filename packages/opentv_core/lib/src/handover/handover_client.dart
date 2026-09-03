@@ -182,7 +182,7 @@ class HandoverClient {
           if (secrets == null) {
             // The first frame is the secrets block, ahead of the catalogue so
             // a receiver has them before the long part begins.
-            secrets = _readSecrets(frame);
+            secrets = HandoverFrames.readSecrets(frame);
             continue;
           }
           sink.add(frame);
@@ -229,35 +229,6 @@ class HandoverClient {
     }
   }
 
-  static List<HandoverSecret> _readSecrets(Uint8List block) {
-    if (block.length < 4) {
-      throw const HandoverException(
-        HandoverRefusal.malformed,
-        'the secrets block is too short',
-      );
-    }
-    final length = ByteData.sublistView(block, 0, 4).getUint32(0, Endian.big);
-    if (block.length < 4 + length) {
-      throw const HandoverException(
-        HandoverRefusal.malformed,
-        'the secrets block is shorter than it claims',
-      );
-    }
-    try {
-      final raw = jsonDecode(
-        utf8.decode(Uint8List.sublistView(block, 4, 4 + length)),
-      ) as List<Object?>;
-      return [
-        for (final entry in raw)
-          HandoverSecret.fromJson(entry! as Map<String, Object?>),
-      ];
-    } on Object {
-      throw const HandoverException(
-        HandoverRefusal.malformed,
-        'the secrets block could not be read',
-      );
-    }
-  }
 
   /// Pushes this device's bundle to the one that displayed the code.
   ///
@@ -271,8 +242,6 @@ class HandoverClient {
     HandoverBundle bundle, {
     void Function(int sent, int total)? onProgress,
   }) async {
-    final sealed = await cipher.seal(bundle.payload(), pairing);
-
     // The manifest fetch will normally have found the reachable address
     // already; a push that starts cold walks the list the same way a pull
     // does.
@@ -284,7 +253,7 @@ class HandoverClient {
     Object? lastFailure;
     for (final host in candidates) {
       try {
-        return await _sendTo(host, pairing, sealed, bundle, onProgress);
+        return await _sendTo(host, pairing, bundle, onProgress);
       } on HandoverException catch (error) {
         lastFailure = error;
       }
@@ -295,10 +264,21 @@ class HandoverClient {
     );
   }
 
+  /// Streams the bundle across as sealed frames.
+  ///
+  /// The same shape as the pull, and for the same reason. This used to seal
+  /// the whole payload in memory and post it as one body, which meant the
+  /// catalogue, a copy of it and a sealed copy of that all resident at once
+  /// on the sender — while the receiver accumulated the entire body in a
+  /// buffer before it could open any of it. A phone pushing a real catalogue
+  /// to a television therefore failed on the device with the least memory to
+  /// spare, which is exactly the direction people want to send it.
+  ///
+  /// The pull was rewritten to frames when that killed a television box.
+  /// This direction was left as it was, and broke the same way.
   Future<void> _sendTo(
     String host,
     HandoverPairing pairing,
-    Uint8List sealed,
     HandoverBundle bundle,
     void Function(int sent, int total)? onProgress,
   ) async {
@@ -321,37 +301,68 @@ class HandoverClient {
         base64.encode(utf8.encode(jsonEncode(bundle.manifest.toJson()))),
       );
       request.headers.contentType = ContentType.binary;
-      request.contentLength = sealed.length;
+      // Not declared: the sealed length is not known until the last frame is
+      // sealed, and computing it in advance would mean sealing everything
+      // first — which is the thing this exists to avoid. Chunked instead, and
+      // the receiver checks what arrived against the manifest.
+      request.headers.chunkedTransferEncoding = true;
 
-      // Written in chunks so progress can be reported. One add() of fifty
-      // megabytes reports nothing until it is over, and a transfer that looks
-      // frozen is one people cancel.
-      const chunk = 64 * 1024;
-      for (var offset = 0; offset < sealed.length; offset += chunk) {
-        final end = (offset + chunk).clamp(0, sealed.length);
-        request.add(Uint8List.sublistView(sealed, offset, end));
+      var index = 0;
+      var sent = 0;
+      Future<void> write(Uint8List chunk) async {
+        request.add(
+          HandoverFrames.framed(
+            await HandoverFrames.seal(chunk, index++, pairing.key),
+          ),
+        );
         await request.flush();
-        onProgress?.call(end, sealed.length);
+      }
+
+      await write(HandoverFrames.secretsBlock(bundle.secrets));
+
+      final source = bundle.databaseFile;
+      if (source == null) {
+        // Held in memory rather than on disk, which is how the tests build
+        // one.
+        for (var at = 0;
+            at < bundle.database.length;
+            at += HandoverFrames.chunkSize) {
+          final end =
+              (at + HandoverFrames.chunkSize).clamp(0, bundle.database.length);
+          await write(Uint8List.sublistView(bundle.database, at, end));
+          sent = end;
+          onProgress?.call(sent, bundle.manifest.databaseBytes);
+        }
+      } else {
+        final handle = await source.open();
+        try {
+          while (true) {
+            final chunk = await handle.read(HandoverFrames.chunkSize);
+            if (chunk.isEmpty) break;
+            await write(Uint8List.fromList(chunk));
+            sent += chunk.length;
+            onProgress?.call(sent, bundle.manifest.databaseBytes);
+          }
+        } finally {
+          await handle.close();
+        }
       }
 
       final response = await request.close();
-      _reachable[pairing] = host;
+      await response.drain<void>();
       if (response.statusCode != HttpStatus.ok) {
-        final reason = await utf8.decoder.bind(response).join();
         throw HandoverException(
-          response.statusCode == HttpStatus.badRequest
-              ? HandoverRefusal.schemaMismatch
-              : HandoverRefusal.malformed,
-          reason.isEmpty
-              ? 'the other device refused the transfer '
-                  '(${response.statusCode})'
-              : reason,
+          HandoverRefusal.malformed,
+          'the other device answered ${response.statusCode}',
         );
       }
-    } on SocketException catch (error) {
+      _reachable[pairing] = host;
+    } on HandoverException {
+      rethrow;
+    } on Object catch (error) {
       throw HandoverException(
         HandoverRefusal.malformed,
-        'could not reach the other device: ${error.message}',
+        'could not send to $host: $error',
       );
     } finally {
       client.close(force: true);

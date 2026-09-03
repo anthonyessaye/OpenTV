@@ -117,6 +117,7 @@ class HandoverServer {
     this.cipher = const HandoverCipher(),
     this.compatibility,
     this.onReceived,
+    this.stagingFile,
   });
 
   final HandoverPairing pairing;
@@ -139,7 +140,22 @@ class HandoverServer {
   /// Accepting a push is exactly as safe as serving a pull. Both are
   /// authenticated by the same key, and that key only ever existed on a
   /// screen and a camera in the same room.
-  final Future<void> Function(HandoverBundle)? onReceived;
+  /// Called once a pushed catalogue has been written to [stagingFile].
+  ///
+  /// A file and a secrets list rather than a bundle in memory, matching what
+  /// the pull hands back. The receiver here is frequently a television, which
+  /// is the device least able to hold a catalogue twice.
+  final Future<void> Function(
+    File staged,
+    HandoverManifest manifest,
+    List<HandoverSecret> secrets,
+  )? onReceived;
+
+  /// Where a pushed catalogue is written as it arrives.
+  ///
+  /// Required for a device that accepts a push. Without it there is nowhere
+  /// to put the thing except memory, which is what used to happen.
+  final File? stagingFile;
 
   HttpServer? _server;
 
@@ -244,9 +260,17 @@ class HandoverServer {
     }
   }
 
+  /// Takes a pushed catalogue, writing it to disk as the frames arrive.
+  ///
+  /// This used to gather the whole body into a buffer and open it in one go,
+  /// which put the catalogue, the sealed copy and the opened copy in memory
+  /// together — on whichever device was being pushed *to*, and the device
+  /// people push to is a television. The pull was rewritten to frames when
+  /// that killed one; this direction was left alone and failed the same way.
   Future<void> _accept(HttpRequest request) async {
     final receive = onReceived;
-    if (receive == null) {
+    final staged = stagingFile;
+    if (receive == null || staged == null) {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
@@ -275,14 +299,48 @@ class HandoverServer {
     // told immediately rather than after a catalogue has crossed the room.
     compatibility?.check(manifest);
 
-    final sealed = BytesBuilder(copy: false);
-    await for (final chunk in request) {
-      sealed.add(chunk);
+    if (staged.existsSync()) await staged.delete();
+
+    final reader = HandoverFrameReader(pairing.key);
+    final sink = staged.openWrite();
+    List<HandoverSecret>? secrets;
+    var written = 0;
+
+    try {
+      await for (final chunk in request) {
+        await for (final frame in reader.add(chunk)) {
+          if (secrets == null) {
+            // The first frame is the secrets block, ahead of the catalogue so
+            // the receiver holds them before the long part begins.
+            secrets = HandoverFrames.readSecrets(frame);
+            continue;
+          }
+          sink.add(frame);
+          written += frame.length;
+        }
+      }
+      await sink.flush();
+    } finally {
+      await sink.close();
     }
 
-    final payload = await cipher.open(sealed.toBytes(), pairing);
-    await receive(HandoverBundle.fromPayload(manifest, payload));
+    if (secrets == null) {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the push carried no secrets block',
+      );
+    }
+    // Truncation is what the frame tags cannot catch on their own: every
+    // frame that arrived was genuine, there were simply not enough of them.
+    if (written != manifest.databaseBytes) {
+      throw HandoverException(
+        HandoverRefusal.malformed,
+        'the catalogue arrived incomplete — '
+        '$written bytes of ${manifest.databaseBytes}',
+      );
+    }
 
+    await receive(staged, manifest, secrets);
     request.response.statusCode = HttpStatus.ok;
   }
 

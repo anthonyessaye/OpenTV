@@ -1655,15 +1655,29 @@ class _SearchTabState extends State<_SearchTab> {
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_run);
+    _controller.addListener(_scheduleRun);
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_run);
+    _controller.removeListener(_scheduleRun);
+    _debounce?.cancel();
     _controller.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  /// One query after the typing stops, not one per keystroke.
+  ///
+  /// The television has debounced since its search was written and the phone
+  /// never did, so every letter ran three queries across the whole catalogue.
+  /// That is survivable on a small provider and is dropped frames on a real
+  /// one — the same 220 milliseconds, for the same reason.
+  Timer? _debounce;
+
+  void _scheduleRun() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 220), _run);
   }
 
   Future<void> _run() async {

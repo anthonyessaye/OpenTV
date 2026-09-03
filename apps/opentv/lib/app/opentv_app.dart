@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:sqlite3/sqlite3.dart' show Database;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -129,6 +130,17 @@ class OpenTvApp extends StatelessWidget {
       home: _Root(device: device),
     );
   }
+}
+
+/// Run inside the database isolate, on every connection.
+///
+/// A top-level function rather than the closure this used to be: the callback
+/// is sent to another isolate, and a closure cannot cross that boundary.
+void _prepareSqlite(Database raw) {
+  // Drift does not enable this and SQLite defaults it off, so without it
+  // every ON DELETE CASCADE in the schema is inert and removing a source
+  // silently orphans its whole catalogue.
+  raw.execute('PRAGMA foreign_keys = ON');
 }
 
 /// Decides what the viewer sees first: onboarding, or their catalogue.
@@ -298,17 +310,20 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       // the previous one would offer a catalogue that no longer exists.
       _handover = null;
 
-      final db = OpenTvDatabase(
-        NativeDatabase(
-          file,
-          setup: (raw) {
-            // Drift does not enable this and SQLite defaults it off, so
-            // without it every ON DELETE CASCADE in the schema is inert and
-            // removing a source silently orphans its whole catalogue.
-            raw.execute('PRAGMA foreign_keys = ON');
-          },
-        ),
-      );
+      // SQLite on its own isolate, not on the one drawing the screen.
+      //
+      // Every query used to run on the UI isolate, which is fine until the
+      // catalogue is real: a search across a hundred and eighty thousand
+      // films is tens of milliseconds of work per keystroke, and tens of
+      // milliseconds on the UI isolate is dropped frames. On a television
+      // that reads as the whole interface hesitating, because it is.
+      //
+      // Nothing above this changes — drift's API is asynchronous either way,
+      // so the isolate boundary is invisible to every caller.
+      final db = OpenTvDatabase(NativeDatabase.createInBackground(
+        file,
+        setup: _prepareSqlite,
+      ));
 
       final sources = await db.allSources();
 

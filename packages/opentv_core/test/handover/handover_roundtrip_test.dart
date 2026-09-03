@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -32,8 +33,12 @@ HandoverBundle _bundle({int schemaVersion = 3, int databaseBytes = 64 * 1024}) {
 void main() {
   late HandoverServer server;
   late HandoverPairing pairing;
+  late Directory temp;
 
-  HandoverBundle? received;
+  /// What a push left on disk, and what came with it.
+  File? receivedFile;
+  HandoverManifest? receivedManifest;
+  List<HandoverSecret>? receivedSecrets;
 
   Future<void> serve(HandoverBundle bundle, {bool accepting = false}) async {
     // Port 0 lets the OS pick, so a test run does not collide with a real
@@ -45,7 +50,14 @@ void main() {
       compatibility: accepting
           ? HandoverCompatibility(schemaVersion: bundle.manifest.schemaVersion)
           : null,
-      onReceived: accepting ? (b) async => received = b : null,
+      stagingFile: accepting ? File('${temp.path}/pushed.sqlite') : null,
+      onReceived: accepting
+          ? (staged, manifest, secrets) async {
+              receivedFile = staged;
+              receivedManifest = manifest;
+              receivedSecrets = secrets;
+            }
+          : null,
     );
     await server.start();
     pairing = HandoverPairing(
@@ -55,9 +67,10 @@ void main() {
     );
   }
 
-  late Directory temp;
   setUp(() {
-    received = null;
+    receivedFile = null;
+    receivedManifest = null;
+    receivedSecrets = null;
     temp = Directory.systemTemp.createTempSync('handover-rt');
   });
   tearDown(() => temp.deleteSync(recursive: true));
@@ -154,9 +167,12 @@ void main() {
         compatibility: HandoverCompatibility(schemaVersion: 3),
       ).send(pairing, outgoing);
 
-      expect(received, isNotNull);
-      expect(received!.database, outgoing.database);
-      expect(received!.secrets.single.secret, 'hunter2');
+      expect(receivedFile, isNotNull);
+      // Written to disk as it arrived rather than held whole in memory: the
+      // device being pushed to is usually the television, which is the one
+      // least able to hold a catalogue twice.
+      expect(receivedFile!.readAsBytesSync(), outgoing.database);
+      expect(receivedSecrets!.single.secret, 'hunter2');
     });
 
     test('progress is reported while sending', () async {
@@ -188,7 +204,7 @@ void main() {
         ).send(pairing, _bundle(schemaVersion: 9)),
         throwsA(isA<HandoverException>()),
       );
-      expect(received, isNull, reason: 'a refused push was applied anyway');
+      expect(receivedFile, isNull, reason: 'a refused push was applied anyway');
     });
 
     test('a device that only offers refuses a push', () async {
@@ -202,7 +218,7 @@ void main() {
         ).send(pairing, _bundle()),
         throwsA(isA<HandoverException>()),
       );
-      expect(received, isNull);
+      expect(receivedFile, isNull);
     });
 
     test('a push sealed with the wrong key is refused', () async {
@@ -220,7 +236,7 @@ void main() {
         ).send(wrong, _bundle()),
         throwsA(isA<HandoverException>()),
       );
-      expect(received, isNull, reason: 'an unauthenticated push was applied');
+      expect(receivedFile, isNull, reason: 'an unauthenticated push was applied');
     });
   });
 
@@ -268,7 +284,7 @@ void main() {
         timeout: Duration(milliseconds: 400),
       ).send(spread, _bundle());
 
-      expect(received, isNotNull);
+      expect(receivedFile, isNotNull);
     });
 
     test('all of them unreachable still reports, and names them', () async {
@@ -302,4 +318,68 @@ void main() {
       throwsA(isA<HandoverException>()),
     );
   }, timeout: const Timeout(Duration(seconds: 10)));
+
+  test('a push arrives in frames, not as one body', () async {
+    // The property that broke phone-to-television. A push used to seal the
+    // whole payload on the sender and buffer the whole body on the receiver,
+    // so a real catalogue needed several copies of itself resident at once —
+    // on the television, which has the least room for that. The pull was
+    // rewritten to frames when it killed a box; this direction was left as it
+    // was and failed identically.
+    final outgoing = _bundle(databaseBytes: 9 * 1024 * 1024);
+    await serve(_bundle(), accepting: true);
+
+    final progress = <int>[];
+    await const HandoverClient(
+      compatibility: HandoverCompatibility(schemaVersion: 3),
+    ).send(pairing, outgoing, onProgress: (sent, total) => progress.add(sent));
+
+    expect(receivedFile, isNotNull);
+    expect(receivedFile!.lengthSync(), outgoing.database.length);
+    expect(receivedFile!.readAsBytesSync(), outgoing.database);
+
+    // Reported more than once, which is only possible if it went in pieces.
+    expect(
+      progress.length,
+      greaterThan(1),
+      reason: 'the whole payload went in one go, which is the failure',
+    );
+    expect(progress.last, outgoing.database.length);
+  });
+
+  test('a truncated push is refused rather than half applied', () async {
+    // Every frame that arrives is genuine; there can simply be too few of
+    // them, and the tags cannot see that on their own.
+    await serve(_bundle(), accepting: true);
+
+    final manifest = HandoverManifest(
+      schemaVersion: 3,
+      appVersion: '1.1.1',
+      databaseBytes: 9999,
+      secretCount: 0,
+      sourceCount: 1,
+      createdAt: DateTime.utc(2026),
+    );
+    final client = HttpClient();
+    final request = await client.postUrl(
+      Uri.parse('http://127.0.0.1:${pairing.port}/bundle'),
+    );
+    request.headers.set(
+      HandoverServer.manifestHeader,
+      base64.encode(utf8.encode(jsonEncode(manifest.toJson()))),
+    );
+    request.add(HandoverFrames.framed(
+      await HandoverFrames.seal(
+        HandoverFrames.secretsBlock(const []),
+        0,
+        pairing.key,
+      ),
+    ));
+    final response = await request.close();
+    await response.drain<void>();
+    client.close(force: true);
+
+    expect(response.statusCode, HttpStatus.badRequest);
+    expect(receivedFile, isNull, reason: 'a truncated push was applied');
+  });
 }

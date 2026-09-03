@@ -101,8 +101,11 @@ class HandoverService {
       pairing: pairing,
       bundle: bundle,
       compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
-      onReceived: (incoming) async {
-        await _apply(incoming);
+      // Beside the live catalogue, so a pushed one never has to be held in
+      // memory — the same file the pull direction stages into.
+      stagingFile: File('${databaseFile.path}.incoming'),
+      onReceived: (staged, manifest, secrets) async {
+        await _applyStaged(staged, secrets);
         await onReceived?.call();
       },
     );
@@ -184,19 +187,6 @@ class HandoverService {
     // touch the local network too.
     await client.warmUp(pairing);
     await client.send(pairing, bundle, onProgress: onProgress);
-  }
-
-  /// Writes a received bundle over this device's catalogue.
-  ///
-  /// Secrets first, and the order is the whole point: if writing them fails
-  /// the old catalogue is intact and still works, while the other order
-  /// leaves a device holding a new catalogue it has no passwords for. There
-  /// is a test that fails the keystore write and requires the catalogue to
-  /// survive.
-  Future<void> _apply(HandoverBundle bundle) async {
-    final staged = File('${databaseFile.path}.incoming');
-    await staged.writeAsBytes(bundle.database, flush: true);
-    await _applyStaged(staged, bundle.secrets);
   }
 
   /// Puts an already-written staging file into place.
