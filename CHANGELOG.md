@@ -36,6 +36,12 @@ most of what it knows from things that failed silently.
   way, in the direction people most want to send it.
 - A truncated push is refused rather than half applied. Every frame that
   arrives is genuine; there can simply be too few of them.
+- The handover's progress bar is visible. It had been drawing at zero height
+  since it was written — a childless `ColoredBox` takes the smallest size its
+  constraints allow, and a plain `Stack` constrains loosely — so a transfer
+  showed a rising percentage above six pixels of empty ground. It is the
+  shared bar now, which fills from the leading edge and animates between the
+  steps the transport reports rather than jumping.
 - The television's onboarding no longer clips its own buttons. That step
   overflowed by 219 pixels whenever the phone options were shown, and shipped
   that way because an overflow paints its stripes only in a debug build.

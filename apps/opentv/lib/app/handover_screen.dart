@@ -341,21 +341,7 @@ class _HandoverReceiveScreenState extends State<HandoverReceiveScreen> {
               // with no visible progress is one people assume has hung and
               // cancel — which is the only way to end up with nothing after
               // waiting.
-              ClipRRect(
-                borderRadius: OpenTvRadius.tile,
-                child: SizedBox(
-                  height: 6,
-                  child: Stack(
-                    children: [
-                      const ColoredBox(color: OpenTvColors.rule),
-                      FractionallySizedBox(
-                        widthFactor: _progress.clamp(0.0, 1.0),
-                        child: const ColoredBox(color: OpenTvColors.tally),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              TouchProgressBar(height: 6, value: _progress),
               const SizedBox(height: OpenTvTouchSpace.sm),
               Text(
                 '${(_progress * 100).round()}%',
