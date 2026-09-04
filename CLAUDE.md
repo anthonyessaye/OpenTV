@@ -239,7 +239,7 @@ a background. The reported bug was "the cards are too tall"; the cards were
 correct. Wrap in `Align` when a row should keep its own height.
 
 **Reader without writer, and writer without reader.** This has now happened
-nine times, in both directions, and it is the single most common failure in
+eleven times, in both directions, and it is the single most common failure in
 this codebase. The resume bar read a position column nothing ever wrote. The
 series Continue shelf filtered episode progress for the series kind, which
 matches nothing. The phone's browse screens were handed a `StreamResolver` and
@@ -254,7 +254,12 @@ interface ever read it, so a failed stream was a black screen with nothing to
 say. `episodesSyncedAt` was written to stop a show with no episodes going back
 to the portal, and nothing consulted it. And the parental PIN was written to
 the keystore and never compared against anything, which made the lock
-decorative.
+decorative. The handover manifest has carried the other device's `appVersion`
+since the format was written and nothing ever read it, so a version mismatch
+could only be reported as two schema numbers. And the receiver wrote the
+reason it refused a push into the response body while the sender called
+`drain` on it and reported the status code, so a refusal that had been
+explained in a sentence arrived as "the other device answered 400".
 
 None of these fail. Nothing logs, nothing throws, and each one looks like
 working software in a screenshot. **If a feature is silent, grep both ends
@@ -367,6 +372,31 @@ moment somebody hides anything.
 
 Note that bumping the schema means a 1.1 device cannot hand over to a 1.0 one.
 That is the compatibility check working, not a bug.
+
+## Search, and schema 5
+
+Schema 5 adds an FTS5 index over `channels`, `movies` and `series_entries`.
+`LIKE '%needle%'` cannot use an index — a B-tree has no way into the middle of
+a string — so every search scanned the table. That stayed invisible for a long
+time because `LIMIT` stops a scan as soon as it has enough rows, so **a term
+matching plenty was fast and a term matching little cost the whole
+catalogue**: measured at 180,000 films, a hit took 0.8ms and a miss 18.5ms,
+and the miss is what a viewer gets as they finish typing something specific.
+A test asserts the ratio rather than either number.
+
+The index is over `name`, not `searchName`, and that is the important part.
+`normaliseForSearch` folds to ASCII and drops every rune it has no mapping
+for, so an Arabic, Cyrillic, Greek or CJK title normalises to the empty
+string — the stored name *and* the term typed to find it. Search in those
+scripts returned nothing, always, silently, on catalogues largely made of
+them. FTS5's `unicode61` tokenizer segments all of them and folds diacritics
+itself, so `telefe` still finds `Telefé`.
+
+External content: the index holds no copy of the titles, which matters because
+the handover sends this file over a home network. That arrangement has one
+trap — an external-content index is **not** updated by writing to the table it
+reads from, so it needs triggers, and without them it is correct in any test
+that seeds and searches once and wrong from the next sync onwards.
 
 ## Security decisions already made
 

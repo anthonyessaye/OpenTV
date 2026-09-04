@@ -22,6 +22,12 @@ most of what it knows from things that failed silently.
 
 ### Changed
 
+- Search is indexed rather than scanned, which needs database schema 5. A
+  search that matched little used to read the whole catalogue to say so — 18ms
+  against 0.8ms for one that matched plenty, on 180,000 films — because a
+  `LIKE '%term%'` cannot use an index and `LIMIT` only ends a scan early when
+  there is something to find. It was slowest exactly as you finished typing
+  something specific.
 - SQLite runs on its own isolate. Searching a catalogue of a hundred and
   eighty thousand films is tens of milliseconds per keystroke, and tens of
   milliseconds on the isolate drawing the screen is dropped frames.
@@ -36,6 +42,16 @@ most of what it knows from things that failed silently.
   way, in the direction people most want to send it.
 - A truncated push is refused rather than half applied. Every frame that
   arrives is genuine; there can simply be too few of them.
+- **Search works in Arabic, Cyrillic, Greek and Chinese.** Titles were folded
+  to ASCII before being stored, and every rune with no ASCII equivalent was
+  dropped — so those titles were stored as an empty string, the terms typed to
+  find them became empty too, and the search returned nothing at all. It never
+  failed; it simply never found anything, on catalogues largely made of those
+  channels.
+- A refused handover says why. The device turning it away wrote a sentence
+  explaining itself, sent it, and the other end threw it away unread and
+  showed "the other device answered 400". Both devices now say the same thing,
+  and it names the two app versions rather than two database schema numbers.
 - The handover's progress bar is visible. It had been drawing at zero height
   since it was written — a childless `ColoredBox` takes the smallest size its
   constraints allow, and a plain `Stack` constrains loosely — so a transfer

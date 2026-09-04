@@ -116,21 +116,18 @@ class _SearchScreenState extends State<SearchScreen> {
 
     setState(() => _searching = true);
 
-    final channels = await widget.db.searchChannels(
-      widget.sourceId,
-      term,
-      limit: 30,
-    );
-    final films = await widget.db.searchMovies(
-      widget.sourceId,
-      term,
-      limit: 60,
-    );
-    final series = await widget.db.searchSeries(
-      widget.sourceId,
-      term,
-      limit: 30,
-    );
+    // Asked for together rather than one after another. Three awaits in a
+    // row is three round trips to the isolate the database runs on, and the
+    // viewer waits for the sum of them for no reason: none of the three needs
+    // an answer from either of the others.
+    final results = await Future.wait([
+      widget.db.searchChannels(widget.sourceId, term, limit: 30),
+      widget.db.searchMovies(widget.sourceId, term, limit: 60),
+      widget.db.searchSeries(widget.sourceId, term, limit: 30),
+    ]);
+    final channels = results[0] as List<Channel>;
+    final films = results[1] as List<Movie>;
+    final series = results[2] as List<SeriesEntry>;
 
     // A slower earlier search must not overwrite a newer one's results.
     if (!mounted || generation != _generation) return;

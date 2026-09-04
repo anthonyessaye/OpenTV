@@ -349,11 +349,18 @@ class HandoverClient {
       }
 
       final response = await request.close();
-      await response.drain<void>();
+      // Read rather than drained. The receiver writes the reason it refused
+      // into the body — a schema it cannot open, a manifest it could not
+      // read — and this used to throw that away and report the status code,
+      // so the one screen a person was watching said "answered 400" while
+      // the sentence explaining it had already crossed the network.
+      final reason = await response.transform(utf8.decoder).join();
       if (response.statusCode != HttpStatus.ok) {
         throw HandoverException(
           HandoverRefusal.malformed,
-          'the other device answered ${response.statusCode}',
+          reason.trim().isEmpty
+              ? 'the other device answered ${response.statusCode}'
+              : reason.trim(),
         );
       }
       _reachable[pairing] = host;

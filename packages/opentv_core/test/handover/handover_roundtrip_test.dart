@@ -48,7 +48,10 @@ void main() {
       pairing: pairing,
       bundle: bundle,
       compatibility: accepting
-          ? HandoverCompatibility(schemaVersion: bundle.manifest.schemaVersion)
+          ? HandoverCompatibility(
+              schemaVersion: bundle.manifest.schemaVersion,
+              appVersion: '1.0.1',
+            )
           : null,
       stagingFile: accepting ? File('${temp.path}/pushed.sqlite') : null,
       onReceived: accepting
@@ -193,6 +196,32 @@ void main() {
 
       expect(total, greaterThan(0));
       expect(last, total);
+    });
+
+    test('the refusal says why, and names both versions', () async {
+      // The existing test below asserts only that a HandoverException is
+      // thrown, which passed unchanged while the client drained the body and
+      // reported "the other device answered 400". The reason was written,
+      // sent, and discarded one layer short of the screen showing it.
+      await serve(_bundle(schemaVersion: 3), accepting: true);
+
+      await expectLater(
+        const HandoverClient(
+          compatibility: HandoverCompatibility(
+            schemaVersion: 9,
+            appVersion: '2.0.0',
+          ),
+        ).send(pairing, _bundle(schemaVersion: 9)),
+        throwsA(isA<HandoverException>().having(
+          (e) => e.message,
+          'message',
+          allOf(
+            contains('1.0.1'),
+            contains('needs updating'),
+            isNot(contains('400')),
+          ),
+        )),
+      );
     });
 
     test('a schema the receiver cannot open is refused', () async {

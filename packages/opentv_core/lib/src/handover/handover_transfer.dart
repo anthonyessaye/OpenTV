@@ -83,20 +83,40 @@ class HandoverCipher {
 /// receiver that checked everything would still produce the case this exists
 /// to prevent: a long transfer that fails at the end.
 class HandoverCompatibility {
-  const HandoverCompatibility({required this.schemaVersion});
+  const HandoverCompatibility({
+    required this.schemaVersion,
+    this.appVersion,
+  });
 
   /// The schema this device's database is at.
   final int schemaVersion;
 
+  /// What this device calls itself, for the refusal message.
+  ///
+  /// The manifest has carried the other device's version since the format
+  /// was written and nothing ever read it, so a mismatch could only be
+  /// reported as two schema numbers — which name the thing that is wrong in
+  /// a vocabulary nobody outside this repository has. Both versions are the
+  /// same fact said in the words on the settings screen.
+  final String? appVersion;
+
   /// Throws when the manifest cannot be accepted, and returns otherwise.
   void check(HandoverManifest manifest) {
-    if (manifest.schemaVersion != schemaVersion) {
-      throw HandoverException(
-        HandoverRefusal.schemaMismatch,
-        'the other device is on database schema ${manifest.schemaVersion} '
-        'and this one is on $schemaVersion. Update both and try again.',
-      );
-    }
+    if (manifest.schemaVersion == schemaVersion) return;
+
+    final mine = appVersion;
+    final theirs = manifest.appVersion;
+    final older = manifest.schemaVersion < schemaVersion;
+    throw HandoverException(
+      HandoverRefusal.schemaMismatch,
+      mine == null
+          ? 'the other device is on database schema '
+              '${manifest.schemaVersion} and this one is on $schemaVersion. '
+              'Update both and try again.'
+          : 'the other device is on OpenTV $theirs and this one is on $mine. '
+              '${older ? 'It' : 'This one'} needs updating before a setup '
+              'can move between them.',
+    );
   }
 }
 
@@ -117,6 +137,7 @@ class HandoverServer {
     this.cipher = const HandoverCipher(),
     this.compatibility,
     this.onReceived,
+    this.onRefused,
     this.stagingFile,
   });
 
@@ -150,6 +171,12 @@ class HandoverServer {
     HandoverManifest manifest,
     List<HandoverSecret> secrets,
   )? onReceived;
+
+  /// Called when this device turned a transfer away.
+  ///
+  /// The refusal is already answered to the sender; this is the same sentence
+  /// for whoever is standing at this end.
+  final void Function(HandoverException refusal)? onRefused;
 
   /// Where a pushed catalogue is written as it arrives.
   ///
@@ -207,6 +234,11 @@ class HandoverServer {
       request.response
         ..statusCode = HttpStatus.badRequest
         ..write(error.message);
+      // Told to this device too. Both ends of a refused handover have a
+      // person in front of them, and the one that refused is the one holding
+      // the explanation — it used to keep it, leaving a television sitting on
+      // its code as though nothing had been tried.
+      onRefused?.call(error);
     }
     await request.response.close();
   }

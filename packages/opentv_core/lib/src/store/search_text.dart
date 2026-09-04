@@ -143,3 +143,48 @@ const Map<int, String> _diacritics = {
   0x17C: 'z',
   0x17E: 'z',
 };
+
+/// The MATCH expression for a typed term, or null when nothing is searchable.
+///
+/// Deliberately not built from [normaliseForSearch]. That folds to ASCII and
+/// drops every rune it has no mapping for, so an Arabic, Cyrillic, Greek or
+/// CJK title normalises to the empty string — which made those titles
+/// unfindable and every query typed in those scripts return nothing at all,
+/// silently, on catalogues largely composed of them. FTS5's `unicode61`
+/// tokenizer segments all of them, so the index goes over the raw name and
+/// the term reaches it unfolded.
+///
+/// Every token is prefix-matched, so results narrow as a title is typed
+/// rather than appearing only once a word is finished. Tokens are quoted, so
+/// a term containing FTS5's own syntax — `AND`, `*`, `(` — is matched as
+/// text instead of parsed as an operator.
+String? ftsPrefixQuery(String term) {
+  final tokens = <String>[];
+  final buffer = StringBuffer();
+
+  void flush() {
+    if (buffer.isEmpty) return;
+    // A doubled quote is how FTS5 escapes one inside a quoted token.
+    tokens.add('"${buffer.toString().replaceAll('"', '""')}"*');
+    buffer.clear();
+  }
+
+  for (final rune in term.runes) {
+    // Separators by the same rule the tokenizer uses: anything that is not a
+    // letter or a digit in any script. Checked by range rather than by a
+    // table, because the point of this path is the scripts a table would
+    // have to keep growing to cover.
+    final isSeparator = rune < 0x30 ||
+        (rune > 0x39 && rune < 0x41) ||
+        (rune > 0x5A && rune < 0x61) ||
+        (rune > 0x7A && rune < 0xC0);
+    if (isSeparator) {
+      flush();
+    } else {
+      buffer.writeCharCode(rune);
+    }
+  }
+  flush();
+
+  return tokens.isEmpty ? null : tokens.join(' ');
+}

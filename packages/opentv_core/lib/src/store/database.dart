@@ -34,7 +34,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   OpenTvDatabase(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -88,6 +88,20 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         await m.addColumn(seriesEntries, seriesEntries.region);
         await backfillRegions();
       }
+
+      // 5 adds a full-text index over each catalogue table.
+      //
+      // `LIKE '%needle%'` cannot use an index — a B-tree has no way into the
+      // middle of a string — so every search scanned the table. That was
+      // invisible while a term matched plenty, because LIMIT stopped the scan
+      // early, and it cost the whole catalogue whenever a term matched little
+      // or nothing. Which is to say it was slowest exactly as a viewer
+      // finished typing something specific.
+      if (from < 5) await createSearchIndex();
+    },
+    onCreate: (m) async {
+      await m.createAll();
+      await createSearchIndex();
     },
     beforeOpen: (details) async {
       // Off by default in SQLite. Without it the cascade deletes that clean
@@ -437,21 +451,24 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String term, {
     int limit = 50,
   }) async {
+    final rows = [
+      for (final row in await _searchRows(
+        'channels',
+        'channels_fts',
+        sourceId,
+        term,
+        limit,
+      ))
+        channels.map(row.data),
+    ];
+
+    // Ranked on the folded column where the term has one. A term in a script
+    // normaliseForSearch cannot fold reduces to nothing there, so those rank
+    // on the name as typed rather than by comparing empty strings.
     final needle = normaliseForSearch(term);
-    if (needle.isEmpty) return const [];
-
-    final rows =
-        await (select(channels)
-              ..where(
-                (c) =>
-                    c.sourceId.equals(sourceId) &
-                    c.hidden.equals(false) &
-                    c.searchName.like('%$needle%'),
-              )
-              ..limit(limit))
-            .get();
-
-    return _rankByPrefix(rows, needle, (c) => c.searchName);
+    return needle.isEmpty
+        ? _rankByPrefix(rows, term.toLowerCase(), (r) => r.name.toLowerCase())
+        : _rankByPrefix(rows, needle, (r) => r.searchName);
   }
 
   Future<List<Movie>> searchMovies(
@@ -459,21 +476,24 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String term, {
     int limit = 50,
   }) async {
+    final rows = [
+      for (final row in await _searchRows(
+        'movies',
+        'movies_fts',
+        sourceId,
+        term,
+        limit,
+      ))
+        movies.map(row.data),
+    ];
+
+    // Ranked on the folded column where the term has one. A term in a script
+    // normaliseForSearch cannot fold reduces to nothing there, so those rank
+    // on the name as typed rather than by comparing empty strings.
     final needle = normaliseForSearch(term);
-    if (needle.isEmpty) return const [];
-
-    final rows =
-        await (select(movies)
-              ..where(
-                (m) =>
-                    m.sourceId.equals(sourceId) &
-                    m.hidden.equals(false) &
-                    m.searchName.like('%$needle%'),
-              )
-              ..limit(limit))
-            .get();
-
-    return _rankByPrefix(rows, needle, (m) => m.searchName);
+    return needle.isEmpty
+        ? _rankByPrefix(rows, term.toLowerCase(), (r) => r.name.toLowerCase())
+        : _rankByPrefix(rows, needle, (r) => r.searchName);
   }
 
   Future<List<SeriesEntry>> searchSeries(
@@ -481,21 +501,115 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String term, {
     int limit = 50,
   }) async {
+    final rows = [
+      for (final row in await _searchRows(
+        'series_entries',
+        'series_fts',
+        sourceId,
+        term,
+        limit,
+      ))
+        seriesEntries.map(row.data),
+    ];
+
+    // Ranked on the folded column where the term has one. A term in a script
+    // normaliseForSearch cannot fold reduces to nothing there, so those rank
+    // on the name as typed rather than by comparing empty strings.
     final needle = normaliseForSearch(term);
-    if (needle.isEmpty) return const [];
+    return needle.isEmpty
+        ? _rankByPrefix(rows, term.toLowerCase(), (r) => r.name.toLowerCase())
+        : _rankByPrefix(rows, needle, (r) => r.searchName);
+  }
 
-    final rows =
-        await (select(seriesEntries)
-              ..where(
-                (s) =>
-                    s.sourceId.equals(sourceId) &
-                    s.hidden.equals(false) &
-                    s.searchName.like('%$needle%'),
-              )
-              ..limit(limit))
-            .get();
+  /// The three full-text indexes, their triggers, and their contents.
+  ///
+  /// External content: FTS5 holds only the index and reads the columns back
+  /// out of the table itself, so a title is not stored twice. That matters
+  /// more here than in most apps — the handover copies this file over a home
+  /// network, and a second copy of 284,000 titles is a second copy somebody
+  /// waits for.
+  ///
+  /// Indexed over `name` rather than `searchName`. The folded column drops
+  /// every rune it has no ASCII mapping for, which is all of Arabic,
+  /// Cyrillic, Greek and CJK, so indexing it would have carried that
+  /// blindness into the new index. `unicode61` segments those scripts and
+  /// folds diacritics itself, so `telefe` still finds `Telefé`.
+  ///
+  /// Kept out of the drift table list on purpose: a virtual table has no row
+  /// class worth generating, and the triggers are the part that matters.
+  ///
+  /// Safe to run twice. A device that took a catalogue from another one by
+  /// handover already has the file the other device built.
+  Future<void> createSearchIndex() async {
+    for (final (table, index) in _searchIndexes) {
+      await customStatement(
+        'CREATE VIRTUAL TABLE IF NOT EXISTS $index USING fts5('
+        'name, content=$table, content_rowid=rowid, '
+        "tokenize='unicode61 remove_diacritics 2')",
+      );
 
-    return _rankByPrefix(rows, needle, (s) => s.searchName);
+      // Without these the index is correct once and wrong from the first
+      // sync onwards. An external-content table is not updated by writing to
+      // the table it reads from, which is the trap in this arrangement: it
+      // would look right in every test that seeds and searches in one go.
+      await customStatement(
+        'CREATE TRIGGER IF NOT EXISTS ${index}_insert AFTER INSERT ON $table '
+        'BEGIN INSERT INTO $index(rowid, name) VALUES (new.rowid, new.name); END',
+      );
+      await customStatement(
+        'CREATE TRIGGER IF NOT EXISTS ${index}_delete AFTER DELETE ON $table '
+        "BEGIN INSERT INTO $index($index, rowid, name) "
+        "VALUES('delete', old.rowid, old.name); END",
+      );
+      await customStatement(
+        'CREATE TRIGGER IF NOT EXISTS ${index}_update AFTER UPDATE ON $table '
+        "BEGIN INSERT INTO $index($index, rowid, name) "
+        "VALUES('delete', old.rowid, old.name); "
+        'INSERT INTO $index(rowid, name) VALUES (new.rowid, new.name); END',
+      );
+
+      // One statement rather than the paged cursor the region backfill uses,
+      // because the reason for that cursor is gone: SQLite runs on its own
+      // isolate now, so a long statement here costs a slow first launch and
+      // not a frozen one.
+      await customStatement("INSERT INTO $index($index) VALUES('rebuild')");
+    }
+  }
+
+  static const _searchIndexes = [
+    ('channels', 'channels_fts'),
+    ('movies', 'movies_fts'),
+    ('series_entries', 'series_fts'),
+  ];
+
+  /// One table's search, addressed by name.
+  ///
+  /// The join is on rowid, which is what `content_rowid` names. Ordering is
+  /// left to [_rankByPrefix] rather than taken from FTS5's `rank`: bm25
+  /// scores by term rarity, which on a catalogue of titles ranks a rare word
+  /// buried mid-title above the title that starts with what was typed.
+  Future<List<QueryRow>> _searchRows(
+    String table,
+    String index,
+    int sourceId,
+    String term,
+    int limit,
+  ) async {
+    final match = ftsPrefixQuery(term);
+    if (match == null) return const [];
+
+    return customSelect(
+      'SELECT $table.* FROM $index '
+      'JOIN $table ON $table.rowid = $index.rowid '
+      'WHERE $index MATCH ? AND $table.source_id = ? AND $table.hidden = 0 '
+      'LIMIT ?',
+      variables: [
+        Variable<String>(match),
+        Variable<int>(sourceId),
+        Variable<int>(limit),
+      ],
+      readsFrom: {channels, movies, seriesEntries},
+    ).get();
   }
 
   static List<T> _rankByPrefix<T>(

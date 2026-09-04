@@ -44,6 +44,9 @@ class _HandoverOfferScreenState extends State<HandoverOfferScreen> {
   HandoverPairing? _pairing;
   String? _failure;
 
+  /// Why this device turned away a setup another one tried to send it.
+  String? _refusal;
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +73,12 @@ class _HandoverOfferScreenState extends State<HandoverOfferScreen> {
       final pairing = await widget.service.offer(
         hosts: addresses,
         onReceived: widget.onReceived,
+        // Shown here rather than only answered to the sender. This device
+        // made the decision, and somebody is standing in front of it holding
+        // a phone that has just said the transfer failed.
+        onRefused: (reason) {
+          if (mounted) setState(() => _refusal = reason);
+        },
       );
       if (mounted) setState(() => _pairing = pairing);
     } on Object catch (error) {
@@ -147,6 +156,15 @@ class _HandoverOfferScreenState extends State<HandoverOfferScreen> {
             textAlign: TextAlign.center,
           ),
           SizedBox(height: widget.touch ? OpenTvTouchSpace.xl : 48),
+          if (_refusal != null) ...[
+            Text(
+              'A device tried to send its setup here and it was refused. '
+              '$_refusal',
+              style: body,
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: widget.touch ? OpenTvTouchSpace.lg : 32),
+          ],
           if (pairing != null) ...[
             QrPanel(
               data: pairing.encode(),

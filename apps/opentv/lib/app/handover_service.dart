@@ -80,6 +80,7 @@ class HandoverService {
     required List<String> hosts,
     int port = 8100,
     Future<void> Function()? onReceived,
+    void Function(String reason)? onRefused,
   }) async {
     await stop();
 
@@ -100,7 +101,10 @@ class HandoverService {
     final server = HandoverServer(
       pairing: pairing,
       bundle: bundle,
-      compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
+      compatibility: HandoverCompatibility(
+        schemaVersion: db.schemaVersion,
+        appVersion: appVersion,
+      ),
       // Beside the live catalogue, so a pushed one never has to be held in
       // memory — the same file the pull direction stages into.
       stagingFile: File('${databaseFile.path}.incoming'),
@@ -108,6 +112,7 @@ class HandoverService {
         await _applyStaged(staged, secrets);
         await onReceived?.call();
       },
+      onRefused: (error) => onRefused?.call(error.message),
     );
     await server.start();
     _server = server;
@@ -135,7 +140,10 @@ class HandoverService {
     void Function(int received, int total)? onProgress,
   }) async {
     final client = HandoverClient(
-      compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
+      compatibility: HandoverCompatibility(
+        schemaVersion: db.schemaVersion,
+        appVersion: appVersion,
+      ),
     );
 
     // Ask for the network before using it.
@@ -181,7 +189,10 @@ class HandoverService {
       sourceCount: (await db.allSources()).length,
     );
     final client = HandoverClient(
-      compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
+      compatibility: HandoverCompatibility(
+        schemaVersion: db.schemaVersion,
+        appVersion: appVersion,
+      ),
     );
     // Same reason as the pull: a push from a phone is the first thing to
     // touch the local network too.
