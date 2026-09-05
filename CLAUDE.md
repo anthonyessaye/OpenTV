@@ -373,7 +373,7 @@ moment somebody hides anything.
 Note that bumping the schema means a 1.1 device cannot hand over to a 1.0 one.
 That is the compatibility check working, not a bug.
 
-## Search, and schema 5
+## Search, and schemas 5 and 6
 
 Schema 5 adds an FTS5 index over `channels`, `movies` and `series_entries`.
 `LIKE '%needle%'` cannot use an index — a B-tree has no way into the middle of
@@ -397,6 +397,28 @@ the handover sends this file over a home network. That arrangement has one
 trap — an external-content index is **not** updated by writing to the table it
 reads from, so it needs triggers, and without them it is correct in any test
 that seeds and searches once and wrong from the next sync onwards.
+
+Schema 6 adds `prefix='2 3'`. **A search starts at two letters, which is the
+most expensive prefix there is**: a bare FTS5 index answers `am*` by walking
+every term beginning `am`, and on a real catalogue that is thousands of
+separate reads. Measured warm it is only twice the cost; the reason it
+matters is that those reads are random ones off a television's eMMC, where
+the multiplier is not two. The prefix tables are part of the virtual table's
+definition and cannot be added to one already built, so 6 drops the index and
+rebuilds it.
+
+**A deadline stops this app waiting; it does not stop the query.** A search
+that times out is still running on the database's isolate, so everything
+after it queues behind it — including the scan that replaced it. That is why
+a single slow query could leave the search box reading "Searching…" for ever,
+and why the index is asked *once*: after one failure the scan is used
+directly for the rest of the session.
+
+**Nothing here reproduced on a laptop.** The catalogue is seeded by
+`packages/opentv_core/tool/seed_big.dart` at a real provider's size and left
+at schema 4 so opening it performs the migration; an Android TV emulator ran
+that at 4GB and at 1.5GB and answered from the index both times. The
+difference that remains is the hardware.
 
 ## Security decisions already made
 

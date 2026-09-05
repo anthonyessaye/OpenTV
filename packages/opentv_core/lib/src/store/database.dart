@@ -40,7 +40,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// upgrade that rebuilds a search index over a real catalogue is long
   /// enough that the viewer deserves to be told which of the two is
   /// happening.
-  static const latestSchema = 5;
+  static const latestSchema = 6;
 
   @override
   int get schemaVersion => latestSchema;
@@ -107,6 +107,28 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // or nothing. Which is to say it was slowest exactly as a viewer
       // finished typing something specific.
       if (from < 5) await createSearchIndex();
+
+      // 6 gives the index its own two- and three-character prefix tables.
+      //
+      // A search starts at two letters, and a bare FTS5 index answers `am*`
+      // by walking every term that begins `am` — on a real catalogue that is
+      // tens of thousands of them, each a separate read. Measured here it is
+      // twenty times the cost of a longer prefix and still only milliseconds;
+      // on a television reading a cold index off eMMC it is the difference
+      // between a search and a search box that never answers.
+      //
+      // Rebuilt rather than migrated, because the prefix tables are part of
+      // the virtual table's definition and cannot be added to one already
+      // made.
+      if (from < 6) {
+        for (final (_, index) in _searchIndexes) {
+          for (final suffix in const ['insert', 'delete', 'update']) {
+            await customStatement('DROP TRIGGER IF EXISTS ${index}_$suffix');
+          }
+          await customStatement('DROP TABLE IF EXISTS $index');
+        }
+        await createSearchIndex();
+      }
     },
     onCreate: (m) async {
       await m.createAll();
@@ -554,7 +576,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       await customStatement(
         'CREATE VIRTUAL TABLE IF NOT EXISTS $index USING fts5('
         'name, content=$table, content_rowid=rowid, '
-        "tokenize='unicode61 remove_diacritics 2')",
+        "tokenize='unicode61 remove_diacritics 2', prefix='2 3')",
       );
 
       // Without these the index is correct once and wrong from the first
@@ -607,43 +629,47 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     final match = ftsPrefixQuery(term);
     if (match == null) return const [];
 
-    try {
-      return await customSelect(
-        'SELECT $table.* FROM $index '
-        'JOIN $table ON $table.rowid = $index.rowid '
-        'WHERE $index MATCH ? AND $table.source_id = ? AND $table.hidden = 0 '
-        'LIMIT ?',
-        variables: [
-          Variable<String>(match),
-          Variable<int>(sourceId),
-          Variable<int>(limit),
-        ],
-        readsFrom: {channels, movies, seriesEntries},
-      ).get().timeout(indexTimeout);
-    } on Object catch (error) {
-      // The index did not answer, so the scan does.
-      //
-      // A fallback rather than a failure, because the alternative is an app
-      // whose search box does nothing — and the scan is what shipped for
-      // every release before this one, so it is slow rather than wrong.
-      //
-      // Recorded rather than swallowed. A fallback nobody can see is how a
-      // performance feature quietly stops existing, and the difference
-      // between this working and this not working is invisible on a screen
-      // that shows the same results either way.
-      searchIndexFailure ??= '$error';
-      return customSelect(
-        'SELECT $table.* FROM $table '
-        'WHERE $table.search_name LIKE ? AND $table.source_id = ? '
-        'AND $table.hidden = 0 LIMIT ?',
-        variables: [
-          Variable<String>('%${normaliseForSearch(term)}%'),
-          Variable<int>(sourceId),
-          Variable<int>(limit),
-        ],
-        readsFrom: {channels, movies, seriesEntries},
-      ).get();
+    // Asked once. A query that timed out is still running on the database's
+    // isolate — a deadline stops this waiting, it does not stop the work — so
+    // every later search queues behind it, and behind the scan that replaced
+    // it. Retrying the index on each keystroke is how one slow query becomes
+    // a search box that never answers again.
+    if (searchIndexFailure == null) {
+      try {
+        return await customSelect(
+          'SELECT $table.* FROM $index '
+          'JOIN $table ON $table.rowid = $index.rowid '
+          'WHERE $index MATCH ? AND $table.source_id = ? '
+          'AND $table.hidden = 0 LIMIT ?',
+          variables: [
+            Variable<String>(match),
+            Variable<int>(sourceId),
+            Variable<int>(limit),
+          ],
+          readsFrom: {channels, movies, seriesEntries},
+        ).get().timeout(indexTimeout);
+      } on Object catch (error) {
+        // Recorded rather than swallowed. A fallback nobody can see is how a
+        // performance feature quietly stops existing, and the difference
+        // between this working and not working is invisible on a screen that
+        // shows the same results either way.
+        searchIndexFailure = '$error';
+      }
     }
+
+    // The scan, which is what every release before the index used. Slow
+    // rather than wrong, and far better than a search box that does nothing.
+    return customSelect(
+      'SELECT $table.* FROM $table '
+      'WHERE $table.search_name LIKE ? AND $table.source_id = ? '
+      'AND $table.hidden = 0 LIMIT ?',
+      variables: [
+        Variable<String>('%${normaliseForSearch(term)}%'),
+        Variable<int>(sourceId),
+        Variable<int>(limit),
+      ],
+      readsFrom: {channels, movies, seriesEntries},
+    ).get();
   }
 
   /// Why the full-text index was not used, if it was not.

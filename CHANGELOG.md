@@ -22,6 +22,15 @@ most of what it knows from things that failed silently.
 
 ### Changed
 
+- Search gets its own two- and three-letter prefix tables, which is schema 6.
+  A search begins at two letters, and that is the most expensive prefix a
+  full-text index has: without them it answers `am` by walking every word
+  that starts with `am`. On a fast machine that is twice the cost of a longer
+  term; on a television reading a cold index, it is the difference between a
+  search and a search box that never answers.
+- A search that gives up on the index now stays given up for the rest of the
+  session. A deadline stops the app waiting but not the query, so retrying it
+  on every keystroke stacked slow queries behind each other.
 - Search is indexed rather than scanned, which needs database schema 5. A
   search that matched little used to read the whole catalogue to say so — 18ms
   against 0.8ms for one that matched plenty, on 180,000 films — because a

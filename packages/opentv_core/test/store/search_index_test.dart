@@ -254,4 +254,71 @@ void main() {
       reason: 'the fallback ran without recording that it had to',
     );
   });
+
+  test('the index carries its own two and three letter prefixes', () async {
+    // A search starts at two letters, and without these a two-letter prefix
+    // is answered by walking every term that begins with it — thousands of
+    // separate reads on a real catalogue, which is cheap on a laptop and is
+    // not cheap on a television reading a cold index off eMMC.
+    final sourceId = await _seed(db, films: 0);
+    final sql = await db
+        .customSelect(
+          "SELECT sql FROM sqlite_master WHERE name = 'movies_fts'",
+        )
+        .getSingle();
+
+    expect(
+      sql.data['sql'] as String,
+      contains("prefix='2 3'"),
+      reason: 'the prefix tables are part of the table definition and cannot '
+          'be added to one already made',
+    );
+    expect(sourceId, greaterThan(0));
+  });
+
+  test('an index built before the prefix tables is rebuilt with them',
+      () async {
+    // Schema 5 shipped without them. A device holding one of those has a
+    // working index, so nothing would prompt a rebuild on its own.
+    final sourceId = await _seed(db, films: 0);
+    await db.upsertMovies([
+      MoviesCompanion.insert(
+        sourceId: sourceId,
+        remoteId: 'g',
+        name: 'Gladiator',
+        searchName: normaliseForSearch('Gladiator'),
+      ),
+    ]);
+
+    for (final index in const ['channels_fts', 'movies_fts', 'series_fts']) {
+      for (final suffix in const ['insert', 'delete', 'update']) {
+        await db.customStatement('DROP TRIGGER ${index}_$suffix');
+      }
+      await db.customStatement('DROP TABLE $index');
+      await db.customStatement(
+        'CREATE VIRTUAL TABLE $index USING fts5(name, '
+        "content=${index == 'series_fts' ? 'series_entries' : index.replaceAll('_fts', '')}, "
+        "content_rowid=rowid, tokenize='unicode61 remove_diacritics 2')",
+      );
+    }
+
+    await db.customStatement('PRAGMA user_version = 5');
+    // What the migration does for a device coming from 5.
+    for (final (_, index) in const [
+      ('channels', 'channels_fts'),
+      ('movies', 'movies_fts'),
+      ('series_entries', 'series_fts'),
+    ]) {
+      await db.customStatement('DROP TABLE IF EXISTS $index');
+    }
+    await db.createSearchIndex();
+
+    final sql = await db
+        .customSelect(
+          "SELECT sql FROM sqlite_master WHERE name = 'movies_fts'",
+        )
+        .getSingle();
+    expect(sql.data['sql'] as String, contains("prefix='2 3'"));
+    expect(await db.searchMovies(sourceId, 'gladiator'), hasLength(1));
+  });
 }
