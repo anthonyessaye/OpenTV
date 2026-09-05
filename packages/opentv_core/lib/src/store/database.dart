@@ -33,8 +33,17 @@ part 'database.g.dart';
 class OpenTvDatabase extends _$OpenTvDatabase {
   OpenTvDatabase(super.e);
 
+  /// The schema this build writes.
+  ///
+  /// Exposed as a constant as well as the override, because the app has to
+  /// know whether the file on disk predates it *before* opening it — an
+  /// upgrade that rebuilds a search index over a real catalogue is long
+  /// enough that the viewer deserves to be told which of the two is
+  /// happening.
+  static const latestSchema = 5;
+
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => latestSchema;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(

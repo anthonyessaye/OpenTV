@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/native.dart';
-import 'package:sqlite3/sqlite3.dart' show Database;
+import 'package:sqlite3/sqlite3.dart' show Database, OpenMode, sqlite3;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -136,6 +136,27 @@ class OpenTvApp extends StatelessWidget {
 ///
 /// A top-level function rather than the closure this used to be: the callback
 /// is sent to another isolate, and a closure cannot cross that boundary.
+/// The schema version recorded in a catalogue file, or null if there is none.
+///
+/// Opened read-only and closed again immediately. This runs before the real
+/// connection exists, so it cannot ask drift — and it must not create the
+/// file, or a first run would look like an upgrade from nothing.
+Future<int?> _schemaOnDisk(File file) async {
+  if (!file.existsSync()) return null;
+  try {
+    final raw = sqlite3.open(file.path, mode: OpenMode.readOnly);
+    try {
+      return raw.select('PRAGMA user_version').first.columnAt(0) as int?;
+    } finally {
+      raw.dispose();
+    }
+  } on Object {
+    // A file that cannot be read is the real open's problem to report, with
+    // a better message than this one could give.
+    return null;
+  }
+}
+
 void _prepareSqlite(Database raw) {
   // Drift does not enable this and SQLite defaults it off, so without it
   // every ON DELETE CASCADE in the schema is inert and removing a source
@@ -159,6 +180,13 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   /// The tunnel, held here because it is app-wide and follows the app's own
   /// lifecycle rather than any one screen's.
   final _vpn = VpnService(host: _host);
+
+  /// Whether the catalogue on disk was written by an older build.
+  ///
+  /// Only true while the migration is actually running. A screen that says a
+  /// database is being upgraded on every cold start would be a lie four
+  /// launches out of five, and the fifth is the one that matters.
+  bool _upgrading = false;
 
   OpenTvDatabase? _db;
   SourceService? _service;
@@ -320,6 +348,13 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       //
       // Nothing above this changes — drift's API is asynchronous either way,
       // so the isolate boundary is invisible to every caller.
+      // Asked before the database is opened, because opening it is what
+      // performs the migration and by then the answer is gone.
+      if (await _schemaOnDisk(file) case final int on
+          when on > 0 && on < OpenTvDatabase.latestSchema) {
+        if (mounted) setState(() => _upgrading = true);
+      }
+
       final db = OpenTvDatabase(NativeDatabase.createInBackground(
         file,
         setup: _prepareSqlite,
@@ -548,7 +583,28 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       return Container(
         color: OpenTvColors.ground,
         alignment: Alignment.center,
-        child: const Text('Starting…', style: OpenTvType.body),
+        child: _upgrading
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Upgrading your catalogue',
+                      style: OpenTvType.section),
+                  const SizedBox(height: OpenTvSpace.sm),
+                  const Text(
+                    'Making search quicker. This happens once, and your '
+                    'providers and history are untouched.',
+                    style: OpenTvType.bodyMuted,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: OpenTvSpace.lg),
+                  // Indeterminate, and honestly so: rebuilding an index
+                  // reports nothing as it goes, and a bar that filled at a
+                  // rate this screen invented would be worse than one that
+                  // only says work is happening.
+                  const SizedBox(width: 420, child: TouchProgressBar()),
+                ],
+              )
+            : const Text('Starting…', style: OpenTvType.body),
       );
     }
 

@@ -40,6 +40,9 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _searching = false;
 
   Timer? _debounce;
+
+  /// Why the last search did not answer, if it did not.
+  String? _failure;
   int _generation = 0;
 
   /// Whether the viewer has moved out of the keyboard and into the results.
@@ -114,17 +117,35 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    setState(() => _searching = true);
+    setState(() {
+      _searching = true;
+      _failure = null;
+    });
 
     // Asked for together rather than one after another. Three awaits in a
     // row is three round trips to the isolate the database runs on, and the
     // viewer waits for the sum of them for no reason: none of the three needs
     // an answer from either of the others.
-    final results = await Future.wait([
-      widget.db.searchChannels(widget.sourceId, term, limit: 30),
-      widget.db.searchMovies(widget.sourceId, term, limit: 60),
-      widget.db.searchSeries(widget.sourceId, term, limit: 30),
-    ]);
+    final List<Object> results;
+    try {
+      results = await Future.wait([
+        widget.db.searchChannels(widget.sourceId, term, limit: 30),
+        widget.db.searchMovies(widget.sourceId, term, limit: 60),
+        widget.db.searchSeries(widget.sourceId, term, limit: 30),
+      ]);
+    } on Object catch (error) {
+      // Said out loud. This screen could previously only report success: it
+      // raised the searching flag, and nothing lowered it on a failure, so
+      // every broken search — whatever the cause — looked identical to a slow
+      // one and read "Searching…" for ever. Which is the same silence the
+      // player's error key sat in for months.
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _failure = '$error';
+        _searching = false;
+      });
+      return;
+    }
     final channels = results[0] as List<Channel>;
     final films = results[1] as List<Movie>;
     final series = results[2] as List<SeriesEntry>;
@@ -403,6 +424,20 @@ class _SearchScreenState extends State<SearchScreen> {
       return const Padding(
         padding: EdgeInsets.all(OpenTvSpace.md),
         child: Text('Type at least two letters.', style: OpenTvType.bodyMuted),
+      );
+    }
+
+    if (_failure != null) {
+      return Padding(
+        padding: const EdgeInsets.all(OpenTvSpace.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Search could not run', style: OpenTvType.section),
+            const SizedBox(height: OpenTvSpace.sm),
+            Text(_failure!, style: OpenTvType.bodyMuted),
+          ],
+        ),
       );
     }
 

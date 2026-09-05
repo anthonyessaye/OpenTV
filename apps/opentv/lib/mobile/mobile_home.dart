@@ -1680,6 +1680,9 @@ class _SearchTabState extends State<_SearchTab> {
     _debounce = Timer(const Duration(milliseconds: 220), _run);
   }
 
+  /// Why the last search did not answer, if it did not.
+  String? _failure;
+
   Future<void> _run() async {
     final term = _controller.text.trim();
     if (term.length < 2) {
@@ -1693,13 +1696,24 @@ class _SearchTabState extends State<_SearchTab> {
       return;
     }
     final id = widget.source.id;
-    final results = await Future.wait([
-      widget.db.searchChannels(id, term, limit: 20),
-      widget.db.searchMovies(id, term, limit: 20),
-      widget.db.searchSeries(id, term, limit: 20),
-    ]);
+    final List<Object> results;
+    try {
+      results = await Future.wait([
+        widget.db.searchChannels(id, term, limit: 20),
+        widget.db.searchMovies(id, term, limit: 20),
+        widget.db.searchSeries(id, term, limit: 20),
+      ]);
+    } on Object catch (error) {
+      // A search that cannot run said nothing here either, and an empty
+      // result is indistinguishable from a catalogue with no match in it.
+      if (mounted && _controller.text.trim() == term) {
+        setState(() => _failure = '$error');
+      }
+      return;
+    }
     if (!mounted || _controller.text.trim() != term) return;
     setState(() {
+      _failure = null;
       _channels = [
         for (final row in results[0] as List<Channel>)
           if (!widget.locked.contains(row.categoryRemoteId) &&
@@ -1768,6 +1782,27 @@ class _SearchTabState extends State<_SearchTab> {
         // at with nothing on it.
         if (_controller.text.trim().isEmpty)
           const Expanded(child: _SearchPrompt())
+        else if (_failure != null)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: OpenTvTouchSpace.page,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Search could not run',
+                        style: OpenTvTouchType.section),
+                    const SizedBox(height: OpenTvTouchSpace.sm),
+                    Text(
+                      _failure!,
+                      style: OpenTvTouchType.bodyMuted,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
         else if (_channels.isEmpty && _movies.isEmpty && _series.isEmpty)
           Expanded(
             child: Center(
