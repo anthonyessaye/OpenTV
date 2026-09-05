@@ -43,6 +43,12 @@ class _SearchScreenState extends State<SearchScreen> {
 
   /// Why the last search did not answer, if it did not.
   String? _failure;
+
+  /// Why search fell back to reading the catalogue row by row, if it did.
+  ///
+  /// Results are the same either way, which is exactly why this is on screen:
+  /// there is nothing else to notice.
+  String? _degraded;
   int _generation = 0;
 
   /// Whether the viewer has moved out of the keyboard and into the results.
@@ -160,6 +166,7 @@ class _SearchScreenState extends State<SearchScreen> {
         for (final row in series) SearchHit.series(row),
       ];
       _searching = false;
+      _degraded = widget.db.searchIndexFailure;
     });
   }
 
@@ -466,10 +473,21 @@ class _SearchScreenState extends State<SearchScreen> {
             bottom: OpenTvSpace.xs,
           ),
           child: Text(
-            '${_hits.length} RESULTS',
+            _degraded == null
+                ? '${_hits.length} RESULTS'
+                : '${_hits.length} RESULTS · SEARCH INDEX UNAVAILABLE',
             style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
           ),
         ),
+        if (_degraded != null)
+          Padding(
+            padding: const EdgeInsets.only(
+              left: OpenTvSpace.md,
+              right: OpenTvSpace.md,
+              bottom: OpenTvSpace.sm,
+            ),
+            child: Text(_degraded!, style: OpenTvType.bodyMuted),
+          ),
         Expanded(
           child: FocusColumn(
             itemCount: sections.length,

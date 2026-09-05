@@ -607,19 +607,57 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     final match = ftsPrefixQuery(term);
     if (match == null) return const [];
 
-    return customSelect(
-      'SELECT $table.* FROM $index '
-      'JOIN $table ON $table.rowid = $index.rowid '
-      'WHERE $index MATCH ? AND $table.source_id = ? AND $table.hidden = 0 '
-      'LIMIT ?',
-      variables: [
-        Variable<String>(match),
-        Variable<int>(sourceId),
-        Variable<int>(limit),
-      ],
-      readsFrom: {channels, movies, seriesEntries},
-    ).get();
+    try {
+      return await customSelect(
+        'SELECT $table.* FROM $index '
+        'JOIN $table ON $table.rowid = $index.rowid '
+        'WHERE $index MATCH ? AND $table.source_id = ? AND $table.hidden = 0 '
+        'LIMIT ?',
+        variables: [
+          Variable<String>(match),
+          Variable<int>(sourceId),
+          Variable<int>(limit),
+        ],
+        readsFrom: {channels, movies, seriesEntries},
+      ).get().timeout(indexTimeout);
+    } on Object catch (error) {
+      // The index did not answer, so the scan does.
+      //
+      // A fallback rather than a failure, because the alternative is an app
+      // whose search box does nothing — and the scan is what shipped for
+      // every release before this one, so it is slow rather than wrong.
+      //
+      // Recorded rather than swallowed. A fallback nobody can see is how a
+      // performance feature quietly stops existing, and the difference
+      // between this working and this not working is invisible on a screen
+      // that shows the same results either way.
+      searchIndexFailure ??= '$error';
+      return customSelect(
+        'SELECT $table.* FROM $table '
+        'WHERE $table.search_name LIKE ? AND $table.source_id = ? '
+        'AND $table.hidden = 0 LIMIT ?',
+        variables: [
+          Variable<String>('%${normaliseForSearch(term)}%'),
+          Variable<int>(sourceId),
+          Variable<int>(limit),
+        ],
+        readsFrom: {channels, movies, seriesEntries},
+      ).get();
+    }
   }
+
+  /// Why the full-text index was not used, if it was not.
+  ///
+  /// Null while it is working, which is the normal case. Set once and kept,
+  /// so a screen can say that search is running the slow way and why —
+  /// including on a device this machine cannot reproduce.
+  String? searchIndexFailure;
+
+  /// How long the index gets before the scan is used instead.
+  ///
+  /// Generous: a first search on a cold cache is not the same as a broken
+  /// one, and a device that is merely slow should still get its index.
+  static const indexTimeout = Duration(seconds: 6);
 
   static List<T> _rankByPrefix<T>(
     List<T> rows,

@@ -220,4 +220,38 @@ void main() {
     await db.createSearchIndex();
     expect(await db.searchMovies(sourceId, 'gladiator'), hasLength(1));
   });
+
+  test('search still answers when the index cannot, and says it did not',
+      () async {
+    // Reproduces a device this machine cannot: whatever the reason the index
+    // does not answer, a search box that does nothing is the worst of the
+    // available outcomes. The scan is what every earlier release used, so the
+    // fallback is slow rather than wrong — and it is recorded, because
+    // results look identical either way and an invisible fallback is how a
+    // feature quietly stops existing.
+    final sourceId = await _seed(db, films: 0);
+    await db.upsertMovies([
+      MoviesCompanion.insert(
+        sourceId: sourceId,
+        remoteId: 'g',
+        name: 'Gladiator',
+        searchName: normaliseForSearch('Gladiator'),
+      ),
+    ]);
+
+    for (final index in const ['channels_fts', 'movies_fts', 'series_fts']) {
+      for (final suffix in const ['insert', 'delete', 'update']) {
+        await db.customStatement('DROP TRIGGER ${index}_$suffix');
+      }
+      await db.customStatement('DROP TABLE $index');
+    }
+
+    expect(db.searchIndexFailure, null);
+    expect(await db.searchMovies(sourceId, 'gladiator'), hasLength(1));
+    expect(
+      db.searchIndexFailure,
+      contains('movies_fts'),
+      reason: 'the fallback ran without recording that it had to',
+    );
+  });
 }

@@ -69,11 +69,11 @@ void main() {
     expect(find.textContaining('could not run'), findsNothing);
   });
 
-  testWidgets('a search that throws says so instead of hanging',
+  testWidgets('a search that cannot use the index still answers, and says so',
       (tester) async {
-    // The index taken away underneath it, which is the shape of every way
-    // this can fail on a device: the query refers to something that is not
-    // there. What it must not do is keep claiming to be working.
+    // Taking the index away is no longer a failure — it is the scan every
+    // earlier release used. What must not happen is that it looks identical
+    // to a working one, because the results are the same either way.
     for (final index in const ['channels_fts', 'movies_fts', 'series_fts']) {
       for (final suffix in const ['insert', 'delete', 'update']) {
         await db.customStatement('DROP TRIGGER ${index}_$suffix');
@@ -83,14 +83,27 @@ void main() {
 
     await type(tester, 'harbor');
 
+    expect(find.textContaining('Searching'), findsNothing);
+    expect(find.textContaining('SEARCH INDEX UNAVAILABLE'), findsOneWidget);
+    // Whichever of the three failed first; the point is that the reason is
+    // on screen rather than only in the log nobody can reach.
+    expect(find.textContaining('_fts'), findsOneWidget);
+  });
+
+  testWidgets('a search that fails outright says so instead of hanging',
+      (tester) async {
+    // Neither path available. The screen used to raise its in-progress flag
+    // and lower it only on success, so this read "Searching…" for ever and
+    // was indistinguishable from a slow catalogue.
+    await db.customStatement('DROP TABLE movies');
+
+    await type(tester, 'harbor');
+
     expect(
       find.textContaining('Searching'),
       findsNothing,
       reason: 'a failed search was still claiming to be in progress',
     );
     expect(find.text('Search could not run'), findsOneWidget);
-    // The reason, not just the fact. Whoever reads this is the only person
-    // who can say what their device did.
-    expect(find.textContaining('channels_fts'), findsOneWidget);
   });
 }
