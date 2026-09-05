@@ -321,4 +321,89 @@ void main() {
     expect(sql.data['sql'] as String, contains("prefix='2 3'"));
     expect(await db.searchMovies(sourceId, 'gladiator'), hasLength(1));
   });
+
+  test('a count is of rows, not of categorised rows', () async {
+    // The settings panel summed the per-category counts, which exclude every
+    // row a provider filed under no category. A catalogue where none of them
+    // carry one reported three zeroes while browsing and playing perfectly.
+    final sourceId = await _seed(db, films: 0);
+    await db.upsertMovies([
+      for (var i = 0; i < 5; i++)
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'm$i',
+          name: 'Film $i',
+          searchName: normaliseForSearch('Film $i'),
+        ),
+    ]);
+
+    expect(
+      await db.countsByCategory(sourceId, ItemKind.movie),
+      isEmpty,
+      reason: 'these rows have no category, which is the whole point',
+    );
+    expect((await db.countsOf(sourceId))[ItemKind.movie], 5);
+  });
+
+  test('the index is not asked for more than a screenful can use', () async {
+    // A term matching the whole catalogue used to hand every hit to the
+    // filters. That is 19ms in page cache and random reads on eMMC, which is
+    // where this app runs.
+    //
+    // The ceiling has a cost and this is it: matches belonging to another
+    // provider are read first, and once enough of them have been read this
+    // source's own matches are never reached. Losing a result on a second
+    // provider is a smaller harm than a search that never answers, but it is
+    // a real one, so it is written down here rather than left to be found.
+    final other = await db.addSource(SourcesCompanion.insert(
+      name: 'other',
+      kind: SourceKind.m3u,
+      url: 'http://example.invalid/other.m3u',
+      createdAt: DateTime.utc(2026),
+    ));
+    await db.upsertMovies([
+      for (var i = 0; i < 4000; i++)
+        MoviesCompanion.insert(
+          sourceId: other,
+          remoteId: 'x$i',
+          name: 'amber chronicle $i',
+          searchName: normaliseForSearch('amber chronicle $i'),
+        ),
+    ]);
+
+    // Written after all of those, so they sit beyond the ceiling.
+    final sourceId = await _seed(db, films: 0);
+    await db.upsertMovies([
+      for (var i = 0; i < 5; i++)
+        MoviesCompanion.insert(
+          sourceId: sourceId,
+          remoteId: 'late$i',
+          name: 'amber chronicle late $i',
+          searchName: normaliseForSearch('amber chronicle late $i'),
+        ),
+    ]);
+
+    expect(
+      await db.searchMovies(sourceId, 'am', limit: 20),
+      isEmpty,
+      reason: 'the query read past the ceiling, which is the unbounded walk '
+          'this exists to prevent',
+    );
+    // The provider that owns the bulk of them is unaffected.
+    expect(await db.searchMovies(other, 'am', limit: 20), hasLength(20));
+  });
+
+  test('a repaired catalogue stops reporting the old failure', () async {
+    final sourceId = await _seed(db, films: 0);
+    db.searchIndexFailure = 'TimeoutException after 0:00:06';
+
+    await db.markSourceSynced(sourceId, DateTime.utc(2026, 9, 5));
+
+    expect(
+      db.searchIndexFailure,
+      null,
+      reason: 're-reading the catalogue rewrites every row the index is built '
+          'from, so the warning outlived the fault',
+    );
+  });
 }

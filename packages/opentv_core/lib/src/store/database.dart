@@ -163,10 +163,19 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   Future<int> removeSource(int id) =>
       (delete(sources)..where((s) => s.id.equals(id))).go();
 
-  Future<void> markSourceSynced(int sourceId, DateTime at) =>
-      (update(sources)..where((s) => s.id.equals(sourceId))).write(
-        SourcesCompanion(lastSyncedAt: Value(at)),
-      );
+  /// Called when a source has finished importing.
+  ///
+  /// Clears any recorded index failure with it. A viewer whose search fell
+  /// back to the scan and then re-read their catalogue has just rewritten
+  /// every row the index is built from, and telling them for the rest of the
+  /// session that the index is unavailable — when it is the thing that was
+  /// just repaired — is the report outliving the fault.
+  Future<void> markSourceSynced(int sourceId, DateTime at) async {
+    searchIndexFailure = null;
+    await (update(sources)..where((s) => s.id.equals(sourceId))).write(
+      SourcesCompanion(lastSyncedAt: Value(at)),
+    );
+  }
 
   // --- batch writes -----------------------------------------------------
 
@@ -391,6 +400,31 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     return {
       for (final row in rows) row.read<String>('id'): row.read<int>('n'),
     };
+  }
+
+  /// How many rows of each kind a source holds.
+  ///
+  /// A plain count, which is not what the settings panel used to show: it
+  /// summed [countsByCategory], and that excludes every row whose provider
+  /// gave it no category. On a catalogue where none of them have one it
+  /// reported nothing at all — three zeroes beside a working, populated
+  /// catalogue — and the only way to find out it was lying was to re-read the
+  /// whole thing from the portal and watch the numbers appear.
+  Future<Map<ItemKind, int>> countsOf(int sourceId) async {
+    final counts = <ItemKind, int>{};
+    for (final (kind, table) in const [
+      (ItemKind.live, 'channels'),
+      (ItemKind.movie, 'movies'),
+      (ItemKind.series, 'series_entries'),
+    ]) {
+      final row = await customSelect(
+        'SELECT COUNT(*) AS n FROM $table WHERE source_id = ? AND hidden = 0',
+        variables: [Variable.withInt(sourceId)],
+        readsFrom: {channels, movies, seriesEntries},
+      ).getSingle();
+      counts[kind] = row.read<int>('n');
+    }
+    return counts;
   }
 
   Future<List<Episode>> episodesOf(int sourceId, String seriesRemoteId) =>
@@ -637,12 +671,23 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     if (searchIndexFailure == null) {
       try {
         return await customSelect(
-          'SELECT $table.* FROM $index '
-          'JOIN $table ON $table.rowid = $index.rowid '
-          'WHERE $index MATCH ? AND $table.source_id = ? '
-          'AND $table.hidden = 0 LIMIT ?',
+          // The index is asked for a bounded number of hits and the filters
+          // are applied to those, rather than the filters being applied to
+          // however many the index cares to return.
+          //
+          // The difference does not show on a laptop: a term matching the
+          // whole catalogue and rejected by every filter still answers in
+          // 19ms, because those rowid lookups are in page cache. They are
+          // random reads, and on a television's eMMC a hundred and fifty
+          // thousand of them is minutes. The scan that replaces it is fast
+          // for the opposite reason — it reads sequentially and stops early.
+          'SELECT $table.* FROM '
+          '(SELECT rowid AS r FROM $index WHERE $index MATCH ? LIMIT ?) '
+          'JOIN $table ON $table.rowid = r '
+          'WHERE $table.source_id = ? AND $table.hidden = 0 LIMIT ?',
           variables: [
             Variable<String>(match),
+            Variable<int>(limit * _indexHitsPerRow),
             Variable<int>(sourceId),
             Variable<int>(limit),
           ],
@@ -678,6 +723,14 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// so a screen can say that search is running the slow way and why —
   /// including on a device this machine cannot reproduce.
   String? searchIndexFailure;
+
+  /// How many index hits are read for each row a search asks for.
+  ///
+  /// Slack for rows the filters remove — another provider's, and hidden ones.
+  /// Generous enough that a normal catalogue never notices the ceiling, and
+  /// low enough that a term matching everything cannot turn one search into a
+  /// hundred thousand random reads.
+  static const _indexHitsPerRow = 40;
 
   /// How long the index gets before the scan is used instead.
   ///

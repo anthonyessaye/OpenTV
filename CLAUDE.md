@@ -414,6 +414,15 @@ a single slow query could leave the search box reading "Searching…" for ever,
 and why the index is asked *once*: after one failure the scan is used
 directly for the rest of the session.
 
+**The index is asked for a bounded number of hits**, and the source and
+hidden filters are applied to those. A common two-letter term matches a large
+share of a catalogue, and reading every match to keep sixty rows measures
+19ms here — because those rowid lookups are in page cache. They are random
+reads, and a hundred and fifty thousand of them on eMMC is not 19ms. The
+ceiling costs something real: matches belonging to another provider are read
+first, so a second provider's results can fall past it. That is written down
+in the test rather than left to be discovered.
+
 **Nothing here reproduced on a laptop.** The catalogue is seeded by
 `packages/opentv_core/tool/seed_big.dart` at a real provider's size and left
 at schema 4 so opening it performs the migration; an Android TV emulator ran

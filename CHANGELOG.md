@@ -51,6 +51,17 @@ most of what it knows from things that failed silently.
   way, in the direction people most want to send it.
 - A truncated push is refused rather than half applied. Every frame that
   arrives is genuine; there can simply be too few of them.
+- **The account panel counts your catalogue.** It summed the per-category
+  counts, which leave out every title a provider filed under no category — so
+  a perfectly good catalogue could report nothing at all, and the only way to
+  discover the number was wrong was to re-read the whole thing and watch it
+  change.
+- A search asks the index for a bounded number of matches. A common two-letter
+  term matches a large part of a catalogue, and reading all of it to keep
+  sixty rows is quick on a laptop and a great many random reads on a
+  television.
+- A search that fell back to the slow path stops saying so once the catalogue
+  is re-read, rather than keeping the warning for the rest of the session.
 - **Search works in Arabic, Cyrillic, Greek and Chinese.** Titles were folded
   to ASCII before being stored, and every rune with no ASCII equivalent was
   dropped — so those titles were stored as an empty string, the terms typed to

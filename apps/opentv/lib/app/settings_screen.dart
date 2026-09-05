@@ -168,11 +168,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _CategoryEntry(category: category, kind: kind),
     ];
 
-    final counts = <ItemKind, int>{
-      for (final kind in [ItemKind.live, ItemKind.movie, ItemKind.series])
-        kind: (await widget.db.countsByCategory(widget.active.id, kind)).values
-            .fold(0, (sum, value) => sum + value),
-    };
+    // Counted outright rather than summed out of the per-category counts,
+    // which drop every row a provider filed under no category.
+    final counts = await widget.db.countsOf(widget.active.id);
 
     final tunnel = await widget.vpn.stored();
     await widget.vpn.resync();
