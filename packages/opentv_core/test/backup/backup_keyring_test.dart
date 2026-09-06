@@ -5,50 +5,64 @@ import 'dart:typed_data';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:test/test.dart';
 
-/// Two devices that never met.
+/// Getting into a folder, by whichever route a device has.
 ///
-/// The case this exists for: a television set up in the living room and a
-/// phone set up on a train, both pointed at the same folder, never once in
-/// the same room. Under the first design each would have sealed its chunks
-/// with its own key and read nothing of the other's — a sync that runs
-/// perfectly and carries nothing.
+/// The case this exists for is two devices that never met: a television set up
+/// in the living room and a phone set up on a train, both pointed at the same
+/// folder. Under a design where the key travelled by QR, each would have
+/// sealed its chunks with its own key and read nothing of the other's — a
+/// sync that runs perfectly and carries nothing.
 void main() {
   late MemoryBackupStore store;
   const keyring = BackupKeyring();
 
-  // Fixed, so a test that derives a key twice is not two seconds of PBKDF2.
+  const phrase = BackupSecret(
+    id: BackupSecret.phraseId,
+    secret: 'ABCD-EFGH-JKMN-PQRS-TUVW',
+  );
+
+  BackupSecret provider({String password = 'hunter2'}) => BackupSecret(
+        id: BackupSecret.providerId('abc123'),
+        secret: providerSecretMaterial(
+          providerKey: 'abc123',
+          username: 'viewer',
+          password: password,
+        ),
+      );
+
+  // Fixed, so deriving a key twice is not two seconds of PBKDF2.
   Random seeded() => Random(11);
 
   setUp(() => store = MemoryBackupStore());
 
-  test('the same phrase on two devices reaches the same key', () async {
+  test('a provider on two devices opens the same folder, with no typing',
+      () async {
     final onTv = await keyring.unlock(
       store: store,
       deviceId: 'tv',
-      passphrase: 'CORRECT-HORSE-BATTERY-STAPLE-XYZW',
+      secrets: [provider(), phrase],
       random: seeded(),
     );
     final onPhone = await keyring.unlock(
       store: store,
       deviceId: 'phone',
-      passphrase: 'CORRECT-HORSE-BATTERY-STAPLE-XYZW',
+      secrets: [provider()],
     );
 
     expect(onPhone, onTv);
   });
 
   test('so the two can actually read each other', () async {
-    const phrase = 'ABCD-EFGH-JKMN-PQRS-TUVW';
     final tvKey = await keyring.unlock(
       store: store,
       deviceId: 'tv',
-      passphrase: phrase,
+      secrets: [provider(), phrase],
       random: seeded(),
     );
     final phoneKey = await keyring.unlock(
       store: store,
       deviceId: 'phone',
-      passphrase: phrase,
+      secrets: [provider()],
     );
 
     final tv = BackupEngine(store: store, deviceId: 'tv', key: tvKey);
@@ -57,7 +71,7 @@ void main() {
     await tv.push([
       BackupRecord(
         scope: BackupScope.playback,
-        key: 'p/movie/9',
+        key: 'abc123/movie/9',
         value: const {'positionMs': 2400000},
         stamp: tv.stamp(),
       ),
@@ -68,11 +82,112 @@ void main() {
     expect(pulled.unreadable, isEmpty);
   });
 
+  group('when the portal reissues a password', () {
+    /// A folder with a provider slot already written under the old password.
+    ///
+    /// Built by claiming with the phrase, so the provider gets a slot of its
+    /// own rather than riding on the opening bid — which is the state a
+    /// household is actually in after a device has been running a while, and
+    /// the state where a rotation has something stale to trip over.
+    Future<Uint8List> settled() async {
+      final key = await keyring.unlock(
+        store: store,
+        deviceId: 'tv',
+        secrets: [phrase],
+        random: seeded(),
+      );
+      await keyring.unlock(
+        store: store,
+        deviceId: 'tv',
+        secrets: [provider(), phrase],
+      );
+      return key;
+    }
+
+    test('the history does not go with it', () async {
+      // The reason a provider cannot simply *be* the key. Portals reissue
+      // credentials on renewal, and a key that was the password would make
+      // every chunk ever written unreadable on the day a subscription
+      // renewed, silently.
+      final original = await settled();
+
+      expect(
+        await keyring.unlock(
+          store: store,
+          deviceId: 'tv',
+          secrets: [provider(password: 'new'), phrase],
+        ),
+        original,
+        reason: 'the phrase should have opened it when the provider no longer '
+            'did, and the history stayed readable',
+      );
+    });
+
+    test('the stale way in is replaced, not left to rot', () async {
+      await settled();
+      await keyring.unlock(
+        store: store,
+        deviceId: 'tv',
+        secrets: [provider(password: 'new'), phrase],
+      );
+
+      // Without this a viewer types their phrase on every renewal for ever,
+      // because a slot is named by the route and the old one still sits at
+      // that path opening nothing.
+      final key = await keyring.unlock(
+        store: store,
+        deviceId: 'phone',
+        secrets: [provider(password: 'new')],
+      );
+      expect(key, hasLength(32));
+    });
+  });
+
+  test('a device with only the phrase still gets in', () async {
+    // Restoring a wiped television, which has no provider yet because the
+    // providers are what it is restoring.
+    final original = await keyring.unlock(
+      store: store,
+      deviceId: 'tv',
+      secrets: [provider(), phrase],
+      random: seeded(),
+    );
+
+    expect(
+      await keyring.unlock(store: store, deviceId: 'new', secrets: [phrase]),
+      original,
+    );
+  });
+
+  test('a different account does not open the folder', () async {
+    await keyring.unlock(
+      store: store,
+      deviceId: 'tv',
+      secrets: [provider(), phrase],
+      random: seeded(),
+    );
+
+    final stranger = BackupSecret(
+      id: BackupSecret.providerId('zzz999'),
+      secret: providerSecretMaterial(
+        providerKey: 'zzz999',
+        username: 'someone',
+        password: 'else',
+      ),
+    );
+
+    await expectLater(
+      keyring.unlock(store: store, deviceId: 'other', secrets: [stranger]),
+      throwsA(isA<BackupKeyringException>().having(
+          (e) => e.message, 'message', contains('recovery phrase'))),
+    );
+  });
+
   test('a wrong phrase is refused in words a person can act on', () async {
     await keyring.unlock(
       store: store,
       deviceId: 'tv',
-      passphrase: 'ABCD-EFGH-JKMN-PQRS-TUVW',
+      secrets: [phrase],
       random: seeded(),
     );
 
@@ -80,7 +195,9 @@ void main() {
       keyring.unlock(
         store: store,
         deviceId: 'phone',
-        passphrase: 'ABCD-EFGH-JKMN-PQRS-WRONG',
+        secrets: const [
+          BackupSecret(id: BackupSecret.phraseId, secret: 'WRONG-WRONG'),
+        ],
       ),
       throwsA(isA<BackupKeyringException>().having(
         (e) => e.message,
@@ -90,43 +207,42 @@ void main() {
     );
   });
 
-  test('the phrase is not in the folder, and neither is the key', () async {
-    const phrase = 'ABCD-EFGH-JKMN-PQRS-TUVW';
+  test('nothing in the folder gives away a phrase, a password or the key',
+      () async {
     final key = await keyring.unlock(
       store: store,
       deviceId: 'tv',
-      passphrase: phrase,
+      secrets: [provider(), phrase],
       random: seeded(),
     );
 
-    final written = utf8.decode(store.files.values.single);
-    expect(written, isNot(contains(phrase)));
-    expect(written, isNot(contains(base64.encode(key))));
-    // The salt and the wrapped blob are all it may hold.
-    final json = jsonDecode(written) as Map<String, Object?>;
-    expect(json.keys.toSet(), {'v', 'salt', 'iterations', 'wrapped'});
+    for (final bytes in store.files.values) {
+      final written = utf8.decode(bytes);
+      expect(written, isNot(contains(phrase.secret)));
+      expect(written, isNot(contains('hunter2')));
+      expect(written, isNot(contains(base64.encode(key))));
+    }
+    // Nor which portal it is, since these are filenames in somebody's bucket.
+    expect(store.files.keys.join(' '), isNot(contains('viewer')));
   });
 
   test('two devices setting up at once still converge', () async {
-    // Both find no keyring, both write one. The loser must adopt the winner's
-    // rather than carry on with a key nothing else can unwrap — it has
-    // written no chunks yet, so it loses nothing by changing its mind.
-    const phrase = 'ABCD-EFGH-JKMN-PQRS-TUVW';
     final racing = _RacingStore();
 
-    final first = keyring.unlock(
-      store: racing,
-      deviceId: 'tv',
-      passphrase: phrase,
-      random: Random(1),
-    );
-    final second = keyring.unlock(
-      store: racing,
-      deviceId: 'phone',
-      passphrase: phrase,
-      random: Random(2),
-    );
-    final keys = await Future.wait([first, second]);
+    final keys = await Future.wait([
+      keyring.unlock(
+        store: racing,
+        deviceId: 'tv',
+        secrets: [provider(), phrase],
+        random: Random(1),
+      ),
+      keyring.unlock(
+        store: racing,
+        deviceId: 'phone',
+        secrets: [provider(), phrase],
+        random: Random(2),
+      ),
+    ]);
 
     expect(
       keys[0],
@@ -148,43 +264,52 @@ void main() {
     );
 
     await expectLater(
-      keyring.unlock(store: store, deviceId: 'phone', passphrase: 'anything'),
+      keyring.unlock(store: store, deviceId: 'phone', secrets: [phrase]),
       throwsA(isA<BackupKeyringException>().having(
-        (e) => e.message, 'message', contains('newer version'))),
+          (e) => e.message, 'message', contains('newer version'))),
+    );
+  });
+
+  test('a device with nothing to offer is told so', () async {
+    await expectLater(
+      keyring.unlock(store: store, deviceId: 'tv', secrets: const []),
+      throwsA(isA<BackupKeyringException>()),
     );
   });
 
   group('the phrase people have to type', () {
     test('is readable across a room and typeable on a phone', () {
-      final phrase = newBackupPhrase(Random(4));
+      final generated = newBackupPhrase(Random(4));
 
-      expect(phrase, matches(RegExp(r'^[A-Z2-9]{4}(-[A-Z2-9]{4}){4}$')));
+      expect(generated, matches(RegExp(r'^[A-Z2-9]{4}(-[A-Z2-9]{4}){4}$')));
       // The characters a viewer would misread off a television.
-      expect(phrase, isNot(matches(RegExp('[01OIl]'))));
+      expect(generated, isNot(matches(RegExp('[01OIl]'))));
     });
 
     test('is not the same twice', () {
       expect(newBackupPhrase(), isNot(newBackupPhrase()));
     });
   });
+
+  test('a provider secret redacts itself', () {
+    // These end up in crash reports, and it carries a portal password.
+    expect(provider().toString(), isNot(contains('hunter2')));
+  });
 }
 
 /// A store where two callers both see an empty folder before either writes.
-///
-/// The interleaving that a real service produces between two devices set up
-/// minutes apart, and that a sequential test never would.
 class _RacingStore extends MemoryBackupStore {
   bool _held = false;
 
   @override
   Future<void> put(String path, Uint8List bytes) async {
-    if (path.startsWith(BackupKeyring.prefix)) {
+    if (path.startsWith(BackupKeyring.prefix) &&
+        !path.startsWith(BackupKeyring.slotPrefix) &&
+        !_held) {
       // The first writer waits, so the second writes underneath it — the
       // worst ordering rather than the convenient one.
-      if (!_held) {
-        _held = true;
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
+      _held = true;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
     }
     return super.put(path, bytes);
   }
