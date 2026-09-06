@@ -5,6 +5,10 @@
 /// UI or the playback engine.
 library;
 
+export 'src/backup/backup_engine.dart';
+export 'src/backup/backup_identity.dart';
+export 'src/backup/backup_record.dart';
+export 'src/backup/backup_store.dart';
 export 'src/epg/epg_models.dart';
 export 'src/secret_match.dart';
 export 'src/subtitles/subtitle_store.dart';

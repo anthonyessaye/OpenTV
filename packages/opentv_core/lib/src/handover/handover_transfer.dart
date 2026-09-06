@@ -33,11 +33,17 @@ class HandoverCipher {
   /// The nonce is generated per call and prefixed to the output. Reusing one
   /// under the same key is the failure that breaks GCM outright, and the only
   /// reliable way not to reuse it is never to store it.
-  Future<Uint8List> seal(Uint8List payload, HandoverPairing pairing) async {
-    final box = await _algorithm.encrypt(
-      payload,
-      secretKey: SecretKey(pairing.key),
-    );
+  Future<Uint8List> seal(Uint8List payload, HandoverPairing pairing) =>
+      sealWith(payload, pairing.key);
+
+  /// The same, under a key that did not come from a pairing.
+  ///
+  /// Split out for the backup, which seals the same kind of payload under a
+  /// key that lives in the keystore rather than on a screen. One
+  /// implementation rather than two, because a second copy of this is a
+  /// second place for a nonce to be reused.
+  Future<Uint8List> sealWith(Uint8List payload, Uint8List key) async {
+    final box = await _algorithm.encrypt(payload, secretKey: SecretKey(key));
     return Uint8List.fromList([...box.nonce, ...box.cipherText, ...box.mac.bytes]);
   }
 
@@ -46,7 +52,11 @@ class HandoverCipher {
   /// A wrong key and altered bytes fail identically here, and that is correct
   /// rather than imprecise: GCM cannot distinguish them, and neither reading
   /// is one where the bundle should be trusted.
-  Future<Uint8List> open(Uint8List sealed, HandoverPairing pairing) async {
+  Future<Uint8List> open(Uint8List sealed, HandoverPairing pairing) =>
+      openWith(sealed, pairing.key);
+
+  /// The same, under a key that did not come from a pairing.
+  Future<Uint8List> openWith(Uint8List sealed, Uint8List key) async {
     const nonceLength = 12;
     final macLength = _algorithm.macAlgorithm.macLength;
     if (sealed.length < nonceLength + macLength) {
@@ -61,10 +71,7 @@ class HandoverCipher {
       mac: Mac(Uint8List.sublistView(sealed, sealed.length - macLength)),
     );
     try {
-      final clear = await _algorithm.decrypt(
-        box,
-        secretKey: SecretKey(pairing.key),
-      );
+      final clear = await _algorithm.decrypt(box, secretKey: SecretKey(key));
       return Uint8List.fromList(clear);
     } on SecretBoxAuthenticationError {
       throw const HandoverException(
