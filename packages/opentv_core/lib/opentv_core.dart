@@ -7,6 +7,7 @@ library;
 
 export 'src/backup/backup_engine.dart';
 export 'src/backup/backup_identity.dart';
+export 'src/backup/backup_keyring.dart';
 export 'src/backup/backup_record.dart';
 export 'src/backup/backup_store.dart';
 export 'src/epg/epg_models.dart';
