@@ -295,6 +295,97 @@ void main() {
     // These end up in crash reports, and it carries a portal password.
     expect(provider().toString(), isNot(contains('hunter2')));
   });
+
+  group('a phrase the viewer chose', () {
+    test('a good one is accepted', () {
+      expect(backupPhraseProblem('marmalade harbour lantern'), null);
+    });
+
+    test('a short one is refused, with what to do instead', () {
+      final problem = backupPhraseProblem('hunter2');
+      expect(problem, contains('12 characters'));
+      expect(problem, contains('unrelated words'));
+    });
+
+    test('long and repetitive is not long', () {
+      // Clears any length rule and is worth nothing.
+      expect(backupPhraseProblem('aaaaaaaaaaaaaaaaaa'), contains('repeats'));
+    });
+
+    test('the provider password is refused', () {
+      // Reusing it hands the folder to the one party who already knows that
+      // string, and rotating it with them would not change this.
+      expect(
+        backupPhraseProblem(
+          'a-long-enough-portal-password',
+          providerPassword: 'a-long-enough-portal-password',
+        ),
+        contains('provider password'),
+      );
+    });
+
+    test('the account name is refused', () {
+      expect(
+        backupPhraseProblem('viewer-lantern-marmalade', username: 'viewer'),
+        contains('account name'),
+      );
+    });
+
+    test('a short account name is not treated as a word', () {
+      // `al` would otherwise refuse half the phrases anybody types.
+      expect(
+        backupPhraseProblem('marmalade harbour lantern', username: 'al'),
+        null,
+      );
+    });
+  });
+
+  test('a phrase can be changed without disturbing what was written',
+      () async {
+    final key = await keyring.unlock(
+      store: store,
+      deviceId: 'tv',
+      secrets: [phrase],
+      random: seeded(),
+    );
+
+    const chosen = BackupSecret(
+      id: BackupSecret.phraseId,
+      secret: 'marmalade harbour lantern',
+    );
+    await keyring.rewrap(store: store, dataKey: key, secret: chosen);
+
+    // The same data key, so every chunk already written stays readable and
+    // every other device carries on unaffected.
+    expect(
+      await keyring.unlock(store: store, deviceId: 'phone', secrets: [chosen]),
+      key,
+    );
+  });
+
+  test('and the old phrase stops working', () async {
+    final key = await keyring.unlock(
+      store: store,
+      deviceId: 'tv',
+      secrets: [phrase],
+      random: seeded(),
+    );
+    await keyring.rewrap(
+      store: store,
+      dataKey: key,
+      secret: const BackupSecret(
+        id: BackupSecret.phraseId,
+        secret: 'marmalade harbour lantern',
+      ),
+    );
+
+    // Otherwise changing it is decoration, and a phrase written on a
+    // whiteboard opens the folder for ever.
+    await expectLater(
+      keyring.unlock(store: store, deviceId: 'other', secrets: [phrase]),
+      throwsA(isA<BackupKeyringException>()),
+    );
+  });
 }
 
 /// A store where two callers both see an empty folder before either writes.

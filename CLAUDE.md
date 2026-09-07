@@ -464,6 +464,28 @@ company holding the files is the one party the encryption excludes.
 password leaves a slot that opens nothing. Whichever device did get in
 rewrites it, or the phrase gets typed on every renewal for ever.
 
+**A phrase may be chosen rather than generated**, with a floor: twelve
+characters, six distinct ones, not the provider password, not the account
+name. The trade is stated once and then trusted — a folder is only as strong
+as the weakest way into it, and the wrapped key sits in a bucket where it can
+be attacked offline. Chosen *instead of* generated rather than alongside, so
+the weak option cannot quietly sit beside the strong one.
+
+**A wrong secret must never be answered by claiming the folder.** `_open`
+returns null to mean "nobody has claimed this", and the caller answers that by
+minting a new data key. Returning it for a folder that plainly exists and
+merely did not open would orphan every chunk ever written — silently, and to
+a viewer it looks like their history has gone. Found by the test for changing
+a phrase, which is also how the next one was found.
+
+**The opening bid is an un-rotatable way in.** It is sealed under whatever
+secret first claimed the folder, so leaving it behind means an old phrase
+still opens the folder through the back door and changing a phrase was
+decoration. `rewrap` clears the bids — deliberately, on a viewer's action,
+rather than at launch, because a device still claiming the folder is reading
+them and deleting those underneath it is how two devices end up with
+different keys.
+
 **Schema 7 adds `SyncOutbox`.** A queue rather than a scan of the tables,
 because the change that matters most cannot be scanned for: a removed
 favourite leaves no row, and "rows newer than last time" would resurrect it

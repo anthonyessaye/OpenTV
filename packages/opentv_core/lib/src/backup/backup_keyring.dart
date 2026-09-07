@@ -136,22 +136,31 @@ class BackupKeyring {
       }
     }
 
-    // No slot opened. The folder may predate slots entirely, in which case
-    // the opening bids still hold the key — and the elected one is the
-    // authority, so a losing bid from an old race is never consulted.
+    // No slot opened. The folder may predate slots, in which case the opening
+    // bids still hold the key — and the elected one is the authority, so a
+    // losing bid from an old race is never consulted.
     final bids = (await store.list(prefix))
         .where((path) => !path.startsWith(slotPrefix))
         .toList();
-    if (bids.isEmpty) return null;
 
-    final elected = elect(bids);
-    for (final secret in secrets) {
-      final key = await _tryOpen(store, elected, secret);
-      if (key != null) {
-        opened.add(secret.id);
-        return key;
+    if (bids.isNotEmpty) {
+      final elected = elect(bids);
+      for (final secret in secrets) {
+        final key = await _tryOpen(store, elected, secret);
+        if (key != null) {
+          opened.add(secret.id);
+          return key;
+        }
       }
     }
+
+    // Null means *nobody has claimed this folder*, and the caller answers it
+    // by claiming it with a new data key. So it may only be returned when
+    // there is genuinely nothing here. A folder that plainly exists and did
+    // not open is a wrong secret, and answering that by minting a new key
+    // would orphan every chunk ever written — silently, and to a viewer it
+    // would look like their history had simply gone.
+    if (slots.isEmpty && bids.isEmpty) return null;
 
     throw BackupKeyringException(
       secrets.any((s) => s.id == BackupSecret.phraseId)
@@ -279,6 +288,42 @@ class BackupKeyring {
     })));
   }
 
+  /// Writes a way in, replacing whatever was at that route before.
+  ///
+  /// How a phrase is changed. [unlock] only fills in routes that did not
+  /// already open, which is right on an ordinary launch and wrong here: a
+  /// viewer changing their phrase is asking for the one that *did* open to be
+  /// replaced. Without this there is no way to change it at all, and a phrase
+  /// somebody has since written on a whiteboard opens the folder for ever.
+  ///
+  /// The data key does not change, so nothing already written needs
+  /// re-encrypting and every other device carries on unaffected.
+  Future<void> rewrap({
+    required BackupStore store,
+    required Uint8List dataKey,
+    required BackupSecret secret,
+  }) async {
+    await store.put(
+      '$slotPrefix${_fileSafe(secret.id)}.json',
+      await _wrap(dataKey, secret, Random.secure()),
+    );
+
+    // The opening bids go with it, and this is the part that makes changing a
+    // phrase mean anything. A bid is sealed under whatever secret first
+    // claimed the folder and is never rotated, so leaving it behind means the
+    // old phrase still opens the folder through the back door — the change
+    // would have been decoration, which is what the test found.
+    //
+    // Safe to remove because the folder is reachable by slots now, and left
+    // until a deliberate act rather than cleared at launch: a device still
+    // claiming the folder is reading these, and deleting them underneath it
+    // is how two devices end up with different keys.
+    for (final bid in await store.list(prefix)) {
+      if (bid.startsWith(slotPrefix)) continue;
+      await store.delete(bid);
+    }
+  }
+
   Future<Map<String, Object?>?> _read(BackupStore store, String at) async {
     final bytes = await store.get(at);
     if (bytes == null) return null;
@@ -361,4 +406,51 @@ class BackupKeyringException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Why a chosen phrase cannot be used, or null when it is fine.
+///
+/// A viewer may prefer something they can remember to something they have to
+/// write down, and that is a reasonable trade for a record of what they
+/// watched. It is a trade, though, and this is where the floor under it
+/// lives: the wrapped key sits in a bucket, so anyone who reaches the bucket
+/// can attack it offline as fast as their hardware allows. A hundred and
+/// twenty thousand rounds buys time against a poor phrase; it does not buy
+/// enough.
+///
+/// Refusals say what to do rather than scoring out of five. A meter that
+/// turns green is a meter people satisfy rather than read.
+String? backupPhraseProblem(
+  String phrase, {
+  String? providerPassword,
+  String? username,
+}) {
+  final trimmed = phrase.trim();
+
+  if (trimmed.length < 12) {
+    return 'Use at least 12 characters. A few unrelated words are easier to '
+        'remember than a short password and far harder to guess.';
+  }
+
+  // Long and repetitive is not long. `aaaaaaaaaaaaaa` clears any length rule.
+  if (trimmed.split('').toSet().length < 6) {
+    return 'Use a few more different characters — this repeats too much to be '
+        'worth its length.';
+  }
+
+  if (providerPassword != null &&
+      providerPassword.isNotEmpty &&
+      trimmed == providerPassword.trim()) {
+    return 'Choose something other than your provider password. Reusing it '
+        'means your provider could open your backup, and changing it with '
+        'them would not change this.';
+  }
+
+  final account = (username ?? '').trim().toLowerCase();
+  if (account.length >= 4 && trimmed.toLowerCase().contains(account)) {
+    return 'Leave your account name out of it — anyone who knows which '
+        'provider you use would try that first.';
+  }
+
+  return null;
 }
