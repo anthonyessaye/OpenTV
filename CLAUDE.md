@@ -429,6 +429,53 @@ at schema 4 so opening it performs the migration; an Android TV emulator ran
 that at 4GB and at 1.5GB and answered from the index both times. The
 difference that remains is the hardware.
 
+## Syncing to the viewer's other devices
+
+`opentv_core/lib/src/backup/` holds the whole of it, and none of it knows what
+service the bytes end up on. `BackupStore` is four verbs; `MemoryBackupStore`
+is what every test runs against, which is why the ordering, merging and
+watermarking can be exercised without an account.
+
+**`Sources.id` is an autoincrement, so nothing keyed on it can travel.** The
+provider that is 1 on the television is 3 on the phone. Identity is derived
+from the portal address and the account instead — and the normalisation is
+deliberately asymmetric. A default port, a trailing slash and the case of the
+host are not differences; the path keeps its case and http is not assumed to
+be https. Merging two households cannot be undone by a viewer who notices,
+and splitting one person's history can.
+
+**No device ever writes another device's file.** Chunks live under the id of
+the device that wrote them and are immutable, so a shared folder needs no
+locking — which is as well, since a file store has none to offer.
+Incrementality is the same layout read differently: one watermark per peer.
+
+**Ordering is wall clock, not a counter.** Rewinding a film has to beat the
+further-along position on another device, and a counter that only rises
+cannot say that. A device stamps one millisecond past the newest thing it has
+seen, so a television with a slow clock cannot write into the past.
+
+**The key is not transported.** A data key is wrapped under both the provider
+credentials and a recovery phrase, so an ordinary unlock needs no typing and a
+reissued portal password is survivable rather than fatal. Not derived from the
+storage credentials: Backblaze issued those and therefore knows them, and the
+company holding the files is the one party the encryption excludes.
+
+**A slot is named by the route, not the secret behind it**, so a rotated
+password leaves a slot that opens nothing. Whichever device did get in
+rewrites it, or the phrase gets typed on every renewal for ever.
+
+**Schema 7 adds `SyncOutbox`.** A queue rather than a scan of the tables,
+because the change that matters most cannot be scanned for: a removed
+favourite leaves no row, and "rows newer than last time" would resurrect it
+on every device that still remembered it. Draining does not clear it — the
+caller clears only once the records are written, or a failed upload takes the
+viewer's changes with it.
+
+**What arrives from elsewhere is written without being queued.** Two devices
+that echoed each other would hand the same position back and forth for as
+long as both were running. `_writePlayback` and `_writeFavourite` are the
+unqueued halves, and `applyBackupRecords` is the only caller.
+
 ## Security decisions already made
 
 Do not undo these without a reason:

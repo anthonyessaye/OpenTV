@@ -145,3 +145,20 @@ class BackupFormatException implements Exception {
   @override
   String toString() => message;
 }
+
+/// What is waiting to reach the other devices, and how far the queue was read.
+///
+/// The two travel together because clearing the queue is only safe once the
+/// records are written. Returning the records alone would invite a caller to
+/// drain and forget in one step, and lose a viewer's changes to a failed
+/// upload.
+class BackupOutbox {
+  const BackupOutbox({required this.records, required this.through});
+
+  final List<BackupRecord> records;
+
+  /// The stamp of the last entry read, or null when there was nothing.
+  final DateTime? through;
+
+  bool get isEmpty => records.isEmpty;
+}

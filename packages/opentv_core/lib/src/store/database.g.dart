@@ -7036,6 +7036,377 @@ class PreferencesCompanion extends UpdateCompanion<Preference> {
   }
 }
 
+class $SyncOutboxTable extends SyncOutbox
+    with TableInfo<$SyncOutboxTable, SyncOutboxData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncOutboxTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  @override
+  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
+    'scope',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<int> sourceId = GeneratedColumn<int>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _localKeyMeta = const VerificationMeta(
+    'localKey',
+  );
+  @override
+  late final GeneratedColumn<String> localKey = GeneratedColumn<String>(
+    'local_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
+  @override
+  late final GeneratedColumn<String> payload = GeneratedColumn<String>(
+    'payload',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _atMeta = const VerificationMeta('at');
+  @override
+  late final GeneratedColumn<DateTime> at = GeneratedColumn<DateTime>(
+    'at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    scope,
+    sourceId,
+    localKey,
+    payload,
+    at,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_outbox';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncOutboxData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('scope')) {
+      context.handle(
+        _scopeMeta,
+        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    }
+    if (data.containsKey('local_key')) {
+      context.handle(
+        _localKeyMeta,
+        localKey.isAcceptableOrUnknown(data['local_key']!, _localKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localKeyMeta);
+    }
+    if (data.containsKey('payload')) {
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
+      );
+    }
+    if (data.containsKey('at')) {
+      context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
+    } else if (isInserting) {
+      context.missing(_atMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {scope, sourceId, localKey};
+  @override
+  SyncOutboxData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncOutboxData(
+      scope: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scope'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_id'],
+      )!,
+      localKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_key'],
+      )!,
+      payload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload'],
+      ),
+      at: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}at'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncOutboxTable createAlias(String alias) {
+    return $SyncOutboxTable(attachedDatabase, alias);
+  }
+}
+
+class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
+  /// `playback`, `favourite` — the same names that travel in a record.
+  final String scope;
+
+  /// Which provider this belongs to, or 0 for something that belongs to none.
+  final int sourceId;
+
+  /// `<kind>/<remoteId>`, still in this device's own terms.
+  ///
+  /// The provider is resolved to a shared key when the queue is drained
+  /// rather than when it is written: a source that is renamed or re-pointed
+  /// between the two would otherwise leave entries addressed to a provider
+  /// that no longer exists here.
+  final String localKey;
+
+  /// The new state as JSON, or null where the change is that it is gone.
+  final String? payload;
+  final DateTime at;
+  const SyncOutboxData({
+    required this.scope,
+    required this.sourceId,
+    required this.localKey,
+    this.payload,
+    required this.at,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['scope'] = Variable<String>(scope);
+    map['source_id'] = Variable<int>(sourceId);
+    map['local_key'] = Variable<String>(localKey);
+    if (!nullToAbsent || payload != null) {
+      map['payload'] = Variable<String>(payload);
+    }
+    map['at'] = Variable<DateTime>(at);
+    return map;
+  }
+
+  SyncOutboxCompanion toCompanion(bool nullToAbsent) {
+    return SyncOutboxCompanion(
+      scope: Value(scope),
+      sourceId: Value(sourceId),
+      localKey: Value(localKey),
+      payload: payload == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payload),
+      at: Value(at),
+    );
+  }
+
+  factory SyncOutboxData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncOutboxData(
+      scope: serializer.fromJson<String>(json['scope']),
+      sourceId: serializer.fromJson<int>(json['sourceId']),
+      localKey: serializer.fromJson<String>(json['localKey']),
+      payload: serializer.fromJson<String?>(json['payload']),
+      at: serializer.fromJson<DateTime>(json['at']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'scope': serializer.toJson<String>(scope),
+      'sourceId': serializer.toJson<int>(sourceId),
+      'localKey': serializer.toJson<String>(localKey),
+      'payload': serializer.toJson<String?>(payload),
+      'at': serializer.toJson<DateTime>(at),
+    };
+  }
+
+  SyncOutboxData copyWith({
+    String? scope,
+    int? sourceId,
+    String? localKey,
+    Value<String?> payload = const Value.absent(),
+    DateTime? at,
+  }) => SyncOutboxData(
+    scope: scope ?? this.scope,
+    sourceId: sourceId ?? this.sourceId,
+    localKey: localKey ?? this.localKey,
+    payload: payload.present ? payload.value : this.payload,
+    at: at ?? this.at,
+  );
+  SyncOutboxData copyWithCompanion(SyncOutboxCompanion data) {
+    return SyncOutboxData(
+      scope: data.scope.present ? data.scope.value : this.scope,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      localKey: data.localKey.present ? data.localKey.value : this.localKey,
+      payload: data.payload.present ? data.payload.value : this.payload,
+      at: data.at.present ? data.at.value : this.at,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncOutboxData(')
+          ..write('scope: $scope, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('localKey: $localKey, ')
+          ..write('payload: $payload, ')
+          ..write('at: $at')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(scope, sourceId, localKey, payload, at);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncOutboxData &&
+          other.scope == this.scope &&
+          other.sourceId == this.sourceId &&
+          other.localKey == this.localKey &&
+          other.payload == this.payload &&
+          other.at == this.at);
+}
+
+class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
+  final Value<String> scope;
+  final Value<int> sourceId;
+  final Value<String> localKey;
+  final Value<String?> payload;
+  final Value<DateTime> at;
+  final Value<int> rowid;
+  const SyncOutboxCompanion({
+    this.scope = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.localKey = const Value.absent(),
+    this.payload = const Value.absent(),
+    this.at = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncOutboxCompanion.insert({
+    required String scope,
+    this.sourceId = const Value.absent(),
+    required String localKey,
+    this.payload = const Value.absent(),
+    required DateTime at,
+    this.rowid = const Value.absent(),
+  }) : scope = Value(scope),
+       localKey = Value(localKey),
+       at = Value(at);
+  static Insertable<SyncOutboxData> custom({
+    Expression<String>? scope,
+    Expression<int>? sourceId,
+    Expression<String>? localKey,
+    Expression<String>? payload,
+    Expression<DateTime>? at,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (scope != null) 'scope': scope,
+      if (sourceId != null) 'source_id': sourceId,
+      if (localKey != null) 'local_key': localKey,
+      if (payload != null) 'payload': payload,
+      if (at != null) 'at': at,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncOutboxCompanion copyWith({
+    Value<String>? scope,
+    Value<int>? sourceId,
+    Value<String>? localKey,
+    Value<String?>? payload,
+    Value<DateTime>? at,
+    Value<int>? rowid,
+  }) {
+    return SyncOutboxCompanion(
+      scope: scope ?? this.scope,
+      sourceId: sourceId ?? this.sourceId,
+      localKey: localKey ?? this.localKey,
+      payload: payload ?? this.payload,
+      at: at ?? this.at,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (scope.present) {
+      map['scope'] = Variable<String>(scope.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<int>(sourceId.value);
+    }
+    if (localKey.present) {
+      map['local_key'] = Variable<String>(localKey.value);
+    }
+    if (payload.present) {
+      map['payload'] = Variable<String>(payload.value);
+    }
+    if (at.present) {
+      map['at'] = Variable<DateTime>(at.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncOutboxCompanion(')
+          ..write('scope: $scope, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('localKey: $localKey, ')
+          ..write('payload: $payload, ')
+          ..write('at: $at, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$OpenTvDatabase extends GeneratedDatabase {
   _$OpenTvDatabase(QueryExecutor e) : super(e);
   $OpenTvDatabaseManager get managers => $OpenTvDatabaseManager(this);
@@ -7051,6 +7422,7 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
   late final $PlaybackStatesTable playbackStates = $PlaybackStatesTable(this);
   late final $SyncStagesTable syncStages = $SyncStagesTable(this);
   late final $PreferencesTable preferences = $PreferencesTable(this);
+  late final $SyncOutboxTable syncOutbox = $SyncOutboxTable(this);
   late final Index categorySourceKind = Index(
     'category_source_kind',
     'CREATE INDEX category_source_kind ON categories (source_id, kind)',
@@ -7156,6 +7528,7 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
     playbackStates,
     syncStages,
     preferences,
+    syncOutbox,
     categorySourceKind,
     channelSourceCategory,
     channelSearch,
@@ -10555,6 +10928,206 @@ typedef $$PreferencesTableProcessedTableManager =
       Preference,
       PrefetchHooks Function()
     >;
+typedef $$SyncOutboxTableCreateCompanionBuilder =
+    SyncOutboxCompanion Function({
+      required String scope,
+      Value<int> sourceId,
+      required String localKey,
+      Value<String?> payload,
+      required DateTime at,
+      Value<int> rowid,
+    });
+typedef $$SyncOutboxTableUpdateCompanionBuilder =
+    SyncOutboxCompanion Function({
+      Value<String> scope,
+      Value<int> sourceId,
+      Value<String> localKey,
+      Value<String?> payload,
+      Value<DateTime> at,
+      Value<int> rowid,
+    });
+
+class $$SyncOutboxTableFilterComposer
+    extends Composer<_$OpenTvDatabase, $SyncOutboxTable> {
+  $$SyncOutboxTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localKey => $composableBuilder(
+    column: $table.localKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncOutboxTableOrderingComposer
+    extends Composer<_$OpenTvDatabase, $SyncOutboxTable> {
+  $$SyncOutboxTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localKey => $composableBuilder(
+    column: $table.localKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncOutboxTableAnnotationComposer
+    extends Composer<_$OpenTvDatabase, $SyncOutboxTable> {
+  $$SyncOutboxTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
+
+  GeneratedColumn<int> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get localKey =>
+      $composableBuilder(column: $table.localKey, builder: (column) => column);
+
+  GeneratedColumn<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get at =>
+      $composableBuilder(column: $table.at, builder: (column) => column);
+}
+
+class $$SyncOutboxTableTableManager
+    extends
+        RootTableManager<
+          _$OpenTvDatabase,
+          $SyncOutboxTable,
+          SyncOutboxData,
+          $$SyncOutboxTableFilterComposer,
+          $$SyncOutboxTableOrderingComposer,
+          $$SyncOutboxTableAnnotationComposer,
+          $$SyncOutboxTableCreateCompanionBuilder,
+          $$SyncOutboxTableUpdateCompanionBuilder,
+          (
+            SyncOutboxData,
+            BaseReferences<_$OpenTvDatabase, $SyncOutboxTable, SyncOutboxData>,
+          ),
+          SyncOutboxData,
+          PrefetchHooks Function()
+        > {
+  $$SyncOutboxTableTableManager(_$OpenTvDatabase db, $SyncOutboxTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncOutboxTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncOutboxTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncOutboxTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> scope = const Value.absent(),
+                Value<int> sourceId = const Value.absent(),
+                Value<String> localKey = const Value.absent(),
+                Value<String?> payload = const Value.absent(),
+                Value<DateTime> at = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncOutboxCompanion(
+                scope: scope,
+                sourceId: sourceId,
+                localKey: localKey,
+                payload: payload,
+                at: at,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String scope,
+                Value<int> sourceId = const Value.absent(),
+                required String localKey,
+                Value<String?> payload = const Value.absent(),
+                required DateTime at,
+                Value<int> rowid = const Value.absent(),
+              }) => SyncOutboxCompanion.insert(
+                scope: scope,
+                sourceId: sourceId,
+                localKey: localKey,
+                payload: payload,
+                at: at,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncOutboxTableProcessedTableManager =
+    ProcessedTableManager<
+      _$OpenTvDatabase,
+      $SyncOutboxTable,
+      SyncOutboxData,
+      $$SyncOutboxTableFilterComposer,
+      $$SyncOutboxTableOrderingComposer,
+      $$SyncOutboxTableAnnotationComposer,
+      $$SyncOutboxTableCreateCompanionBuilder,
+      $$SyncOutboxTableUpdateCompanionBuilder,
+      (
+        SyncOutboxData,
+        BaseReferences<_$OpenTvDatabase, $SyncOutboxTable, SyncOutboxData>,
+      ),
+      SyncOutboxData,
+      PrefetchHooks Function()
+    >;
 
 class $OpenTvDatabaseManager {
   final _$OpenTvDatabase _db;
@@ -10583,4 +11156,6 @@ class $OpenTvDatabaseManager {
       $$SyncStagesTableTableManager(_db, _db.syncStages);
   $$PreferencesTableTableManager get preferences =>
       $$PreferencesTableTableManager(_db, _db.preferences);
+  $$SyncOutboxTableTableManager get syncOutbox =>
+      $$SyncOutboxTableTableManager(_db, _db.syncOutbox);
 }

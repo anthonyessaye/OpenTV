@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../backup/backup_engine.dart';
+import '../backup/backup_identity.dart';
+import '../backup/backup_record.dart';
 import '../metadata/title_cleaner.dart';
 import 'search_text.dart';
 import 'tables.dart';
@@ -28,6 +31,7 @@ part 'database.g.dart';
     PlaybackStates,
     SyncStages,
     Preferences,
+    SyncOutbox,
   ],
 )
 class OpenTvDatabase extends _$OpenTvDatabase {
@@ -40,7 +44,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// upgrade that rebuilds a search index over a real catalogue is long
   /// enough that the viewer deserves to be told which of the two is
   /// happening.
-  static const latestSchema = 6;
+  static const latestSchema = 7;
 
   @override
   int get schemaVersion => latestSchema;
@@ -129,6 +133,12 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         }
         await createSearchIndex();
       }
+
+      // 7 adds the queue of changes waiting to reach the viewer's other
+      // devices. Created rather than backfilled: what a device did before it
+      // could sync is not something the other devices are missing, it is
+      // something they were never promised.
+      if (from < 7) await m.createTable(syncOutbox);
     },
     onCreate: (m) async {
       await m.createAll();
@@ -738,6 +748,156 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// one, and a device that is merely slow should still get its index.
   static const indexTimeout = Duration(seconds: 6);
 
+  // --- syncing to the viewer's other devices ---------------------------
+
+  /// Queues one change for the other devices.
+  ///
+  /// Upserted on the thing rather than appended per change, so an episode
+  /// whose position is written every few seconds while it plays leaves one
+  /// entry behind rather than a hundred.
+  Future<void> _queue({
+    required String scope,
+    required int sourceId,
+    required String localKey,
+    required DateTime at,
+    required Map<String, Object?>? payload,
+  }) =>
+      into(syncOutbox).insertOnConflictUpdate(
+        SyncOutboxCompanion.insert(
+          scope: scope,
+          sourceId: Value(sourceId),
+          localKey: localKey,
+          payload: Value(payload == null ? null : jsonEncode(payload)),
+          at: at.toUtc(),
+        ),
+      );
+
+  /// What is waiting to go, addressed in terms every device shares.
+  ///
+  /// The provider is resolved here rather than when the change was queued,
+  /// because a source can be renamed or re-pointed in between — and a record
+  /// addressed to a provider key this device no longer has is one nothing
+  /// will ever match.
+  ///
+  /// Nothing is deleted by draining. The caller clears the queue only once
+  /// the records are safely written, or a failed upload would take a viewer's
+  /// changes with it.
+  Future<BackupOutbox> drainSyncOutbox({
+    required String deviceId,
+    int limit = 500,
+  }) async {
+    final rows = await (select(syncOutbox)
+          ..orderBy([(o) => OrderingTerm.asc(o.at)])
+          ..limit(limit))
+        .get();
+    if (rows.isEmpty) {
+      return BackupOutbox(records: const [], through: null);
+    }
+
+    final byId = {for (final source in await allSources()) source.id: source};
+    final records = <BackupRecord>[];
+    for (final row in rows) {
+      final source = byId[row.sourceId];
+      if (source == null) continue;
+      records.add(BackupRecord(
+        scope: row.scope,
+        key: '${providerKey(source.url, source.username)}/${row.localKey}',
+        value: row.payload == null
+            ? null
+            : (jsonDecode(row.payload!) as Map).cast<String, Object?>(),
+        stamp: BackupStamp(wallClock: row.at, deviceId: deviceId),
+      ));
+    }
+    return BackupOutbox(records: records, through: rows.last.at);
+  }
+
+  /// Forgets everything queued up to and including [through].
+  ///
+  /// A change made while the upload was in flight carries a later stamp and
+  /// survives, which is why this is a time and not a count.
+  Future<int> clearSyncOutbox(DateTime through) =>
+      (delete(syncOutbox)..where((o) => o.at.isSmallerOrEqualValue(through)))
+          .go();
+
+  /// Applies what the other devices have said.
+  ///
+  /// Returns how many rows actually changed. Records for a provider this
+  /// device does not have are skipped rather than guessed at — a phone with
+  /// one portal should not grow a history for a portal it has never seen.
+  ///
+  /// Nothing applied here is queued back. Two devices that echoed each
+  /// other's writes would hand the same position back and forth for as long
+  /// as both were running.
+  Future<int> applyBackupRecords(Iterable<BackupRecord> records) async {
+    final byKey = {
+      for (final source in await allSources())
+        providerKey(source.url, source.username): source.id,
+    };
+
+    var changed = 0;
+    for (final record in records) {
+      final parts = record.key.split('/');
+      if (parts.length != 3) continue;
+      final sourceId = byKey[parts[0]];
+      if (sourceId == null) continue;
+
+      final kind = ItemKind.values.asNameMap()[parts[1]];
+      if (kind == null) continue;
+      final remoteId = parts[2];
+
+      switch (record.scope) {
+        case BackupScope.playback:
+          if (record.value == null) continue;
+          // A record older than what is already here is dropped. The engine
+          // picks a winner among what the other devices said; it cannot know
+          // this device carried on watching in the meantime.
+          final held = await playbackStateFor(
+            sourceId: sourceId,
+            kind: kind,
+            remoteId: remoteId,
+          );
+          if (held != null &&
+              !record.stamp.wallClock.isAfter(held.lastWatchedUtc)) {
+            continue;
+          }
+          await _writePlayback(
+            sourceId: sourceId,
+            kind: kind,
+            remoteId: remoteId,
+            at: record.stamp.wallClock,
+            positionMs: record.value!['positionMs'] as int?,
+            durationMs: record.value!['durationMs'] as int?,
+            parentRemoteId: record.value!['parentRemoteId'] as String?,
+            completed: record.value!['completed'] as bool?,
+          );
+          changed++;
+
+        case BackupScope.favourite:
+          if (record.value == null) {
+            changed += await _deleteFavourite(
+              sourceId: sourceId,
+              kind: kind,
+              remoteId: remoteId,
+            );
+          } else {
+            await _writeFavourite(
+              sourceId: sourceId,
+              kind: kind,
+              remoteId: remoteId,
+              at: record.stamp.wallClock,
+            );
+            changed++;
+          }
+
+        default:
+          // A scope written by a newer build. Ignored rather than refused, so
+          // one unknown record does not stop the rest of a sync.
+          continue;
+      }
+    }
+    return changed;
+  }
+
   static List<T> _rankByPrefix<T>(
     List<T> rows,
     String needle,
@@ -1210,17 +1370,63 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     required ItemKind kind,
     required String remoteId,
     required DateTime at,
-  }) => into(favourites).insert(
-    FavouritesCompanion.insert(
+  }) async {
+    await _writeFavourite(
       sourceId: sourceId,
-      itemKind: kind,
-      itemRemoteId: remoteId,
-      addedAt: at,
-    ),
-    mode: InsertMode.insertOrReplace,
-  );
+      kind: kind,
+      remoteId: remoteId,
+      at: at,
+    );
+    await _queue(
+      scope: BackupScope.favourite,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$remoteId',
+      at: at,
+      payload: {'addedAt': at.toUtc().toIso8601String()},
+    );
+  }
+
+  Future<void> _writeFavourite({
+    required int sourceId,
+    required ItemKind kind,
+    required String remoteId,
+    required DateTime at,
+  }) =>
+      into(favourites).insert(
+        FavouritesCompanion.insert(
+          sourceId: sourceId,
+          itemKind: kind,
+          itemRemoteId: remoteId,
+          addedAt: at,
+        ),
+        mode: InsertMode.insertOrReplace,
+      );
 
   Future<int> removeFavourite({
+    required int sourceId,
+    required ItemKind kind,
+    required String remoteId,
+    DateTime? at,
+  }) async {
+    final removed = await _deleteFavourite(
+      sourceId: sourceId,
+      kind: kind,
+      remoteId: remoteId,
+    );
+    // Queued whether or not a row was there. A device can be asked to remove
+    // something it does not have — because another device already told it —
+    // and the removal still has to reach the ones that do.
+    await _queue(
+      scope: BackupScope.favourite,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$remoteId',
+      at: at ?? DateTime.now().toUtc(),
+      payload: null,
+    );
+    return removed;
+  }
+
+  Future<int> _deleteFavourite({
     required int sourceId,
     required ItemKind kind,
     required String remoteId,
@@ -1278,19 +1484,57 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String? parentRemoteId,
     bool? completed,
   }) async {
-    await into(playbackStates).insertOnConflictUpdate(
-      PlaybackStatesCompanion.insert(
-        sourceId: sourceId,
-        itemKind: kind,
-        itemRemoteId: remoteId,
-        lastWatchedUtc: at.toUtc(),
-        positionMs: Value(positionMs),
-        durationMs: Value(durationMs),
-        parentRemoteId: Value(parentRemoteId),
-        completed: Value(completed ?? false),
-      ),
+    await _writePlayback(
+      sourceId: sourceId,
+      kind: kind,
+      remoteId: remoteId,
+      at: at,
+      positionMs: positionMs,
+      durationMs: durationMs,
+      parentRemoteId: parentRemoteId,
+      completed: completed,
+    );
+    await _queue(
+      scope: BackupScope.playback,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$remoteId',
+      at: at,
+      payload: {
+        'positionMs': positionMs,
+        'durationMs': durationMs,
+        'parentRemoteId': parentRemoteId,
+        'completed': completed ?? false,
+      },
     );
   }
+
+  /// The write on its own, with nothing queued.
+  ///
+  /// What arrives from another device goes through here. Queueing it would
+  /// send it straight back where it came from, and two devices would hand the
+  /// same position to each other for as long as both were running.
+  Future<void> _writePlayback({
+    required int sourceId,
+    required ItemKind kind,
+    required String remoteId,
+    required DateTime at,
+    int? positionMs,
+    int? durationMs,
+    String? parentRemoteId,
+    bool? completed,
+  }) =>
+      into(playbackStates).insertOnConflictUpdate(
+        PlaybackStatesCompanion.insert(
+          sourceId: sourceId,
+          itemKind: kind,
+          itemRemoteId: remoteId,
+          lastWatchedUtc: at.toUtc(),
+          positionMs: Value(positionMs),
+          durationMs: Value(durationMs),
+          parentRemoteId: Value(parentRemoteId),
+          completed: Value(completed ?? false),
+        ),
+      );
 
   Future<PlaybackState?> playbackStateFor({
     required int sourceId,

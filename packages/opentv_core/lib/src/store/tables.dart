@@ -454,3 +454,39 @@ class Preferences extends Table {
   @override
   Set<Column<Object>> get primaryKey => {key};
 }
+
+
+/// What this device has changed and not yet handed to the other devices.
+///
+/// A queue rather than a scan of the tables themselves, because the change
+/// that matters most cannot be scanned for: a favourite that was *removed*
+/// leaves no row behind, and a sync built on "rows newer than last time"
+/// would resurrect it on the next device that still remembered it — for ever,
+/// since each device would keep re-teaching the others.
+///
+/// Keyed on the thing rather than the change, so a position updated five
+/// times while an episode plays queues one entry, not five. Only the latest
+/// state of anything is worth sending.
+class SyncOutbox extends Table {
+  /// `playback`, `favourite` — the same names that travel in a record.
+  TextColumn get scope => text()();
+
+  /// Which provider this belongs to, or 0 for something that belongs to none.
+  IntColumn get sourceId => integer().withDefault(const Constant(0))();
+
+  /// `<kind>/<remoteId>`, still in this device's own terms.
+  ///
+  /// The provider is resolved to a shared key when the queue is drained
+  /// rather than when it is written: a source that is renamed or re-pointed
+  /// between the two would otherwise leave entries addressed to a provider
+  /// that no longer exists here.
+  TextColumn get localKey => text()();
+
+  /// The new state as JSON, or null where the change is that it is gone.
+  TextColumn get payload => text().nullable()();
+
+  DateTimeColumn get at => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {scope, sourceId, localKey};
+}
