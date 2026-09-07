@@ -513,6 +513,21 @@ on every device that still remembered it. Draining does not clear it — the
 caller clears only once the records are written, or a failed upload takes the
 viewer's changes with it.
 
+**A sync pass may never throw.** No internet, a deleted bucket and rotated
+keys all arrive in `BackupSync.run`, and none of them is a reason for an app
+to stop working. The failure is kept and shown on the settings screen, which
+is the only place anybody can act on it.
+
+**The key is derived once per device, not once per pass.** A hundred and
+twenty thousand rounds of PBKDF2 runs on the isolate drawing the screen, and
+it is felt on a television. The result is cached in the keystore against a
+fingerprint of the bucket, so pointing the app at a different folder does not
+quietly reuse the old key against it.
+
+**Something has to tell the screen.** Records land in the database and the
+shelves were drawn from what was there at launch, so without `onApplied` the
+sync works and looks exactly as though it had not.
+
 **What arrives from elsewhere is written without being queued.** Two devices
 that echoed each other would hand the same position back and forth for as
 long as both were running. `_writePlayback` and `_writeFavourite` are the

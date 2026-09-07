@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:opentv_core/opentv_core.dart';
 
 import 'backup_service.dart';
+import 'backup_sync.dart';
 import 'host.dart';
 import 'settings_screen.dart';
 import 'subtitle_service.dart';
@@ -73,6 +74,12 @@ class HandoverService {
     await take(BackupService.accessKeyReference);
     await take(BackupService.secretKeyReference);
     await take(BackupService.phraseReference);
+    // The folder's key itself, which is the QR route the keyring was built to
+    // allow: a device in the same room is handed the key rather than deriving
+    // it, and arrives already able to read everything ever written. The
+    // fingerprint that says which bucket it belongs to rides in the
+    // preferences table, which travels with the database.
+    await take(BackupSync.dataKeyReference);
 
     return out;
   }

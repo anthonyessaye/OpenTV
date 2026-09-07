@@ -13,6 +13,16 @@ most of what it knows from things that failed silently.
 
 ### Added
 
+- **Carry on watching on another device.** Point each device at a folder in
+  storage you own — Backblaze B2, Cloudflare R2, Wasabi, Storj or your own
+  MinIO — and a film paused on the television carries on where you left it on
+  the phone. There is no server and no account with us; what crosses is
+  encrypted before it leaves the device, so the company holding the folder
+  cannot read what you watch. Your catalogue is not copied, because each
+  device already reads that from your provider.
+- Devices with the same provider open the folder with no setup between them.
+  A recovery phrase is the way back in when a portal reissues its password,
+  and the only way in for a device that has no provider yet.
 - The browser setup can set the OpenSubtitles key and the parental PIN. It
   exists to spare you typing on a remote, and those two — a long API key and
   a PIN — were the worst things left to type on one.

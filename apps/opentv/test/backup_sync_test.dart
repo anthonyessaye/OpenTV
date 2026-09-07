@@ -1,0 +1,302 @@
+import 'dart:typed_data';
+
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:opentv/app/backup_service.dart';
+import 'package:opentv/app/backup_sync.dart';
+import 'package:opentv/app/host.dart';
+import 'package:opentv_core/opentv_core.dart';
+
+/// The loop, as the app runs it.
+///
+/// Everything underneath is tested in core against a store held in memory.
+/// What is only true here is the orchestration: that a pass says its own news
+/// before hearing anybody else's, that a failure cannot take the app with it,
+/// that the key is derived once rather than on every pass, and that a screen
+/// showing what arrived is told to redraw.
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late OpenTvDatabase tvDb;
+  late OpenTvDatabase phoneDb;
+  late MemoryBackupStore store;
+  final secrets = <String, String>{};
+  var derivations = 0;
+
+  const portal = 'http://portal.example:8080';
+
+  /// A service pointed at the shared store rather than at a bucket.
+  ///
+  /// Subclassed rather than mocked so everything else — the device id, the
+  /// offered secrets, the unlock — is the real thing.
+  BackupService serviceFor(OpenTvDatabase db) => _LocalService(
+        db: db,
+        host: const Host(),
+        folder: store,
+        onDerive: () => derivations++,
+      );
+
+  setUp(() async {
+    secrets.clear();
+    derivations = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('opentv/host'), (
+      call,
+    ) async {
+      final arguments = call.arguments as Map<Object?, Object?>?;
+      final reference = arguments?['reference'] as String?;
+      return switch (call.method) {
+        'readSecret' => secrets[reference],
+        'writeSecret' => secrets[reference!] = arguments!['secret'] as String,
+        'deleteSecret' => secrets.remove(reference),
+        _ => null,
+      };
+    });
+
+    store = MemoryBackupStore();
+    tvDb = OpenTvDatabase(NativeDatabase.memory());
+    phoneDb = OpenTvDatabase(NativeDatabase.memory());
+  });
+
+  tearDown(() async {
+    await tvDb.close();
+    await phoneDb.close();
+  });
+
+  /// The same provider on both, with different local ids.
+  Future<int> addProvider(OpenTvDatabase db, {int padding = 0}) async {
+    for (var i = 0; i < padding; i++) {
+      await db.addSource(SourcesCompanion.insert(
+        name: 'filler $i',
+        kind: SourceKind.m3u,
+        url: 'http://filler$i.example',
+        createdAt: DateTime.utc(2026),
+      ));
+    }
+    secrets['portal-password'] = 'hunter2';
+    return db.addSource(SourcesCompanion.insert(
+      name: 'Portal',
+      kind: SourceKind.xtream,
+      url: portal,
+      username: const Value('viewer'),
+      credentialRef: const Value('portal-password'),
+      createdAt: DateTime.utc(2026),
+    ));
+  }
+
+  BackupSync syncFor(OpenTvDatabase db, {void Function()? onApplied}) =>
+      BackupSync(
+        db: db,
+        backup: serviceFor(db),
+        host: const Host(),
+        onApplied: onApplied,
+      );
+
+  test('a position crosses without anybody typing a phrase', () async {
+    // The whole point: both devices hold the same provider password, so both
+    // derive the same folder key with no phrase and no setup between them.
+    final onTv = await addProvider(tvDb);
+    final onPhone = await addProvider(phoneDb, padding: 2);
+
+    await tvDb.recordPlayback(
+      sourceId: onTv,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 7, 20),
+      positionMs: 2400000,
+    );
+
+    await syncFor(tvDb).run();
+    await syncFor(phoneDb).run();
+
+    final landed = await phoneDb.playbackStateFor(
+      sourceId: onPhone,
+      kind: ItemKind.movie,
+      remoteId: '9',
+    );
+    expect(landed?.positionMs, 2400000);
+  });
+
+  test('the screen is told when something arrived', () async {
+    final onTv = await addProvider(tvDb);
+    await addProvider(phoneDb);
+    await tvDb.recordPlayback(
+      sourceId: onTv,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 7, 20),
+      positionMs: 10,
+    );
+    await syncFor(tvDb).run();
+
+    var redrawn = 0;
+    await syncFor(phoneDb, onApplied: () => redrawn++).run();
+
+    // Without this the record lands in the database and the shelf carries on
+    // drawing what it read at launch — working, and indistinguishable from
+    // not working.
+    expect(redrawn, 1);
+  });
+
+  test('and not told when nothing did', () async {
+    await addProvider(tvDb);
+    var redrawn = 0;
+    await syncFor(tvDb, onApplied: () => redrawn++).run();
+    expect(redrawn, 0);
+  });
+
+  test('the key is derived once, not on every pass', () async {
+    await addProvider(tvDb);
+    final sync = syncFor(tvDb);
+
+    await sync.run();
+    await sync.run();
+    await sync.run();
+
+    // A hundred and twenty thousand rounds of PBKDF2 runs on the isolate
+    // drawing the screen. Once per device is tolerable; once per pass is not.
+    expect(derivations, 1);
+  });
+
+  test('a folder that cannot be reached does not take the app with it',
+      () async {
+    await addProvider(tvDb);
+    final sync = BackupSync(
+      db: tvDb,
+      backup: _BrokenService(db: tvDb, host: const Host()),
+      host: const Host(),
+    );
+
+    // No throw. A television with no internet, a deleted bucket and rotated
+    // keys all arrive here, and none is a reason for an app to stop working.
+    await sync.run();
+    expect(sync.failure, isNotNull);
+  });
+
+  test('nothing is configured, so nothing happens and nothing complains',
+      () async {
+    await addProvider(tvDb);
+    final sync = BackupSync(
+      db: tvDb,
+      backup: BackupService(db: tvDb, host: const Host()),
+      host: const Host(),
+    );
+
+    await sync.run();
+    expect(sync.failure, null);
+    expect(await sync.isConfigured, isFalse);
+  });
+
+  test('the queue survives a pass that could not upload', () async {
+    // A folder that opens perfectly and refuses only the chunk, which is the
+    // ordering this is about. The first version used a store that refused
+    // everything — so the pass failed before it ever reached the queue, and
+    // the test passed with the clear moved *before* the upload.
+    final onTv = await addProvider(tvDb);
+    await tvDb.recordPlayback(
+      sourceId: onTv,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 7, 20),
+      positionMs: 10,
+    );
+
+    final sync = BackupSync(
+      db: tvDb,
+      backup: _LocalService(
+        db: tvDb,
+        host: const Host(),
+        folder: _RefusesChunks(),
+        onDerive: () {},
+      ),
+      host: const Host(),
+    );
+    await sync.run();
+    expect(sync.failure, isNotNull);
+
+    // Cleared on a failed upload, a viewer's change is simply gone.
+    final still = await tvDb.drainSyncOutbox(deviceId: 'tv');
+    expect(
+      still.records,
+      hasLength(1),
+      reason: 'the queue was emptied by an upload that never happened',
+    );
+  });
+}
+
+/// A service whose folder is the store held in memory.
+///
+/// Subclassed rather than mocked, so the device id, the offered secrets and
+/// the unlock are all the real thing — the parts this test exists to exercise.
+class _LocalService extends BackupService {
+  _LocalService({
+    required super.db,
+    required super.host,
+    required this.folder,
+    required this.onDerive,
+  });
+
+  final BackupStore folder;
+  final void Function() onDerive;
+
+  @override
+  Future<S3Config?> config() async => _somewhere;
+
+  @override
+  Future<BackupStore?> store() async => folder;
+
+  @override
+  Future<Uint8List> unlock() {
+    onDerive();
+    return super.unlock();
+  }
+}
+
+/// A service whose bucket refuses everything.
+class _BrokenService extends BackupService {
+  _BrokenService({required super.db, required super.host});
+
+  @override
+  Future<S3Config?> config() async => _somewhere;
+
+  @override
+  Future<BackupStore?> store() async => _RefusingStore();
+}
+
+final _somewhere = S3Config(
+  endpoint: Uri.parse('https://example.invalid'),
+  region: 'r',
+  bucket: 'b',
+  accessKeyId: 'a',
+  secretAccessKey: 's',
+);
+
+/// Opens fine, and will not take a chunk.
+class _RefusesChunks extends MemoryBackupStore {
+  @override
+  Future<void> put(String path, Uint8List bytes) async {
+    if (path.startsWith('devices/')) {
+      throw const BackupTransferException('the bucket is full');
+    }
+    return super.put(path, bytes);
+  }
+}
+
+class _RefusingStore implements BackupStore {
+  @override
+  Future<void> delete(String path) async => throw _refused;
+
+  @override
+  Future<Uint8List?> get(String path) async => throw _refused;
+
+  @override
+  Future<List<String>> list(String prefix) async => throw _refused;
+
+  @override
+  Future<void> put(String path, Uint8List bytes) async => throw _refused;
+
+  static const _refused =
+      BackupTransferException('the bucket refused these keys');
+}

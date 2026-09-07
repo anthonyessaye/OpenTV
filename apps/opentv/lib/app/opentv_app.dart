@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'backup_service.dart';
+import 'backup_sync.dart';
 import '../l10n/strings.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
@@ -188,6 +190,12 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   /// launches out of five, and the fifth is the one that matters.
   bool _upgrading = false;
 
+  /// Carries what has been watched to the viewer's other devices.
+  ///
+  /// Null until a catalogue is open, because everything it does is expressed
+  /// in terms of a provider and a database.
+  BackupSync? _sync;
+
   OpenTvDatabase? _db;
   SourceService? _service;
   StreamResolver? _resolver;
@@ -321,8 +329,14 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
         _vpn.disconnect();
+        // The last thing watched has just been written, and this is the
+        // moment a viewer picks up their phone. Whether it finishes before
+        // the process is frozen is not guaranteed, which is why the queue
+        // survives being drained — the next launch sends whatever did not go.
+        unawaited(_sync?.run());
       case AppLifecycleState.resumed:
         _vpn.connectIfConfigured();
+        unawaited(_sync?.run());
       case AppLifecycleState.inactive:
         break;
     }
@@ -373,6 +387,24 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         _sources = sources;
         _source = sources.isEmpty ? null : sources.first;
       });
+
+      // Built here rather than at startup: everything it does is expressed in
+      // terms of a database, and the handover replaces that file underneath.
+      _sync = BackupSync(
+        db: db,
+        backup: BackupService(db: db, host: _host),
+        host: _host,
+        // What arrives from elsewhere lands in the database, and the shelves
+        // showing it were drawn from what was there at launch. Without this
+        // the sync works and looks exactly as though it had not.
+        onApplied: () {
+          if (mounted) setState(() {});
+        },
+      );
+      // Unawaited on purpose. A television with no internet, a bucket
+      // somebody deleted and a rotated key all end up here, and none of them
+      // is a reason to hold up a catalogue that is already open.
+      unawaited(_sync?.run());
 
       unawaited(_fillMissingRegions(db));
       // Anything a crash left behind. The player deletes its own subtitle on
