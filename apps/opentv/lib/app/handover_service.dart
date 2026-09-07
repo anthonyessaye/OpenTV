@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:opentv_core/opentv_core.dart';
 
+import 'backup_service.dart';
 import 'host.dart';
 import 'settings_screen.dart';
 import 'subtitle_service.dart';
@@ -64,6 +65,14 @@ class HandoverService {
     await take(SettingsScreen.tmdbReference);
     await take(SubtitleService.keyReference);
     await take(VpnService.configReference);
+    // The backup folder's keys and its recovery phrase. A device that has
+    // just been handed a whole setup should be syncing with the others
+    // immediately, not asking for a bucket to be typed in again — and the
+    // phrase in particular is the one thing a viewer may not have written
+    // down anywhere else.
+    await take(BackupService.accessKeyReference);
+    await take(BackupService.secretKeyReference);
+    await take(BackupService.phraseReference);
 
     return out;
   }

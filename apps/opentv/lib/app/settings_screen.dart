@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
+import 'backup_service.dart';
 import 'host.dart';
 import 'source_service.dart';
 import 'subtitle_service.dart';
@@ -74,6 +75,7 @@ enum _Panel {
   vpn,
   parental,
   handover,
+  backup,
   about,
 }
 
@@ -121,6 +123,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _note;
   String _tmdbKey = '';
   String _subtitleKey = '';
+
+  /// The backup folder, which is somebody's own bucket and is off until they
+  /// set one up.
+  late final BackupService _backup = BackupService(
+    db: widget.db,
+    host: const Host(),
+  );
+  String _endpoint = '';
+  String _region = '';
+  String _bucket = '';
+  String _accessKey = '';
+  String _secretKey = '';
+  String _phrase = '';
+  bool _hasPhrase = false;
+  bool _backupLoaded = false;
+  bool _checkingBackup = false;
+  String? _backupNote;
   bool _checking = false;
 
   XtreamAccount? _account;
@@ -274,6 +293,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Panel.vpn => 'Private tunnel',
                       _Panel.parental => 'Parental lock',
                       _Panel.handover => 'Another device',
+                      // Two words, because the panel buttons are one line
+                      // tall and a longer label wraps and loses its second
+                      // half. "Sync between devices" clipped to "Sync
+                      // between devi" on a real television.
+                      _Panel.backup => 'Device sync',
                       _Panel.about => 'About',
                     },
                     selected: panel == _panel,
@@ -296,6 +320,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       // BY over the whole source, so they are read when the
                       // panel is opened rather than on every settings build.
                       if (panel == _Panel.regions) _loadRegions();
+                      // Reading the bucket settings means a keystore round
+                      // trip for two secrets, so it happens when the panel is
+                      // opened rather than on every settings build.
+                      if (panel == _Panel.backup && !_backupLoaded) {
+                        _loadBackup();
+                      }
                     },
                   ),
                 ),
@@ -318,6 +348,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _Panel.vpn => _vpn(),
               _Panel.parental => _parental(),
               _Panel.handover => _handover(),
+              _Panel.backup => _backupPanel(),
               _Panel.about => _about(),
             },
           ),
@@ -896,6 +927,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _loadBackup() async {
+    final settings = await _backup.config();
+    final hasPhrase = await _backup.hasPhrase();
+    if (!mounted) return;
+    setState(() {
+      _backupLoaded = true;
+      _hasPhrase = hasPhrase;
+      _endpoint = settings?.endpoint.toString() ?? '';
+      _region = settings?.region ?? '';
+      _bucket = settings?.bucket ?? '';
+      // The keys are not read back into the fields. A settings screen that
+      // renders a stored secret is one screenshot away from spending it, and
+      // no other panel here does it either.
+      _accessKey = '';
+      _secretKey = '';
+    });
+  }
+
+  Future<void> _saveBackup() async {
+    await _backup.save(
+      endpoint: _endpoint,
+      region: _region,
+      bucket: _bucket,
+      accessKey: _accessKey,
+      secretKey: _secretKey,
+    );
+    if (!mounted) return;
+    setState(() {
+      _accessKey = '';
+      _secretKey = '';
+      _backupNote = 'Saved.';
+    });
+  }
+
+  Future<void> _testBackup() async {
+    setState(() {
+      _checkingBackup = true;
+      _backupNote = null;
+    });
+    final result = await _backup.check();
+    if (!mounted) return;
+    setState(() {
+      _checkingBackup = false;
+      _backupNote = result;
+    });
+  }
+
+  Future<void> _savePhrase() async {
+    final problem = backupPhraseProblem(
+      _phrase,
+      username: widget.active.username,
+    );
+    if (problem != null) {
+      setState(() => _backupNote = problem);
+      return;
+    }
+    await _backup.savePhrase(_phrase);
+    if (!mounted) return;
+    setState(() {
+      _hasPhrase = true;
+      _phrase = '';
+      _backupNote = 'Recovery phrase saved. Write it down somewhere that is '
+          'not this device.';
+    });
+  }
+
+  void _generatePhrase() {
+    setState(() {
+      _phrase = newBackupPhrase();
+      _backupNote = 'Write this down before saving it. It is the way back in '
+          'if your provider password changes.';
+    });
+  }
+
   Future<void> _loadRegions() async {
     final stored = await widget.db.preference(RegionFilter.preferenceKey);
     final rows = await widget.db.regionsIn(widget.active.id, _regionKind);
@@ -1034,6 +1139,182 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(
           'This product uses the TMDB API but is not endorsed or certified '
           'by TMDB.',
+          style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
+        ),
+      ],
+    );
+  }
+
+  /// The folder the viewer's devices leave their watch state in.
+  ///
+  /// Bring your own bucket, for the reason the TMDB and OpenSubtitles keys
+  /// are the viewer's own: a service key compiled into an open-source client
+  /// lasts exactly as long as it takes somebody to read the source. Here it
+  /// is also the point — the folder is *theirs*, holding a record of what
+  /// they watch, on an account nobody else pays for.
+  ///
+  /// Deliberately says what it cannot do as well as what it can, which is the
+  /// same voice the tunnel screen uses about what a tunnel is not.
+  Widget _backupPanel() {
+    return ListView(
+      children: [
+        Text(
+          'Your devices leave what you have watched in a folder you own, so a '
+          'film paused on one carries on where you left it on another. '
+          'Nothing goes to us — this app has no server. Everything written '
+          'there is encrypted before it leaves the device, so the company '
+          'holding the bucket cannot read it.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Text(
+          'Any S3-compatible storage works: Backblaze B2, Cloudflare R2, '
+          'Wasabi, Storj, or your own MinIO. B2 is the shortest route — make '
+          'a private bucket, create an application key, and copy the two '
+          'strings it gives you.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.lg),
+        SizedBox(
+          width: 900,
+          child: TextEntryField(
+            label: 'Endpoint',
+            value: _endpoint,
+            hint: 'https://s3.us-west-004.backblazeb2.com',
+            active: true,
+            onChanged: (text) => setState(() => _endpoint = text),
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.sm),
+        SizedBox(
+          width: 900,
+          child: TextEntryField(
+            label: 'Region',
+            value: _region,
+            hint: 'us-west-004, or auto on R2',
+            active: true,
+            onChanged: (text) => setState(() => _region = text),
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.sm),
+        SizedBox(
+          width: 900,
+          child: TextEntryField(
+            label: 'Bucket',
+            value: _bucket,
+            hint: 'The private bucket you made',
+            active: true,
+            onChanged: (text) => setState(() => _bucket = text),
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.sm),
+        SizedBox(
+          width: 900,
+          child: TextEntryField(
+            label: 'Access key ID',
+            value: _accessKey,
+            hint: _endpoint.isEmpty ? 'From your storage account' : 'Stored',
+            active: true,
+            obscure: true,
+            onChanged: (text) => setState(() => _accessKey = text),
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.sm),
+        SizedBox(
+          width: 900,
+          child: TextEntryField(
+            label: 'Secret access key',
+            value: _secretKey,
+            hint: _endpoint.isEmpty ? 'From your storage account' : 'Stored',
+            active: true,
+            obscure: true,
+            onChanged: (text) => setState(() => _secretKey = text),
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Row(
+          children: [
+            PlayerButton(
+              label: 'SAVE',
+              emphasis: true,
+              onSelect: _endpoint.isEmpty || _bucket.isEmpty
+                  ? null
+                  : _saveBackup,
+            ),
+            const SizedBox(width: OpenTvSpace.sm),
+            // A screen can say a key is stored; it cannot say it works, and
+            // those are different facts. The same reason there is a test
+            // button beside the TMDB key.
+            PlayerButton(
+              label: _checkingBackup ? 'TESTING…' : 'TEST',
+              onSelect: _checkingBackup ? null : _testBackup,
+            ),
+            const SizedBox(width: OpenTvSpace.sm),
+            PlayerButton(
+              label: 'REMOVE',
+              onSelect: () async {
+                await _backup.forget();
+                if (!mounted) return;
+                setState(() {
+                  _endpoint = '';
+                  _region = '';
+                  _bucket = '';
+                  _backupNote = 'Removed. Nothing was deleted from the bucket.';
+                });
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: OpenTvSpace.xl),
+        Text('Recovery phrase', style: OpenTvType.section),
+        const SizedBox(height: OpenTvSpace.sm),
+        Text(
+          _hasPhrase
+              ? 'A phrase is set on this device. Use the same one on your '
+                  'other devices.'
+              : 'Your devices normally open the folder with your provider '
+                  'password, and no phrase is needed. This is the way back in '
+                  'when that password changes — which providers do on renewal '
+                  '— and the only way in for a device that has no provider '
+                  'yet.',
+          style: OpenTvType.bodyMuted,
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        SizedBox(
+          width: 900,
+          child: TextEntryField(
+            label: 'Recovery phrase',
+            value: _phrase,
+            hint: 'A few unrelated words, or generate one',
+            active: true,
+            onChanged: (text) => setState(() => _phrase = text),
+          ),
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Row(
+          children: [
+            PlayerButton(
+              label: 'SAVE PHRASE',
+              emphasis: true,
+              onSelect: _phrase.isEmpty ? null : _savePhrase,
+            ),
+            const SizedBox(width: OpenTvSpace.sm),
+            PlayerButton(label: 'GENERATE', onSelect: _generatePhrase),
+          ],
+        ),
+        if (_backupNote != null) ...[
+          const SizedBox(height: OpenTvSpace.md),
+          Text(
+            _backupNote!,
+            style: OpenTvType.data.copyWith(color: OpenTvColors.tally),
+          ),
+        ],
+        const SizedBox(height: OpenTvSpace.lg),
+        Text(
+          'What crosses is what you have watched, where you stopped, and what '
+          'you have favourited. Your catalogue is not copied — each device '
+          'reads that from your provider — and neither is anything you have '
+          'hidden or locked.',
           style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
         ),
       ],
