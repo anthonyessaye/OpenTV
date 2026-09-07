@@ -486,6 +486,26 @@ rather than at launch, because a device still claiming the folder is reading
 them and deleting those underneath it is how two devices end up with
 different keys.
 
+**SigV4 is written out rather than taken from a package**, because it has to
+run on four platforms including tvOS and it is a few hundred lines of hashing
+that will not change again. One implementation covers B2, R2, Wasabi, Storj
+and MinIO. `canonicalRequestFor` exists so a test can read the canonical
+request: a signature is a number that is either right or wrong and says
+nothing about which part was wrong, and the canonical request is the part
+that is usually wrong.
+
+**Build the canonical path from `pathSegments`, never from `path`.** Dart
+keeps percent-escapes in `path`, so encoding it turns `a%20b` into `a%2520b`
+— signed one way, sent another, and the object is unreadable for ever with a
+signature error naming none of it. Every key this app writes happens to be
+safe characters, which is exactly why the first version of that test asserted
+the double-encoded string and passed.
+
+**No test here can show the signature is one Backblaze will accept.** They pin
+the canonical request, the encoding, the paths, the paging and the errors;
+only a real bucket settles the rest, and a wrong region fails identically to
+a wrong key.
+
 **Schema 7 adds `SyncOutbox`.** A queue rather than a scan of the tables,
 because the change that matters most cannot be scanned for: a removed
 favourite leaves no row, and "rows newer than last time" would resurrect it
