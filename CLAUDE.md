@@ -542,6 +542,20 @@ on every device that still remembered it. Draining does not clear it — the
 caller clears only once the records are written, or a failed upload takes the
 viewer's changes with it.
 
+**A screen that never shows a stored secret must not save a blank over it.**
+The rule is right — no panel here renders a credential back — and it means
+the field is empty every time somebody returns. Writing that through wiped the
+bucket keys, and the next test reported that the service did not recognise
+them. An empty secret field means "keep what is stored".
+
+**History only crosses between devices holding the same provider**, because
+records are keyed on a hash of the portal address and the account. Two
+devices with the same portal typed differently — a trailing slash, `http`
+against `https`, an address the provider moved — are two accounts as far as
+this is concerned, and each syncs contentedly with itself while nothing
+appears. Both sync screens print the identity for exactly this reason: it is
+invisible otherwise.
+
 **Every screen that exists on the television has to exist on the phone.**
 Device sync was built on one side only, and the phone ran a pass at launch
 and on leaving all along with no way to be pointed at a folder — a feature

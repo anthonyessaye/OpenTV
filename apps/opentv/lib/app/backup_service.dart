@@ -84,6 +84,14 @@ class BackupService {
     );
   }
 
+  /// Saves what was typed, and keeps what was not.
+  ///
+  /// An empty key field means "leave the stored one alone", never "store
+  /// nothing". No screen here renders a secret back — that rule is right, and
+  /// it means the fields are empty every time a viewer returns. Writing those
+  /// blanks through overwrote the keys with nothing, and the next test came
+  /// back saying the bucket did not recognise them: a screen that destroys a
+  /// credential for being redisplayed carefully.
   Future<void> save({
     required String endpoint,
     required String region,
@@ -94,8 +102,12 @@ class BackupService {
     await db.setPreference(_endpointKey, endpoint.trim());
     await db.setPreference(_regionKey, region.trim());
     await db.setPreference(_bucketKey, bucket.trim());
-    await host.writeSecret(accessKeyReference, accessKey.trim());
-    await host.writeSecret(secretKeyReference, secretKey.trim());
+    if (accessKey.trim().isNotEmpty) {
+      await host.writeSecret(accessKeyReference, accessKey.trim());
+    }
+    if (secretKey.trim().isNotEmpty) {
+      await host.writeSecret(secretKeyReference, secretKey.trim());
+    }
   }
 
   Future<void> forget() async {
@@ -153,6 +165,26 @@ class BackupService {
     } on Object catch (error) {
       return '$error';
     }
+  }
+
+  /// What this device will sync, and under what name.
+  ///
+  /// Shown because the commonest way for this feature to do nothing is
+  /// invisible: two devices holding the same portal, typed differently. A
+  /// trailing slash, `http` against `https`, an address the provider moved —
+  /// any of those makes two identities out of one account, and each device
+  /// then syncs happily with itself. Putting the identity on screen is what
+  /// lets somebody compare the two and see that they differ.
+  Future<List<({String name, String address, String key})>>
+      providerIdentities() async {
+    return [
+      for (final source in await db.enabledSources())
+        (
+          name: source.name,
+          address: normaliseProviderUrl(source.url),
+          key: providerKey(source.url, source.username),
+        ),
+    ];
   }
 
   /// Everything this device can offer to open the folder with.

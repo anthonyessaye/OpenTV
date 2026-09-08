@@ -963,6 +963,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // exactly the thing this screen exists to make visible.
       _backupNote = widget.sync?.failure;
     });
+    final identities = await _backup.providerIdentities();
+    if (mounted) setState(() => _identities = identities);
   }
 
   static bool _endpointNeedsRegion(String endpoint) {
@@ -1015,6 +1017,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   bool _syncing = false;
+
+  /// What this device will sync, and the name it does it under.
+  List<({String name, String address, String key})> _identities = const [];
 
   Future<void> _runSync() async {
     final sync = widget.sync;
@@ -1315,6 +1320,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+      // What this device calls its providers, so two that ought to match can
+      // be compared. The commonest way for this to do nothing is two devices
+      // holding the same portal typed differently — a trailing slash, http
+      // against https — which makes two identities out of one account, and
+      // each device then syncs contentedly with itself.
+      if (_identities.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: OpenTvSpace.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('What this device syncs', style: OpenTvType.section),
+              const SizedBox(height: OpenTvSpace.xs),
+              Text(
+                'History only crosses between devices holding the same '
+                'provider. If another device shows a different code here, the '
+                'two are not the same account as far as this is concerned — '
+                'usually because the address was typed differently.',
+                style: OpenTvType.bodyMuted,
+              ),
+              const SizedBox(height: OpenTvSpace.sm),
+              for (final identity in _identities)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: OpenTvSpace.xs),
+                  child: Text(
+                    '${identity.key}   ${identity.name} — ${identity.address}',
+                    style: OpenTvType.data,
+                  ),
+                ),
+            ],
+          ),
+        ),
       Row(
         children: [
           // Nothing else on this screen says the sync has ever run. It runs

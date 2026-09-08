@@ -263,6 +263,38 @@ void main() {
       reason: 'the position was queued and never written',
     );
   });
+
+  test('saving again does not wipe keys that were not retyped', () async {
+    // No screen here renders a secret back, which is right — so the key
+    // fields are empty every time a viewer returns to the panel. Writing
+    // those blanks through overwrote the stored keys with nothing, and the
+    // next test reported that the bucket did not recognise them.
+    final service = BackupService(db: tvDb, host: const Host());
+    await service.save(
+      endpoint: 'https://s3.us-west-004.backblazeb2.com',
+      region: '',
+      bucket: 'mine',
+      accessKey: 'AKIAEXAMPLE',
+      secretKey: 'a-secret',
+    );
+
+    // Coming back and changing only the bucket.
+    await service.save(
+      endpoint: 'https://s3.us-west-004.backblazeb2.com',
+      region: '',
+      bucket: 'another',
+      accessKey: '',
+      secretKey: '',
+    );
+
+    final config = await service.config();
+    expect(config, isNotNull, reason: 'the keys were destroyed by a save');
+    expect(config!.accessKeyId, 'AKIAEXAMPLE');
+    expect(config.secretAccessKey, 'a-secret');
+    expect(config.bucket, 'another');
+    // And the region still comes out of the endpoint.
+    expect(config.region, 'us-west-004');
+  });
 }
 
 /// A service whose folder is the store held in memory.

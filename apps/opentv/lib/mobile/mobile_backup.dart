@@ -55,6 +55,9 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
   bool _busy = false;
   String? _note;
 
+  /// What this device will sync, and the name it does it under.
+  List<({String name, String address, String key})> _identities = const [];
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +93,8 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
       // renders a stored secret, and this one opens a bucket.
       _note = widget.sync?.failure;
     });
+    final identities = await _backup.providerIdentities();
+    if (mounted) setState(() => _identities = identities);
   }
 
   static bool _needsRegion(String endpoint) {
@@ -268,6 +273,27 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
               label: 'Sync now',
               onTap: _busy || widget.sync == null ? null : _run,
             ),
+          ],
+          if (_identities.isNotEmpty) ...[
+            const SizedBox(height: OpenTvTouchSpace.xl),
+            const Text('WHAT THIS DEVICE SYNCS', style: OpenTvTouchType.label),
+            const SizedBox(height: OpenTvTouchSpace.xs),
+            const Text(
+              'History only crosses between devices holding the same '
+              'provider. If your television shows a different code here, the '
+              'two are not the same account as far as this is concerned — '
+              'usually because the address was typed differently.',
+              style: OpenTvTouchType.bodyMuted,
+            ),
+            const SizedBox(height: OpenTvTouchSpace.sm),
+            for (final identity in _identities)
+              Padding(
+                padding: const EdgeInsets.only(bottom: OpenTvTouchSpace.xs),
+                child: Text(
+                  '${identity.key}\n${identity.name} — ${identity.address}',
+                  style: OpenTvTouchType.caption,
+                ),
+              ),
           ],
           const SizedBox(height: OpenTvTouchSpace.xl),
           const Text('RECOVERY PHRASE', style: OpenTvTouchType.label),

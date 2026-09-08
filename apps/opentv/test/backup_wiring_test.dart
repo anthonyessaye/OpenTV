@@ -115,4 +115,20 @@ void main() {
       );
     });
   });
+
+  test('both screens show what the device syncs as', () {
+    // The commonest way for this feature to do nothing is invisible: two
+    // devices holding the same portal typed differently make two identities
+    // out of one account, and each then syncs contentedly with itself. The
+    // only way anybody finds that is by comparing the two.
+    final mobile = File('lib/mobile/mobile_backup.dart').readAsStringSync();
+    for (final (name, file) in [('television', settings), ('phone', mobile)]) {
+      expect(
+        file,
+        contains('providerIdentities()'),
+        reason: '$name gives no way to see why nothing is crossing',
+      );
+      expect(file, contains('identity.key'));
+    }
+  });
 }
