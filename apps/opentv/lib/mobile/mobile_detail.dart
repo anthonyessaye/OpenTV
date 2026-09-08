@@ -91,20 +91,13 @@ class _MobileDetailState extends State<MobileDetail> {
   /// the same fifty characters — so the part after the S01E01 marker is what
   /// gets the width. Numbered where there is nothing after it, because
   /// "Episode 4" is a better label than a path.
-  String _labelFor(Episode episode) {
-    final raw = episode.title.trim();
+  /// What to call one episode. The rule is in core, beside the television's
+  /// copy of this question and the player's.
+  String _labelFor(Episode episode) => episodeLabel(
+        title: episode.title,
+        number: episode.episodeNumber,
+      );
 
-    // A provider that simply named the episode has already given us what we
-    // want. Only a title carrying a marker is a path worth splitting, and
-    // only one whose marker has nothing after it needs a number — this used
-    // to number every clean name it was handed, throwing away the very thing
-    // it was trying to show.
-    if (!TitleCleaner.hasEpisodeMarker(raw)) {
-      return raw.isEmpty ? 'Episode ${episode.episodeNumber ?? ''}' : raw;
-    }
-    return TitleCleaner.episodeName(raw) ??
-        'Episode ${episode.episodeNumber ?? ''}';
-  }
 
   @override
   void didUpdateWidget(MobileDetail old) {

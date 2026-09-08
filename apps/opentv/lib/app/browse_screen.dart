@@ -887,7 +887,17 @@ class _BrowseScreenState extends State<BrowseScreen> {
     // queue of channels is what the zap buttons are for, and a film has no
     // list to be part of.
     final episodes = playable.itemKind == ItemKind.episode
-        ? [for (final item in _queue) item.title]
+        ? [
+            for (var i = 0; i < _queue.length; i++)
+              episodeLabel(
+                title: _queue[i].title,
+                number: _queue[i].number,
+                index: i,
+                // Numbered here and nowhere else: this list runs across every
+                // season with nothing beside it to say what order it is in.
+                withNumber: true,
+              ),
+          ]
         : const <String>[];
     final at = _queue.indexWhere((item) => item.remoteId == playable.remoteId);
 

@@ -51,10 +51,35 @@ void main() {
     );
   });
 
+  test('the naming rule is not copied a third time', () {
+    // It was written twice — the television's series screen and the phone's,
+    // each commented to point at the other — and the player's list would have
+    // been the third. Both callers now defer to core.
+    final series = File('lib/app/series_screen.dart').readAsStringSync();
+    final phone = File('lib/mobile/mobile_detail.dart').readAsStringSync();
+    for (final (name, file) in [('series', series), ('phone', phone)]) {
+      expect(
+        file,
+        contains('episodeLabel('),
+        reason: '$name has its own copy of how to read a provider name',
+      );
+      expect(
+        file,
+        isNot(contains('hasEpisodeMarker(')),
+        reason: '$name still splits provider names itself',
+      );
+    }
+  });
+
   test('the player is given labels, not the catalogue', () {
     // The player has never known what an episode is, and giving it one now
     // would put the catalogue inside the one screen that has managed without.
-    expect(browse, contains('for (final item in _queue) item.title'));
+    expect(browse, contains('episodeLabel('));
+    expect(
+      browse,
+      isNot(contains('for (final item in _queue) item.title')),
+      reason: 'the list shows the provider file name again',
+    );
     expect(player, contains('final List<String> episodes'));
     expect(
       player,

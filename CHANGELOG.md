@@ -55,6 +55,11 @@ most of what it knows from things that failed silently.
 
 ### Fixed
 
+- Episode names are the episode, not the file. Splitting a provider's path at
+  its `S01E04` only removed what came before the name — so both episode lists
+  have been showing "The Winter Soldier 1080p WEB DL" since they were written.
+  The rule for reading provider names now lives in one place instead of two.
+
 - A phone can send its setup to a television again. The pull direction was
   rewritten to stream sealed frames when holding a whole catalogue in memory
   killed a television box; the push was left as it was and failed the same
