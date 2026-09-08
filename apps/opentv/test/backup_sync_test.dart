@@ -354,7 +354,14 @@ void main() {
 
     expect(phoneSync.received, 1);
     expect(phoneSync.applied, 0);
-    expect(phoneSync.summary, contains('provider this device does not have'));
+
+    // And names the provider rather than describing the shape of the
+    // problem. The television announces what it syncs for, so the device
+    // that cannot place those records has something a viewer can recognise
+    // instead of a sixteen-character hash.
+    expect(phoneSync.unlinked, hasLength(1));
+    expect(phoneSync.summary, contains('Portal'));
+    expect(phoneSync.summary, contains('link it below'));
   });
 
   test('and something landing tells the screens to read again', () async {
@@ -378,6 +385,101 @@ void main() {
     // without their loaders running, so what arrived sat in the database
     // until the next launch.
     expect(told, 1);
+  });
+
+  group('a provider under two addresses', () {
+    /// The same account added on the phone at an address that normalises
+    /// differently — a provider that moved, which no derived variant covers.
+    Future<int> addMoved(OpenTvDatabase db) async {
+      secrets['moved-password'] = 'hunter2';
+      return db.addSource(SourcesCompanion.insert(
+        name: 'Portal',
+        kind: SourceKind.xtream,
+        url: 'http://new-address.example:8080',
+        username: const Value('viewer'),
+        credentialRef: const Value('moved-password'),
+        createdAt: DateTime.utc(2026),
+      ));
+    }
+
+    test('a device says what it syncs for, once', () async {
+      await addProvider(tvDb);
+      final sync = syncFor(tvDb);
+
+      await sync.run();
+      final afterFirst = (await store.list('devices/')).length;
+
+      // Nothing has changed, so there is nothing to say. A chunk per pass
+      // would be a bucket that grows while the viewer does nothing at all.
+      await sync.run();
+      expect((await store.list('devices/')).length, afterFirst);
+    });
+
+    test('linking one applies the history already in the folder', () async {
+      final onTv = await addProvider(tvDb);
+      final onPhone = await addMoved(phoneDb);
+      secrets['backup-phrase'] = 'marmalade harbour lantern';
+
+      await tvDb.recordPlayback(
+        sourceId: onTv,
+        kind: ItemKind.movie,
+        remoteId: '9',
+        at: DateTime.utc(2026, 9, 8, 20),
+        positionMs: 2400000,
+      );
+      await syncFor(tvDb).run();
+
+      final phoneSync = syncFor(phoneDb);
+      await phoneSync.run();
+      expect(phoneSync.applied, 0, reason: 'the addresses do not match');
+      expect(phoneSync.unlinked, hasLength(1));
+
+      await phoneSync.link(
+        key: phoneSync.unlinked.first.providerKey,
+        sourceId: onPhone,
+      );
+
+      // Written before anybody knew the two were the same account, and
+      // recovered rather than only fixed from here on — which is the whole
+      // reason the watermark goes back with the link.
+      final landed = await phoneDb.playbackStateFor(
+        sourceId: onPhone,
+        kind: ItemKind.movie,
+        remoteId: '9',
+      );
+      expect(landed?.positionMs, 2400000);
+      expect(phoneSync.unlinked, isEmpty);
+    });
+
+    test('and what arrives afterwards reaches the screen', () async {
+      final onTv = await addProvider(tvDb);
+      final onPhone = await addMoved(phoneDb);
+      secrets['backup-phrase'] = 'marmalade harbour lantern';
+
+      await tvDb.recordPlayback(
+        sourceId: onTv,
+        kind: ItemKind.movie,
+        remoteId: '9',
+        at: DateTime.utc(2026, 9, 8, 20),
+        positionMs: 10,
+      );
+      await syncFor(tvDb).run();
+
+      var told = 0;
+      final phoneSync = syncFor(phoneDb, onApplied: () => told++);
+      await phoneSync.run();
+      expect(told, 0);
+
+      await phoneSync.link(
+        key: phoneSync.unlinked.first.providerKey,
+        sourceId: onPhone,
+      );
+
+      // A link that quietly filled the database and left the shelves showing
+      // what they read at launch would look exactly like one that did
+      // nothing.
+      expect(told, 1);
+    });
   });
 }
 

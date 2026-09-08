@@ -115,6 +115,53 @@ void main() {
       expect(transport.requested, ['<auth>']);
     });
 
+    group('what the portal says its own address is', () {
+      // Parsed since the models were written and read by nothing, so a
+      // version of this sync that could have recognised one provider behind
+      // two addresses had the answer on hand and threw it away.
+      Future<String?> reportedFor(Object? server) async {
+        final id = await _addSource();
+        final transport = FakeTransport(
+          authPayload: {
+            'user_info': const {'auth': 1, 'status': 'Active'},
+            if (server != null) 'server_info': server,
+          },
+        );
+        await engine.run(id, fetcher(transport));
+        return (await db.findSource(id))?.reportedUrl;
+      }
+
+      test('is kept on the source', () async {
+        expect(
+          await reportedFor(const {'url': 'panel-07.example', 'port': 8080}),
+          'http://panel-07.example:8080',
+        );
+      });
+
+      test('is assembled from the scheme and port it arrives in', () async {
+        expect(
+          await reportedFor(const {
+            'url': 'panel-07.example',
+            'https_port': 443,
+            'server_protocol': 'https',
+          }),
+          'https://panel-07.example',
+        );
+      });
+
+      test('is taken as it stands when it already spells one out', () async {
+        expect(
+          await reportedFor(const {'url': 'https://panel-07.example/live'}),
+          'https://panel-07.example/live',
+        );
+      });
+
+      test('is left alone when the portal does not say', () async {
+        expect(await reportedFor(null), isNull);
+        expect(await reportedFor(const {'url': ''}), isNull);
+      });
+    });
+
     test('an expired account stops the run and says so', () async {
       final id = await _addSource();
       final transport = FakeTransport(

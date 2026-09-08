@@ -40,6 +40,16 @@ class Sources extends Table {
 
   TextColumn get username => text().nullable()();
 
+  /// What the portal calls itself, as it reported on the last authentication.
+  ///
+  /// Xtream's `server_info` block carries the panel's own address, which is
+  /// the one thing about a provider that two devices cannot type differently.
+  /// Kept beside the typed address rather than replacing it: not every panel
+  /// fills it in, some report an address only reachable from inside their own
+  /// network, and it changes when a provider migrates. It widens what the
+  /// sync will match, and is trusted for nothing else.
+  TextColumn get reportedUrl => text().nullable()();
+
   /// Keystore handle for the secret. Never the secret itself.
   TextColumn get credentialRef => text().nullable()();
 
@@ -500,4 +510,56 @@ class SyncOutbox extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {scope, sourceId, localKey};
+}
+
+
+/// A provider key this device has been told belongs to one of its sources.
+///
+/// The derived keys cover the addresses that differ by a scheme or a `www.`;
+/// they cannot cover a provider that genuinely moved, or one written two ways
+/// that share nothing. That last case is not something to guess at — merging
+/// two households is not undone by noticing — so it is a claim a viewer
+/// makes, with both providers named on screen, and this is where it is kept.
+class ProviderAliases extends Table {
+  /// The key as the other device wrote it.
+  TextColumn get providerKey => text()();
+
+  IntColumn get sourceId =>
+      integer().references(Sources, #id, onDelete: KeyAction.cascade)();
+
+  /// What the other device called it, kept so the link can be shown back in
+  /// the words it was offered in.
+  TextColumn get label => text().nullable()();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  /// One key resolves to one source. A key pointed at two sources would make
+  /// the same record land twice under different providers.
+  @override
+  Set<Column<Object>> get primaryKey => {providerKey};
+}
+
+/// A provider some other device is syncing that this one could not place.
+///
+/// Records addressed to an unknown provider used to be dropped where they
+/// were found, which is why the commonest failure here was invisible: the
+/// pass worked, the count said records had arrived, and nothing appeared.
+/// Kept instead, so the sync screen can name what turned up and offer to
+/// link it — and because the chunks it came from are still in the bucket,
+/// accepting one recovers the history rather than only fixing the future.
+class UnlinkedProviders extends Table {
+  TextColumn get providerKey => text()();
+
+  /// What the device that wrote it calls the provider, when it said.
+  TextColumn get name => text().nullable()();
+  TextColumn get address => text().nullable()();
+
+  /// How many records have arrived for it. A count is the difference between
+  /// "something is misconfigured" and "your whole history is over there".
+  IntColumn get records => integer().withDefault(const Constant(0))();
+
+  DateTimeColumn get seenAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {providerKey};
 }

@@ -14,7 +14,11 @@ import 'backup_store.dart';
 /// secret, or one of them has the wrong credentials for this folder — which
 /// is exactly what the provider slot is there to notice.
 class BackupSecret {
-  const BackupSecret({required this.id, required this.secret});
+  const BackupSecret({
+    required this.id,
+    required this.secret,
+    this.fillable = true,
+  });
 
   /// The recovery phrase route, which every folder has.
   static const phraseId = 'phrase';
@@ -27,6 +31,16 @@ class BackupSecret {
 
   final String id;
   final String secret;
+
+  /// Whether a slot should be written for this route when it does not open
+  /// one.
+  ///
+  /// False for the addresses a device merely *guesses* another might have
+  /// used. Trying them is free — a slot that is not there costs no
+  /// derivation — but writing one for each would leave a bucket full of
+  /// slots opening the same folder by names no device actually goes by, and
+  /// every one of them another way in to be rotated later.
+  final bool fillable;
 
   /// Redacted, because these reach crash reports.
   @override
@@ -223,9 +237,15 @@ class BackupKeyring {
       List<int>.generate(32, (_) => source.nextInt(256)),
     );
 
+    // Under a name this device actually goes by, never one of the addresses
+    // it is merely willing to answer to. A bid is a claim on the folder, and
+    // claiming it as a provider nobody is configured with would leave the
+    // one way in named after a guess.
+    final claimant =
+        secrets.firstWhere((s) => s.fillable, orElse: () => secrets.first);
     await store.put(
       '$prefix$deviceId.json',
-      await _wrap(dataKey, secrets.first, source),
+      await _wrap(dataKey, claimant, source),
     );
 
     // Listed again rather than assumed. If another device claimed it in the
@@ -241,16 +261,23 @@ class BackupKeyring {
       );
     }
 
+    // Every secret, not the one this device happened to bid with. The
+    // elected bid may be another device's, sealed under whichever of its own
+    // secrets came first — which need not be the first of these. Asking with
+    // one of them and giving up was a race this could lose while holding the
+    // key that opens it.
     final elected = elect(bids);
-    final key = await _tryOpen(store, elected, secrets.first);
-    if (key == null) {
-      throw const BackupKeyringException(
-        'another device claimed this folder with a different secret. Use the '
-        'recovery phrase it was set up with.',
-      );
+    for (final secret in secrets) {
+      final key = await _tryOpen(store, elected, secret);
+      if (key != null) {
+        opened.add(secret.id);
+        return key;
+      }
     }
-    opened.add(secrets.first.id);
-    return key;
+    throw const BackupKeyringException(
+      'another device claimed this folder with a different secret. Use the '
+      'recovery phrase it was set up with.',
+    );
   }
 
   /// Gives every secret this device holds a way in, if it has not got one.
@@ -271,6 +298,7 @@ class BackupKeyring {
       // nothing — and skipping it means the phrase gets typed again on every
       // renewal, for ever.
       if (opened.contains(secret.id)) continue;
+      if (!secret.fillable) continue;
       await store.put(
         '$slotPrefix${_fileSafe(secret.id)}.json',
         await _wrap(dataKey, secret, Random.secure()),

@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 463 core, 124 ui, 129 app.
+Tests: 701 core, 138 ui, 223 app.
 
 ## Two interfaces, one app
 
@@ -259,7 +259,11 @@ since the format was written and nothing ever read it, so a version mismatch
 could only be reported as two schema numbers. And the receiver wrote the
 reason it refused a push into the response body while the sender called
 `drain` on it and reported the status code, so a refusal that had been
-explained in a sentence arrived as "the other device answered 400".
+explained in a sentence arrived as "the other device answered 400". And
+`XtreamServerInfo` — the panel's own address, the one part of a provider two
+devices cannot type differently — was parsed on every authentication since
+the models were written and read by nothing, while the sync that needed it
+was splitting one account into two for want of exactly that.
 
 None of these fail. Nothing logs, nothing throws, and each one looks like
 working software in a screenshot. **If a feature is silent, grep both ends
@@ -387,6 +391,12 @@ Providers commonly file everything under one category and put the language in
 front of the title — `AR |`, `TR:`, `[EX-YU]`. Hiding categories cannot
 express "not the Turkish ones" at all, which is why regions are a separate
 control rather than part of that panel.
+
+Schema 9 is the sync learning all of this: `Sources.reportedUrl`, plus the
+two tables holding what a viewer has said belongs together and what turned up
+addressed to nobody. Nothing is backfilled — the reported address arrives on
+the next authentication, and the derived variants cover the ordinary cases
+until it does.
 
 Schema 4 adds a `region` column to channels, movies and series, populated at
 sync and **backfilled during the migration**. Stored rather than derived at
@@ -555,6 +565,63 @@ against `https`, an address the provider moved — are two accounts as far as
 this is concerned, and each syncs contentedly with itself while nothing
 appears. Both sync screens print the identity for exactly this reason: it is
 invisible otherwise.
+
+**One provider does not produce one key, and that is the whole of this.**
+The address is typed by hand on every device, and what survives normalisation
+is what nobody notices: `http` against `https`, a `www.`, a portal that
+moved. Each makes two identities out of one account, and both devices then
+sync contentedly with themselves. So writing and reading are deliberately
+asymmetric — **one key is written and a set is accepted**. A record's key
+travels inside the sealed chunk and is only ever compared against keys
+derived locally, so accepting more of them costs nothing in the bucket and
+tells the storage company nothing. Writing under several would be writing
+several records, and the merge would have no way to choose between them.
+
+**Reading generously cannot fix it on its own.** A device has no way to guess
+the vanity address another was set up with, so the *writers* have to converge
+— which is why `providerWriteKey` prefers the portal's own reported address
+over the typed one. Reading widely is what keeps records written before that
+happened from being stranded.
+
+**A variant must never shadow a source that genuinely writes under that key.**
+`providerKeyMap` lays down every canonical key first and alone, then fills in
+variants with `putIfAbsent`. The same panel bought twice — one account on
+http, a second on https — is a real arrangement, and without the two passes
+one of them absorbs the other's history.
+
+**A record for an unknown provider is kept, not dropped where it is found.**
+That single `continue` was the quietest failure in the feature: the pass
+worked, the count said records had arrived, and nothing appeared. They are
+collected in `UnlinkedProviders`, named by the identity record each device
+announces once, and offered to the viewer to link. Linking clears the
+watermarks with it — every chunk is still in the bucket and none is ever
+rewritten, so forgetting how far this device had read is what makes a link
+recover the history that already crossed rather than only fixing the future.
+
+**Linking is asked for rather than inferred.** Derived variants stop at forms
+of the same hostname on purpose. Two households merged into one history
+cannot be undone by a viewer who notices; a split one can.
+
+**A guessed keyslot is tried and never written.** A slot that is not there
+costs no derivation — `_open` skips it before deriving anything — so guessing
+widely is free. Filling one for each guess would leave a bucket of routes
+named after providers nobody has, every one of them another way in to be
+rotated later. Hence `BackupSecret.fillable`. The same change exposed a bug
+sitting in `_claim`: it sealed the opening bid with one secret and tried to
+open it with `secrets.first`, so a device could claim a folder and then fail
+to open the bid it had just written. It tries them all now, which also fixes
+a race it could previously lose while holding the key.
+
+**A recovery phrase is asked for first and is not optional.** The provider
+password is only a shortcut past typing it. A folder claimed under nothing
+but a provider is the case with no way out: the password is reissued on
+renewal, and a device whose own provider has not been added yet has nothing
+to offer at all. Both screens ask before the bucket, and neither will save
+one without a phrase.
+
+**Announcements are not news.** They are excluded from the counts a pass
+reports, or a pass that moved nothing a viewer cares about would say it had —
+which is the exact thing those counts exist to prevent.
 
 **Every screen that exists on the television has to exist on the phone.**
 Device sync was built on one side only, and the phone ran a pass at launch

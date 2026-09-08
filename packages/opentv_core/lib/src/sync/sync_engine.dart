@@ -33,6 +33,14 @@ class FatalSyncException implements Exception {
 abstract class CatalogueFetcher {
   Set<SyncStage> get stages;
 
+  /// What the provider says its own address is, once a stage has run.
+  ///
+  /// Null before anything has authenticated, and null for a source that has
+  /// no such notion — a playlist file is not asked where it lives. Only the
+  /// sync between a viewer's devices reads it, to recognise one provider
+  /// reached by two spellings of the same address.
+  String? get reportedAddress => null;
+
   Stream<List<CategoriesCompanion>> categories(int sourceId);
   Stream<List<ChannelsCompanion>> channels(int sourceId);
   Stream<List<MoviesCompanion>> movies(int sourceId);
@@ -200,6 +208,15 @@ class SyncEngine {
           error: '$e',
         );
       }
+    }
+
+    // Kept even from a run that then failed, and even from one where every
+    // stage was skipped as already done. Authenticating is what produces it,
+    // and a half-finished sync that got that far knows something the next
+    // one would only have to ask again.
+    final reported = fetcher.reportedAddress;
+    if (reported != null && reported.isNotEmpty) {
+      await db.setSourceReportedUrl(sourceId, reported);
     }
 
     // Only a clean run counts as a sync. A partial one leaves the previous

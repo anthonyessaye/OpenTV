@@ -181,8 +181,20 @@ class BackupService {
       for (final source in await db.enabledSources())
         (
           name: source.name,
-          address: normaliseProviderUrl(source.url),
-          key: providerKey(source.url, source.username),
+          // What the portal calls itself where it has said, because that is
+          // the address the key is actually built from and a viewer
+          // comparing two devices needs to be looking at the same thing the
+          // sync is.
+          address: normaliseProviderUrl(
+            (source.reportedUrl?.trim().isNotEmpty ?? false)
+                ? source.reportedUrl!
+                : source.url,
+          ),
+          key: providerWriteKey(
+            url: source.url,
+            username: source.username,
+            reportedUrl: source.reportedUrl,
+          ),
         ),
     ];
   }
@@ -199,15 +211,34 @@ class BackupService {
       if (reference == null) continue;
       final password = await host.readSecret(reference);
       if (password == null || password.isEmpty) continue;
-      final key = providerKey(source.url, source.username);
-      offered.add(BackupSecret(
-        id: BackupSecret.providerId(key),
-        secret: providerSecretMaterial(
-          providerKey: key,
-          username: source.username,
-          password: password,
-        ),
-      ));
+
+      // The slot this device would write, and then the slots another device
+      // holding the same account might have written instead — the address
+      // typed with the other scheme, or with a `www.`. A slot that is not
+      // there costs nothing at all: the keyring skips it before deriving
+      // anything, so guessing widely is free and guessing right is the whole
+      // difference between a phrase being needed and not.
+      final own = providerWriteKey(
+        url: source.url,
+        username: source.username,
+        reportedUrl: source.reportedUrl,
+      );
+      for (final key in providerKeyCandidates(
+        url: source.url,
+        username: source.username,
+        reportedUrl: source.reportedUrl,
+      )) {
+        offered.add(BackupSecret(
+          id: BackupSecret.providerId(key),
+          secret: providerSecretMaterial(
+            providerKey: key,
+            username: source.username,
+            password: password,
+          ),
+          // Only this device's own name for the provider earns a slot.
+          fillable: key == own,
+        ));
+      }
     }
 
     final phrase = await host.readSecret(phraseReference);

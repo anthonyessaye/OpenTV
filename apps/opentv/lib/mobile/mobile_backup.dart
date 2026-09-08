@@ -55,6 +55,13 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
   bool _busy = false;
   String? _note;
 
+  /// Providers another device syncs that this one could not place.
+  List<UnlinkedProvider> _unlinked = const [];
+
+  /// This device's own providers, so a link has something to point at. A
+  /// household with two of them has to be asked which.
+  List<Source> _sources = const [];
+
   /// What this device will sync, and the name it does it under.
   List<({String name, String address, String key})> _identities = const [];
 
@@ -94,7 +101,14 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
       _note = widget.sync?.failure;
     });
     final identities = await _backup.providerIdentities();
-    if (mounted) setState(() => _identities = identities);
+    final waiting = await widget.db.unlinkedProvidersSeen();
+    final sources = await widget.db.enabledSources();
+    if (!mounted) return;
+    setState(() {
+      _identities = identities;
+      _unlinked = waiting;
+      _sources = sources;
+    });
   }
 
   static bool _needsRegion(String endpoint) {
@@ -149,6 +163,25 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
     setState(() {
       _busy = false;
       _note = sync.summary;
+      _unlinked = sync.unlinked;
+    });
+  }
+
+  /// Accepts that a provider another device syncs is one of this device's.
+  Future<void> _link(String key, int sourceId) async {
+    final sync = widget.sync;
+    if (sync == null) return;
+    setState(() {
+      _busy = true;
+      _note = null;
+    });
+    await sync.link(key: key, sourceId: sourceId);
+    final waiting = await widget.db.unlinkedProvidersSeen();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _unlinked = waiting;
+      _note = sync.summary;
     });
   }
 
@@ -164,7 +197,7 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
     setState(() {
       _hasPhrase = true;
       _note = 'Recovery phrase saved. Write it down somewhere that is not '
-          'this device.';
+          'this device — nobody can reissue it.';
     });
 
     // And try again with it, which is the whole point of having been asked
@@ -197,6 +230,47 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
             style: OpenTvTouchType.bodyMuted,
           ),
           const SizedBox(height: OpenTvTouchSpace.lg),
+          // First, and not optional. The phrase is what opens the folder; a
+          // provider password is only a shortcut past typing it, and a device
+          // set up without one cannot get back in when a provider reissues a
+          // password — or let in the next device before its provider is
+          // added. Asked for before the bucket, because a folder claimed
+          // under nothing but a provider is the case with no way out.
+          const Text('RECOVERY PHRASE', style: OpenTvTouchType.label),
+          const SizedBox(height: OpenTvTouchSpace.xs),
+          Text(
+            _hasPhrase
+                ? 'A phrase is set on this device. Use the same one on your '
+                    'other devices — it is what lets them read the same '
+                    'folder.'
+                : 'This is what unlocks the folder, and the same one has to be '
+                    'set on every device. Write it down: nobody can reissue '
+                    'it, because nobody else has it — not us, and not the '
+                    'company holding the bucket.',
+            style: OpenTvTouchType.bodyMuted,
+          ),
+          const SizedBox(height: OpenTvTouchSpace.md),
+          TouchField(
+            label: 'Recovery phrase',
+            controller: _phrase,
+            hint: 'A few unrelated words',
+          ),
+          const SizedBox(height: OpenTvTouchSpace.sm),
+          _Button(
+            label: 'Save phrase',
+            emphasis: !_hasPhrase,
+            onTap: _savePhrase,
+          ),
+          const SizedBox(height: OpenTvTouchSpace.sm),
+          _Button(
+            label: 'Generate one',
+            onTap: () => setState(() {
+              _phrase.text = newBackupPhrase();
+              _note = 'Write this down before saving it. It is the only way '
+                  'back into the folder.';
+            }),
+          ),
+          const SizedBox(height: OpenTvTouchSpace.xl),
           const Text('WHERE IT GOES', style: OpenTvTouchType.label),
           const SizedBox(height: OpenTvTouchSpace.xs),
           const Text(
@@ -259,7 +333,11 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
             Text(note, style: OpenTvTouchType.caption),
           ],
           const SizedBox(height: OpenTvTouchSpace.sm),
-          _Button(label: 'Save', emphasis: true, onTap: _busy ? null : _save),
+          _Button(
+            label: 'Save',
+            emphasis: _hasPhrase,
+            onTap: _busy || !_hasPhrase ? null : _save,
+          ),
           const SizedBox(height: OpenTvTouchSpace.sm),
           _Button(
             label: _busy ? 'Working…' : 'Test the connection',
@@ -293,35 +371,43 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
                 ),
               ),
           ],
-          const SizedBox(height: OpenTvTouchSpace.xl),
-          const Text('RECOVERY PHRASE', style: OpenTvTouchType.label),
-          const SizedBox(height: OpenTvTouchSpace.xs),
-          Text(
-            _hasPhrase
-                ? 'A phrase is set on this device. Use the same one everywhere.'
-                : 'Your devices normally open the folder with your provider '
-                    'password and no phrase is needed. This is the way back in '
-                    'when that password changes — which providers do on '
-                    'renewal — and the only way in for a device that has no '
-                    'provider yet.',
-            style: OpenTvTouchType.bodyMuted,
-          ),
-          const SizedBox(height: OpenTvTouchSpace.md),
-          TouchField(
-            label: 'Recovery phrase',
-            controller: _phrase,
-            hint: 'A few unrelated words',
-          ),
-          const SizedBox(height: OpenTvTouchSpace.sm),
-          _Button(label: 'Save phrase', onTap: _savePhrase),
-          const SizedBox(height: OpenTvTouchSpace.sm),
-          _Button(
-            label: 'Generate one',
-            onTap: () => setState(() {
-              _phrase.text = newBackupPhrase();
-              _note = 'Write this down before saving it.';
-            }),
-          ),
+          // What another device is syncing that this one could not place.
+          // The derived variants cover an address typed with the other
+          // scheme, and the portal's own name covers two vanity addresses;
+          // neither covers a provider that genuinely moved, and that is not
+          // something to guess at.
+          if (_unlinked.isNotEmpty) ...[
+            const SizedBox(height: OpenTvTouchSpace.xl),
+            const Text('WAITING TO BE LINKED', style: OpenTvTouchType.label),
+            const SizedBox(height: OpenTvTouchSpace.xs),
+            const Text(
+              'Another device is syncing a provider this one does not '
+              'recognise. If it is the same account under a different '
+              'address, linking it applies everything already in the folder '
+              'as well as what comes next.',
+              style: OpenTvTouchType.bodyMuted,
+            ),
+            for (final waiting in _unlinked) ...[
+              const SizedBox(height: OpenTvTouchSpace.sm),
+              Text(
+                '${waiting.name ?? waiting.providerKey}\n'
+                '${waiting.address ?? 'address not given'} — '
+                '${waiting.records} records',
+                style: OpenTvTouchType.caption,
+              ),
+              const SizedBox(height: OpenTvTouchSpace.xs),
+              for (final source in _sources)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: OpenTvTouchSpace.xs),
+                  child: _Button(
+                    label: 'Link to ${source.name}',
+                    onTap: _busy
+                        ? null
+                        : () => _link(waiting.providerKey, source.id),
+                  ),
+                ),
+            ],
+          ],
           const SizedBox(height: OpenTvTouchSpace.xl),
           const Text(
             'What crosses is what you have watched, where you stopped, and '

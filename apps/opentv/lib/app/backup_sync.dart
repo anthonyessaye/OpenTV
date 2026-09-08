@@ -50,6 +50,13 @@ class BackupSync {
   static const _keyForPreference = 'backup.key-for';
   static const _watermarkPreference = 'backup.watermarks';
 
+  /// What this device last told the folder it syncs for.
+  ///
+  /// Kept so the announcement is written once rather than on every pass. It
+  /// is three short strings, but a chunk per pass for ever is a bucket that
+  /// grows while nothing happens.
+  static const _announcedPreference = 'backup.announced';
+
   bool _running = false;
 
   /// Why the last attempt failed, or null when it did not.
@@ -65,6 +72,13 @@ class BackupSync {
   int sent = 0;
   int received = 0;
   int applied = 0;
+
+  /// Providers another device is syncing that this one could not place.
+  ///
+  /// The commonest way for all of this to do nothing, and until it was
+  /// collected it was also the quietest: the records were dropped where they
+  /// were found and the pass reported a clean run.
+  List<UnlinkedProvider> unlinked = const [];
 
   /// Bumped whenever records from elsewhere changed something here.
   ///
@@ -103,16 +117,30 @@ class BackupSync {
       // would leave this device's own news until the next one.
       final outbox = await db.drainSyncOutbox(deviceId: engine.deviceId);
       sent = outbox.records.length;
-      if (!outbox.isEmpty) {
-        await engine.push(outbox.records);
+
+      // Said alongside, so a device meeting records it cannot place has a
+      // provider's name to show rather than a hash of one.
+      final (announcements, announcing) = await _announcements(engine);
+
+      if (outbox.records.isNotEmpty || announcements.isNotEmpty) {
+        await engine.push([...outbox.records, ...announcements]);
         // Only now, and never before: a failed upload would otherwise take
         // the viewer's changes with it.
-        await db.clearSyncOutbox(outbox.through!);
+        if (!outbox.isEmpty) await db.clearSyncOutbox(outbox.through!);
+        if (announcing != null) {
+          await db.setPreference(_announcedPreference, announcing);
+        }
       }
 
       final marks = await _watermarks();
       final pulled = await engine.pull(watermarks: marks);
-      received = pulled.records.length;
+
+      // Announcements are bookkeeping, not news. Counting them would make a
+      // pass that moved nothing a viewer cares about report that it had, and
+      // these counts exist precisely so that cannot happen.
+      received = pulled.records
+          .where((record) => record.scope != BackupScope.identity)
+          .length;
       applied = 0;
       if (pulled.records.isNotEmpty) {
         applied = await db.applyBackupRecords(
@@ -124,6 +152,7 @@ class BackupSync {
         }
       }
       await _saveWatermarks(pulled.watermarks);
+      unlinked = await db.unlinkedProvidersSeen();
 
       failure = pulled.unreadable.isEmpty ? null : pulled.unreadable.first;
     } on Object catch (error) {
@@ -131,6 +160,55 @@ class BackupSync {
     } finally {
       _running = false;
     }
+  }
+
+  /// What this device syncs for, when that has changed since it last said.
+  ///
+  /// Returns the records to send and the note to remember once they are
+  /// safely written — remembering before the upload would mean a failed pass
+  /// silently deciding it had already announced itself.
+  Future<(List<BackupRecord>, String?)> _announcements(
+    BackupEngine engine,
+  ) async {
+    final identities = await backup.providerIdentities();
+    if (identities.isEmpty) return (const <BackupRecord>[], null);
+
+    final said = jsonEncode({
+      for (final identity in identities)
+        identity.key: [identity.name, identity.address],
+    });
+    if (await db.preference(_announcedPreference) == said) {
+      return (const <BackupRecord>[], null);
+    }
+
+    return (
+      [
+        for (final identity in identities)
+          BackupRecord(
+            scope: BackupScope.identity,
+            key: identity.key,
+            value: {'name': identity.name, 'address': identity.address},
+            stamp: engine.stamp(),
+          ),
+      ],
+      said,
+    );
+  }
+
+  /// Accepts that [key] is another name for one of this device's providers.
+  ///
+  /// The watermarks go with it. Every chunk is still in the bucket and no
+  /// chunk is ever rewritten, so forgetting how far this device had read is
+  /// what makes this recover the history that crossed before anybody knew the
+  /// two belonged together — rather than only fixing what happens next.
+  Future<void> link({
+    required String key,
+    required int sourceId,
+    String? label,
+  }) async {
+    await db.linkProvider(key: key, sourceId: sourceId, label: label);
+    await db.clearPreference(_watermarkPreference);
+    await run();
   }
 
   /// The key for the configured folder, from the keystore where possible.
@@ -166,6 +244,14 @@ class BackupSync {
       if (received > 0) 'applied $applied',
     ];
     if (received > 0 && applied == 0) {
+      if (unlinked.isNotEmpty) {
+        final waiting = unlinked.first;
+        final named = waiting.name ?? 'a provider';
+        final at = waiting.address == null ? '' : ' at ${waiting.address}';
+        return '${parts.join(', ')}. They are for $named$at, which is not one '
+            'this device holds under that address. If it is the same account, '
+            'link it below.';
+      }
       return '${parts.join(', ')}. Nothing was applied, which means those '
           'records belong to a provider this device does not have — compare '
           'the codes below with the other device.';

@@ -36,10 +36,14 @@ class FakeFetcher implements CatalogueFetcher {
     this.guideBatches = const [],
     this.failOn = const {},
     this.fatalOn = const {},
+    this.reportedAddress,
   });
 
   @override
   final Set<SyncStage> stages;
+
+  @override
+  final String? reportedAddress;
 
   final List<List<ChannelsCompanion>> channelBatches;
   final List<List<MoviesCompanion>> movieBatches;

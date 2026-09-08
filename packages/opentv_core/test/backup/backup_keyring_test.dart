@@ -434,6 +434,98 @@ void main() {
       );
     });
   });
+
+  group('addresses a device is willing to answer to', () {
+    /// The same account, as another device would have keyed it after typing
+    /// the address with the other scheme.
+    BackupSecret guess({bool fillable = false}) => BackupSecret(
+          id: BackupSecret.providerId('variant-key'),
+          secret: providerSecretMaterial(
+            providerKey: 'variant-key',
+            username: 'viewer',
+            password: 'hunter2',
+          ),
+          fillable: fillable,
+        );
+
+    test('one of them opens a folder claimed under it', () async {
+      // The television was set up on https and the phone on http, so the
+      // phone's own key names a slot that does not exist and the only slot
+      // there is one it has to be willing to try.
+      final onTv = await keyring.unlock(
+        store: store,
+        deviceId: 'tv',
+        secrets: [guess(fillable: true)],
+        random: seeded(),
+      );
+
+      final onPhone = await keyring.unlock(
+        store: store,
+        deviceId: 'phone',
+        secrets: [provider(), guess()],
+        random: seeded(),
+      );
+
+      expect(onPhone, onTv, reason: 'no phrase should have been needed');
+    });
+
+    test('a folder claimed while one of them is offered first still opens',
+        () async {
+      // The bid is sealed under a route this device goes by, so it cannot be
+      // opened with whichever secret happened to be first. Claiming a folder
+      // and then failing to open the bid just written is the shape of bug
+      // that reads as "another device claimed this" on an empty bucket.
+      final claimed = await keyring.unlock(
+        store: store,
+        deviceId: 'tv',
+        secrets: [guess(), provider()],
+        random: seeded(),
+      );
+
+      final again = await keyring.unlock(
+        store: store,
+        deviceId: 'tv',
+        secrets: [guess(), provider()],
+        random: seeded(),
+      );
+      expect(again, claimed);
+    });
+
+    test('and none of them leaves a slot behind', () async {
+      // A folder set up on a phrase, joined by a device that also holds a
+      // provider — the pass that exists to write slots for the routes that
+      // did not open one.
+      await keyring.unlock(
+        store: store,
+        deviceId: 'tv',
+        secrets: [phrase],
+        random: seeded(),
+      );
+      await keyring.unlock(
+        store: store,
+        deviceId: 'phone',
+        secrets: [provider(), guess(), phrase],
+        random: seeded(),
+      );
+
+      final slots = (await store.list(BackupKeyring.slotPrefix)).toList();
+
+      // Every slot is a way into the folder that somebody has to rotate one
+      // day. The provider this device is actually configured with earns one.
+      // An address it was merely willing to try must not: the bucket would
+      // fill with routes named after providers nobody has.
+      expect(
+        slots,
+        contains(contains(BackupSecret.providerId('abc123').replaceAll(':', '_'))),
+      );
+      expect(
+        slots,
+        isNot(contains(contains(
+          BackupSecret.providerId('variant-key').replaceAll(':', '_'),
+        ))),
+      );
+    });
+  });
 }
 
 /// A store where two callers both see an empty folder before either writes.

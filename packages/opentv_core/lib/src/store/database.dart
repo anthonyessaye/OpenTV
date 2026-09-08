@@ -32,6 +32,8 @@ part 'database.g.dart';
     SyncStages,
     Preferences,
     SyncOutbox,
+    ProviderAliases,
+    UnlinkedProviders,
   ],
 )
 class OpenTvDatabase extends _$OpenTvDatabase {
@@ -44,7 +46,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// upgrade that rebuilds a search index over a real catalogue is long
   /// enough that the viewer deserves to be told which of the two is
   /// happening.
-  static const latestSchema = 8;
+  static const latestSchema = 9;
 
   @override
   int get schemaVersion => latestSchema;
@@ -168,6 +170,21 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         ]) {
           await m.createIndex(index);
         }
+      }
+
+      // 9 is the sync learning that one provider does not always produce one
+      // key. `reportedUrl` is what the portal calls itself, which is the only
+      // part of an address two devices cannot type differently; the two
+      // tables hold what a viewer has said belongs together, and what turned
+      // up addressed to nobody.
+      //
+      // Nothing is backfilled. The reported address arrives on the next
+      // authentication, and until it does the derived variants cover the
+      // ordinary cases on their own.
+      if (from < 9) {
+        await m.addColumn(sources, sources.reportedUrl);
+        await m.createTable(providerAliases);
+        await m.createTable(unlinkedProviders);
       }
     },
     onCreate: (m) async {
@@ -831,7 +848,11 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       if (source == null) continue;
       records.add(BackupRecord(
         scope: row.scope,
-        key: '${providerKey(source.url, source.username)}/${row.localKey}',
+        key: '${providerWriteKey(
+          url: source.url,
+          username: source.username,
+          reportedUrl: source.reportedUrl,
+        )}/${row.localKey}',
         value: row.payload == null
             ? null
             : (jsonDecode(row.payload!) as Map).cast<String, Object?>(),
@@ -858,18 +879,43 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// Nothing applied here is queued back. Two devices that echoed each
   /// other's writes would hand the same position back and forth for as long
   /// as both were running.
-  Future<int> applyBackupRecords(Iterable<BackupRecord> records) async {
-    final byKey = {
-      for (final source in await allSources())
-        providerKey(source.url, source.username): source.id,
-    };
+  Future<int> applyBackupRecords(
+    Iterable<BackupRecord> records, {
+    DateTime? at,
+  }) async {
+    final byKey = await providerKeyMap();
+
+    // What arrived for a provider this device could not place, and whatever
+    // the device that wrote it called that provider. Both are collected and
+    // dealt with after the loop, because an identity record may sit anywhere
+    // among the records it explains.
+    final unmatched = <String, int>{};
+    final announced = <String, ({String? name, String? address})>{};
 
     var changed = 0;
     for (final record in records) {
+      // Not about an item, so it has no item key to split.
+      if (record.scope == BackupScope.identity) {
+        final value = record.value;
+        if (value != null) {
+          announced[record.key] = (
+            name: value['name'] as String?,
+            address: value['address'] as String?,
+          );
+        }
+        continue;
+      }
+
       final parts = record.key.split('/');
       if (parts.length != 3) continue;
       final sourceId = byKey[parts[0]];
-      if (sourceId == null) continue;
+      if (sourceId == null) {
+        // Kept rather than dropped where it was found. A record for an
+        // unknown provider is the commonest way this feature does nothing,
+        // and dropping it silently is what made that invisible.
+        unmatched[parts[0]] = (unmatched[parts[0]] ?? 0) + 1;
+        continue;
+      }
 
       final kind = ItemKind.values.asNameMap()[parts[1]];
       if (kind == null) continue;
@@ -925,8 +971,119 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           continue;
       }
     }
+
+    await _noteUnlinked(
+      counts: unmatched,
+      announced: announced,
+      known: byKey.keys,
+      at: at ?? DateTime.now().toUtc(),
+    );
     return changed;
   }
+
+  /// Every provider key this device will answer to, and the source behind it.
+  ///
+  /// Canonical keys are laid down first and alone. A variant must never
+  /// shadow a source that genuinely writes under that key: two providers on
+  /// one host — the same panel bought twice, which happens — would otherwise
+  /// have one of them absorb the other's history.
+  Future<Map<String, int>> providerKeyMap() async {
+    final sources = await allSources();
+    final byKey = <String, int>{};
+    for (final source in sources) {
+      byKey[providerKey(source.url, source.username)] = source.id;
+    }
+
+    final aliasesFor = <int, List<String>>{};
+    for (final alias in await select(providerAliases).get()) {
+      (aliasesFor[alias.sourceId] ??= []).add(alias.providerKey);
+    }
+
+    for (final source in sources) {
+      for (final key in providerKeyCandidates(
+        url: source.url,
+        username: source.username,
+        reportedUrl: source.reportedUrl,
+        aliases: aliasesFor[source.id] ?? const [],
+      )) {
+        byKey.putIfAbsent(key, () => source.id);
+      }
+    }
+    return byKey;
+  }
+
+  Future<void> _noteUnlinked({
+    required Map<String, int> counts,
+    required Map<String, ({String? name, String? address})> announced,
+    required Iterable<String> known,
+    required DateTime at,
+  }) async {
+    // A key this device now answers to is not waiting on anybody. This is how
+    // an entry clears itself once the portal reports its own address, or once
+    // the addresses are made to agree.
+    await (delete(unlinkedProviders)
+          ..where((u) => u.providerKey.isIn(known.toList())))
+        .go();
+
+    for (final entry in counts.entries) {
+      final held = await (select(unlinkedProviders)
+            ..where((u) => u.providerKey.equals(entry.key)))
+          .getSingleOrNull();
+      final said = announced[entry.key];
+      await into(unlinkedProviders).insertOnConflictUpdate(
+        UnlinkedProvidersCompanion.insert(
+          providerKey: entry.key,
+          name: Value(said?.name ?? held?.name),
+          address: Value(said?.address ?? held?.address),
+          records: Value((held?.records ?? 0) + entry.value),
+          seenAt: at,
+        ),
+      );
+    }
+  }
+
+  /// Providers another device is syncing that this one could not place.
+  Future<List<UnlinkedProvider>> unlinkedProvidersSeen() =>
+      (select(unlinkedProviders)
+            ..orderBy([(u) => OrderingTerm.desc(u.records)]))
+          .get();
+
+  /// Records that [key] is one of [sourceId]'s names.
+  ///
+  /// The caller resets that peer's watermark afterwards. The chunks are still
+  /// in the bucket and immutable, so re-reading them applies a history that
+  /// was written before anybody knew the two belonged together — which is the
+  /// difference between fixing this and fixing it from now on.
+  Future<void> linkProvider({
+    required String key,
+    required int sourceId,
+    String? label,
+    DateTime? at,
+  }) async {
+    await into(providerAliases).insertOnConflictUpdate(
+      ProviderAliasesCompanion.insert(
+        providerKey: key,
+        sourceId: sourceId,
+        label: Value(label),
+        createdAt: at ?? DateTime.now().toUtc(),
+      ),
+    );
+    await (delete(unlinkedProviders)..where((u) => u.providerKey.equals(key)))
+        .go();
+  }
+
+  /// Stops answering to [key], and forgets it was ever offered.
+  Future<void> unlinkProvider(String key) async {
+    await (delete(providerAliases)..where((a) => a.providerKey.equals(key)))
+        .go();
+    await (delete(unlinkedProviders)..where((u) => u.providerKey.equals(key)))
+        .go();
+  }
+
+  /// What the portal said its own address was.
+  Future<void> setSourceReportedUrl(int sourceId, String url) =>
+      (update(sources)..where((s) => s.id.equals(sourceId)))
+          .write(SourcesCompanion(reportedUrl: Value(url)));
 
   static List<T> _rankByPrefix<T>(
     List<T> rows,

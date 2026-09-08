@@ -63,6 +63,17 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, Source> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _reportedUrlMeta = const VerificationMeta(
+    'reportedUrl',
+  );
+  @override
+  late final GeneratedColumn<String> reportedUrl = GeneratedColumn<String>(
+    'reported_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _credentialRefMeta = const VerificationMeta(
     'credentialRef',
   );
@@ -139,6 +150,7 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, Source> {
     kind,
     url,
     username,
+    reportedUrl,
     credentialRef,
     epgUrl,
     enabled,
@@ -181,6 +193,15 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, Source> {
       context.handle(
         _usernameMeta,
         username.isAcceptableOrUnknown(data['username']!, _usernameMeta),
+      );
+    }
+    if (data.containsKey('reported_url')) {
+      context.handle(
+        _reportedUrlMeta,
+        reportedUrl.isAcceptableOrUnknown(
+          data['reported_url']!,
+          _reportedUrlMeta,
+        ),
       );
     }
     if (data.containsKey('credential_ref')) {
@@ -258,6 +279,10 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, Source> {
         DriftSqlType.string,
         data['${effectivePrefix}username'],
       ),
+      reportedUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reported_url'],
+      ),
       credentialRef: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}credential_ref'],
@@ -304,6 +329,16 @@ class Source extends DataClass implements Insertable<Source> {
   final String url;
   final String? username;
 
+  /// What the portal calls itself, as it reported on the last authentication.
+  ///
+  /// Xtream's `server_info` block carries the panel's own address, which is
+  /// the one thing about a provider that two devices cannot type differently.
+  /// Kept beside the typed address rather than replacing it: not every panel
+  /// fills it in, some report an address only reachable from inside their own
+  /// network, and it changes when a provider migrates. It widens what the
+  /// sync will match, and is trusted for nothing else.
+  final String? reportedUrl;
+
   /// Keystore handle for the secret. Never the secret itself.
   final String? credentialRef;
 
@@ -320,6 +355,7 @@ class Source extends DataClass implements Insertable<Source> {
     required this.kind,
     required this.url,
     this.username,
+    this.reportedUrl,
     this.credentialRef,
     this.epgUrl,
     required this.enabled,
@@ -338,6 +374,9 @@ class Source extends DataClass implements Insertable<Source> {
     map['url'] = Variable<String>(url);
     if (!nullToAbsent || username != null) {
       map['username'] = Variable<String>(username);
+    }
+    if (!nullToAbsent || reportedUrl != null) {
+      map['reported_url'] = Variable<String>(reportedUrl);
     }
     if (!nullToAbsent || credentialRef != null) {
       map['credential_ref'] = Variable<String>(credentialRef);
@@ -363,6 +402,9 @@ class Source extends DataClass implements Insertable<Source> {
       username: username == null && nullToAbsent
           ? const Value.absent()
           : Value(username),
+      reportedUrl: reportedUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reportedUrl),
       credentialRef: credentialRef == null && nullToAbsent
           ? const Value.absent()
           : Value(credentialRef),
@@ -391,6 +433,7 @@ class Source extends DataClass implements Insertable<Source> {
       ),
       url: serializer.fromJson<String>(json['url']),
       username: serializer.fromJson<String?>(json['username']),
+      reportedUrl: serializer.fromJson<String?>(json['reportedUrl']),
       credentialRef: serializer.fromJson<String?>(json['credentialRef']),
       epgUrl: serializer.fromJson<String?>(json['epgUrl']),
       enabled: serializer.fromJson<bool>(json['enabled']),
@@ -410,6 +453,7 @@ class Source extends DataClass implements Insertable<Source> {
       ),
       'url': serializer.toJson<String>(url),
       'username': serializer.toJson<String?>(username),
+      'reportedUrl': serializer.toJson<String?>(reportedUrl),
       'credentialRef': serializer.toJson<String?>(credentialRef),
       'epgUrl': serializer.toJson<String?>(epgUrl),
       'enabled': serializer.toJson<bool>(enabled),
@@ -425,6 +469,7 @@ class Source extends DataClass implements Insertable<Source> {
     SourceKind? kind,
     String? url,
     Value<String?> username = const Value.absent(),
+    Value<String?> reportedUrl = const Value.absent(),
     Value<String?> credentialRef = const Value.absent(),
     Value<String?> epgUrl = const Value.absent(),
     bool? enabled,
@@ -437,6 +482,7 @@ class Source extends DataClass implements Insertable<Source> {
     kind: kind ?? this.kind,
     url: url ?? this.url,
     username: username.present ? username.value : this.username,
+    reportedUrl: reportedUrl.present ? reportedUrl.value : this.reportedUrl,
     credentialRef: credentialRef.present
         ? credentialRef.value
         : this.credentialRef,
@@ -453,6 +499,9 @@ class Source extends DataClass implements Insertable<Source> {
       kind: data.kind.present ? data.kind.value : this.kind,
       url: data.url.present ? data.url.value : this.url,
       username: data.username.present ? data.username.value : this.username,
+      reportedUrl: data.reportedUrl.present
+          ? data.reportedUrl.value
+          : this.reportedUrl,
       credentialRef: data.credentialRef.present
           ? data.credentialRef.value
           : this.credentialRef,
@@ -474,6 +523,7 @@ class Source extends DataClass implements Insertable<Source> {
           ..write('kind: $kind, ')
           ..write('url: $url, ')
           ..write('username: $username, ')
+          ..write('reportedUrl: $reportedUrl, ')
           ..write('credentialRef: $credentialRef, ')
           ..write('epgUrl: $epgUrl, ')
           ..write('enabled: $enabled, ')
@@ -491,6 +541,7 @@ class Source extends DataClass implements Insertable<Source> {
     kind,
     url,
     username,
+    reportedUrl,
     credentialRef,
     epgUrl,
     enabled,
@@ -507,6 +558,7 @@ class Source extends DataClass implements Insertable<Source> {
           other.kind == this.kind &&
           other.url == this.url &&
           other.username == this.username &&
+          other.reportedUrl == this.reportedUrl &&
           other.credentialRef == this.credentialRef &&
           other.epgUrl == this.epgUrl &&
           other.enabled == this.enabled &&
@@ -521,6 +573,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
   final Value<SourceKind> kind;
   final Value<String> url;
   final Value<String?> username;
+  final Value<String?> reportedUrl;
   final Value<String?> credentialRef;
   final Value<String?> epgUrl;
   final Value<bool> enabled;
@@ -533,6 +586,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     this.kind = const Value.absent(),
     this.url = const Value.absent(),
     this.username = const Value.absent(),
+    this.reportedUrl = const Value.absent(),
     this.credentialRef = const Value.absent(),
     this.epgUrl = const Value.absent(),
     this.enabled = const Value.absent(),
@@ -546,6 +600,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     required SourceKind kind,
     required String url,
     this.username = const Value.absent(),
+    this.reportedUrl = const Value.absent(),
     this.credentialRef = const Value.absent(),
     this.epgUrl = const Value.absent(),
     this.enabled = const Value.absent(),
@@ -562,6 +617,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     Expression<String>? kind,
     Expression<String>? url,
     Expression<String>? username,
+    Expression<String>? reportedUrl,
     Expression<String>? credentialRef,
     Expression<String>? epgUrl,
     Expression<bool>? enabled,
@@ -575,6 +631,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
       if (kind != null) 'kind': kind,
       if (url != null) 'url': url,
       if (username != null) 'username': username,
+      if (reportedUrl != null) 'reported_url': reportedUrl,
       if (credentialRef != null) 'credential_ref': credentialRef,
       if (epgUrl != null) 'epg_url': epgUrl,
       if (enabled != null) 'enabled': enabled,
@@ -590,6 +647,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     Value<SourceKind>? kind,
     Value<String>? url,
     Value<String?>? username,
+    Value<String?>? reportedUrl,
     Value<String?>? credentialRef,
     Value<String?>? epgUrl,
     Value<bool>? enabled,
@@ -603,6 +661,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
       kind: kind ?? this.kind,
       url: url ?? this.url,
       username: username ?? this.username,
+      reportedUrl: reportedUrl ?? this.reportedUrl,
       credentialRef: credentialRef ?? this.credentialRef,
       epgUrl: epgUrl ?? this.epgUrl,
       enabled: enabled ?? this.enabled,
@@ -631,6 +690,9 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     }
     if (username.present) {
       map['username'] = Variable<String>(username.value);
+    }
+    if (reportedUrl.present) {
+      map['reported_url'] = Variable<String>(reportedUrl.value);
     }
     if (credentialRef.present) {
       map['credential_ref'] = Variable<String>(credentialRef.value);
@@ -661,6 +723,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
           ..write('kind: $kind, ')
           ..write('url: $url, ')
           ..write('username: $username, ')
+          ..write('reportedUrl: $reportedUrl, ')
           ..write('credentialRef: $credentialRef, ')
           ..write('epgUrl: $epgUrl, ')
           ..write('enabled: $enabled, ')
@@ -7407,6 +7470,706 @@ class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
   }
 }
 
+class $ProviderAliasesTable extends ProviderAliases
+    with TableInfo<$ProviderAliasesTable, ProviderAliase> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProviderAliasesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _providerKeyMeta = const VerificationMeta(
+    'providerKey',
+  );
+  @override
+  late final GeneratedColumn<String> providerKey = GeneratedColumn<String>(
+    'provider_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<int> sourceId = GeneratedColumn<int>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    providerKey,
+    sourceId,
+    label,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'provider_aliases';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ProviderAliase> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('provider_key')) {
+      context.handle(
+        _providerKeyMeta,
+        providerKey.isAcceptableOrUnknown(
+          data['provider_key']!,
+          _providerKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_providerKeyMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {providerKey};
+  @override
+  ProviderAliase map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProviderAliase(
+      providerKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}provider_key'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_id'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ProviderAliasesTable createAlias(String alias) {
+    return $ProviderAliasesTable(attachedDatabase, alias);
+  }
+}
+
+class ProviderAliase extends DataClass implements Insertable<ProviderAliase> {
+  /// The key as the other device wrote it.
+  final String providerKey;
+  final int sourceId;
+
+  /// What the other device called it, kept so the link can be shown back in
+  /// the words it was offered in.
+  final String? label;
+  final DateTime createdAt;
+  const ProviderAliase({
+    required this.providerKey,
+    required this.sourceId,
+    this.label,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['provider_key'] = Variable<String>(providerKey);
+    map['source_id'] = Variable<int>(sourceId);
+    if (!nullToAbsent || label != null) {
+      map['label'] = Variable<String>(label);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ProviderAliasesCompanion toCompanion(bool nullToAbsent) {
+    return ProviderAliasesCompanion(
+      providerKey: Value(providerKey),
+      sourceId: Value(sourceId),
+      label: label == null && nullToAbsent
+          ? const Value.absent()
+          : Value(label),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ProviderAliase.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProviderAliase(
+      providerKey: serializer.fromJson<String>(json['providerKey']),
+      sourceId: serializer.fromJson<int>(json['sourceId']),
+      label: serializer.fromJson<String?>(json['label']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'providerKey': serializer.toJson<String>(providerKey),
+      'sourceId': serializer.toJson<int>(sourceId),
+      'label': serializer.toJson<String?>(label),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ProviderAliase copyWith({
+    String? providerKey,
+    int? sourceId,
+    Value<String?> label = const Value.absent(),
+    DateTime? createdAt,
+  }) => ProviderAliase(
+    providerKey: providerKey ?? this.providerKey,
+    sourceId: sourceId ?? this.sourceId,
+    label: label.present ? label.value : this.label,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  ProviderAliase copyWithCompanion(ProviderAliasesCompanion data) {
+    return ProviderAliase(
+      providerKey: data.providerKey.present
+          ? data.providerKey.value
+          : this.providerKey,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      label: data.label.present ? data.label.value : this.label,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProviderAliase(')
+          ..write('providerKey: $providerKey, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('label: $label, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(providerKey, sourceId, label, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProviderAliase &&
+          other.providerKey == this.providerKey &&
+          other.sourceId == this.sourceId &&
+          other.label == this.label &&
+          other.createdAt == this.createdAt);
+}
+
+class ProviderAliasesCompanion extends UpdateCompanion<ProviderAliase> {
+  final Value<String> providerKey;
+  final Value<int> sourceId;
+  final Value<String?> label;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const ProviderAliasesCompanion({
+    this.providerKey = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.label = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProviderAliasesCompanion.insert({
+    required String providerKey,
+    required int sourceId,
+    this.label = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : providerKey = Value(providerKey),
+       sourceId = Value(sourceId),
+       createdAt = Value(createdAt);
+  static Insertable<ProviderAliase> custom({
+    Expression<String>? providerKey,
+    Expression<int>? sourceId,
+    Expression<String>? label,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (providerKey != null) 'provider_key': providerKey,
+      if (sourceId != null) 'source_id': sourceId,
+      if (label != null) 'label': label,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProviderAliasesCompanion copyWith({
+    Value<String>? providerKey,
+    Value<int>? sourceId,
+    Value<String?>? label,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return ProviderAliasesCompanion(
+      providerKey: providerKey ?? this.providerKey,
+      sourceId: sourceId ?? this.sourceId,
+      label: label ?? this.label,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (providerKey.present) {
+      map['provider_key'] = Variable<String>(providerKey.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<int>(sourceId.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProviderAliasesCompanion(')
+          ..write('providerKey: $providerKey, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('label: $label, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $UnlinkedProvidersTable extends UnlinkedProviders
+    with TableInfo<$UnlinkedProvidersTable, UnlinkedProvider> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $UnlinkedProvidersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _providerKeyMeta = const VerificationMeta(
+    'providerKey',
+  );
+  @override
+  late final GeneratedColumn<String> providerKey = GeneratedColumn<String>(
+    'provider_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _addressMeta = const VerificationMeta(
+    'address',
+  );
+  @override
+  late final GeneratedColumn<String> address = GeneratedColumn<String>(
+    'address',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _recordsMeta = const VerificationMeta(
+    'records',
+  );
+  @override
+  late final GeneratedColumn<int> records = GeneratedColumn<int>(
+    'records',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _seenAtMeta = const VerificationMeta('seenAt');
+  @override
+  late final GeneratedColumn<DateTime> seenAt = GeneratedColumn<DateTime>(
+    'seen_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    providerKey,
+    name,
+    address,
+    records,
+    seenAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'unlinked_providers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<UnlinkedProvider> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('provider_key')) {
+      context.handle(
+        _providerKeyMeta,
+        providerKey.isAcceptableOrUnknown(
+          data['provider_key']!,
+          _providerKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_providerKeyMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    }
+    if (data.containsKey('address')) {
+      context.handle(
+        _addressMeta,
+        address.isAcceptableOrUnknown(data['address']!, _addressMeta),
+      );
+    }
+    if (data.containsKey('records')) {
+      context.handle(
+        _recordsMeta,
+        records.isAcceptableOrUnknown(data['records']!, _recordsMeta),
+      );
+    }
+    if (data.containsKey('seen_at')) {
+      context.handle(
+        _seenAtMeta,
+        seenAt.isAcceptableOrUnknown(data['seen_at']!, _seenAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_seenAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {providerKey};
+  @override
+  UnlinkedProvider map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return UnlinkedProvider(
+      providerKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}provider_key'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      ),
+      address: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}address'],
+      ),
+      records: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}records'],
+      )!,
+      seenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}seen_at'],
+      )!,
+    );
+  }
+
+  @override
+  $UnlinkedProvidersTable createAlias(String alias) {
+    return $UnlinkedProvidersTable(attachedDatabase, alias);
+  }
+}
+
+class UnlinkedProvider extends DataClass
+    implements Insertable<UnlinkedProvider> {
+  final String providerKey;
+
+  /// What the device that wrote it calls the provider, when it said.
+  final String? name;
+  final String? address;
+
+  /// How many records have arrived for it. A count is the difference between
+  /// "something is misconfigured" and "your whole history is over there".
+  final int records;
+  final DateTime seenAt;
+  const UnlinkedProvider({
+    required this.providerKey,
+    this.name,
+    this.address,
+    required this.records,
+    required this.seenAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['provider_key'] = Variable<String>(providerKey);
+    if (!nullToAbsent || name != null) {
+      map['name'] = Variable<String>(name);
+    }
+    if (!nullToAbsent || address != null) {
+      map['address'] = Variable<String>(address);
+    }
+    map['records'] = Variable<int>(records);
+    map['seen_at'] = Variable<DateTime>(seenAt);
+    return map;
+  }
+
+  UnlinkedProvidersCompanion toCompanion(bool nullToAbsent) {
+    return UnlinkedProvidersCompanion(
+      providerKey: Value(providerKey),
+      name: name == null && nullToAbsent ? const Value.absent() : Value(name),
+      address: address == null && nullToAbsent
+          ? const Value.absent()
+          : Value(address),
+      records: Value(records),
+      seenAt: Value(seenAt),
+    );
+  }
+
+  factory UnlinkedProvider.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return UnlinkedProvider(
+      providerKey: serializer.fromJson<String>(json['providerKey']),
+      name: serializer.fromJson<String?>(json['name']),
+      address: serializer.fromJson<String?>(json['address']),
+      records: serializer.fromJson<int>(json['records']),
+      seenAt: serializer.fromJson<DateTime>(json['seenAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'providerKey': serializer.toJson<String>(providerKey),
+      'name': serializer.toJson<String?>(name),
+      'address': serializer.toJson<String?>(address),
+      'records': serializer.toJson<int>(records),
+      'seenAt': serializer.toJson<DateTime>(seenAt),
+    };
+  }
+
+  UnlinkedProvider copyWith({
+    String? providerKey,
+    Value<String?> name = const Value.absent(),
+    Value<String?> address = const Value.absent(),
+    int? records,
+    DateTime? seenAt,
+  }) => UnlinkedProvider(
+    providerKey: providerKey ?? this.providerKey,
+    name: name.present ? name.value : this.name,
+    address: address.present ? address.value : this.address,
+    records: records ?? this.records,
+    seenAt: seenAt ?? this.seenAt,
+  );
+  UnlinkedProvider copyWithCompanion(UnlinkedProvidersCompanion data) {
+    return UnlinkedProvider(
+      providerKey: data.providerKey.present
+          ? data.providerKey.value
+          : this.providerKey,
+      name: data.name.present ? data.name.value : this.name,
+      address: data.address.present ? data.address.value : this.address,
+      records: data.records.present ? data.records.value : this.records,
+      seenAt: data.seenAt.present ? data.seenAt.value : this.seenAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UnlinkedProvider(')
+          ..write('providerKey: $providerKey, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('records: $records, ')
+          ..write('seenAt: $seenAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(providerKey, name, address, records, seenAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UnlinkedProvider &&
+          other.providerKey == this.providerKey &&
+          other.name == this.name &&
+          other.address == this.address &&
+          other.records == this.records &&
+          other.seenAt == this.seenAt);
+}
+
+class UnlinkedProvidersCompanion extends UpdateCompanion<UnlinkedProvider> {
+  final Value<String> providerKey;
+  final Value<String?> name;
+  final Value<String?> address;
+  final Value<int> records;
+  final Value<DateTime> seenAt;
+  final Value<int> rowid;
+  const UnlinkedProvidersCompanion({
+    this.providerKey = const Value.absent(),
+    this.name = const Value.absent(),
+    this.address = const Value.absent(),
+    this.records = const Value.absent(),
+    this.seenAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  UnlinkedProvidersCompanion.insert({
+    required String providerKey,
+    this.name = const Value.absent(),
+    this.address = const Value.absent(),
+    this.records = const Value.absent(),
+    required DateTime seenAt,
+    this.rowid = const Value.absent(),
+  }) : providerKey = Value(providerKey),
+       seenAt = Value(seenAt);
+  static Insertable<UnlinkedProvider> custom({
+    Expression<String>? providerKey,
+    Expression<String>? name,
+    Expression<String>? address,
+    Expression<int>? records,
+    Expression<DateTime>? seenAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (providerKey != null) 'provider_key': providerKey,
+      if (name != null) 'name': name,
+      if (address != null) 'address': address,
+      if (records != null) 'records': records,
+      if (seenAt != null) 'seen_at': seenAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  UnlinkedProvidersCompanion copyWith({
+    Value<String>? providerKey,
+    Value<String?>? name,
+    Value<String?>? address,
+    Value<int>? records,
+    Value<DateTime>? seenAt,
+    Value<int>? rowid,
+  }) {
+    return UnlinkedProvidersCompanion(
+      providerKey: providerKey ?? this.providerKey,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      records: records ?? this.records,
+      seenAt: seenAt ?? this.seenAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (providerKey.present) {
+      map['provider_key'] = Variable<String>(providerKey.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (address.present) {
+      map['address'] = Variable<String>(address.value);
+    }
+    if (records.present) {
+      map['records'] = Variable<int>(records.value);
+    }
+    if (seenAt.present) {
+      map['seen_at'] = Variable<DateTime>(seenAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UnlinkedProvidersCompanion(')
+          ..write('providerKey: $providerKey, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('records: $records, ')
+          ..write('seenAt: $seenAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$OpenTvDatabase extends GeneratedDatabase {
   _$OpenTvDatabase(QueryExecutor e) : super(e);
   $OpenTvDatabaseManager get managers => $OpenTvDatabaseManager(this);
@@ -7423,6 +8186,11 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
   late final $SyncStagesTable syncStages = $SyncStagesTable(this);
   late final $PreferencesTable preferences = $PreferencesTable(this);
   late final $SyncOutboxTable syncOutbox = $SyncOutboxTable(this);
+  late final $ProviderAliasesTable providerAliases = $ProviderAliasesTable(
+    this,
+  );
+  late final $UnlinkedProvidersTable unlinkedProviders =
+      $UnlinkedProvidersTable(this);
   late final Index categorySourceKind = Index(
     'category_source_kind',
     'CREATE INDEX category_source_kind ON categories (source_id, kind)',
@@ -7541,6 +8309,8 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
     syncStages,
     preferences,
     syncOutbox,
+    providerAliases,
+    unlinkedProviders,
     categorySourceKind,
     channelSourceCategory,
     channelSearch,
@@ -7579,6 +8349,7 @@ typedef $$SourcesTableCreateCompanionBuilder =
       required SourceKind kind,
       required String url,
       Value<String?> username,
+      Value<String?> reportedUrl,
       Value<String?> credentialRef,
       Value<String?> epgUrl,
       Value<bool> enabled,
@@ -7593,6 +8364,7 @@ typedef $$SourcesTableUpdateCompanionBuilder =
       Value<SourceKind> kind,
       Value<String> url,
       Value<String?> username,
+      Value<String?> reportedUrl,
       Value<String?> credentialRef,
       Value<String?> epgUrl,
       Value<bool> enabled,
@@ -7633,6 +8405,11 @@ class $$SourcesTableFilterComposer
 
   ColumnFilters<String> get username => $composableBuilder(
     column: $table.username,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reportedUrl => $composableBuilder(
+    column: $table.reportedUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7701,6 +8478,11 @@ class $$SourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get reportedUrl => $composableBuilder(
+    column: $table.reportedUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get credentialRef => $composableBuilder(
     column: $table.credentialRef,
     builder: (column) => ColumnOrderings(column),
@@ -7755,6 +8537,11 @@ class $$SourcesTableAnnotationComposer
 
   GeneratedColumn<String> get username =>
       $composableBuilder(column: $table.username, builder: (column) => column);
+
+  GeneratedColumn<String> get reportedUrl => $composableBuilder(
+    column: $table.reportedUrl,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get credentialRef => $composableBuilder(
     column: $table.credentialRef,
@@ -7812,6 +8599,7 @@ class $$SourcesTableTableManager
                 Value<SourceKind> kind = const Value.absent(),
                 Value<String> url = const Value.absent(),
                 Value<String?> username = const Value.absent(),
+                Value<String?> reportedUrl = const Value.absent(),
                 Value<String?> credentialRef = const Value.absent(),
                 Value<String?> epgUrl = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
@@ -7824,6 +8612,7 @@ class $$SourcesTableTableManager
                 kind: kind,
                 url: url,
                 username: username,
+                reportedUrl: reportedUrl,
                 credentialRef: credentialRef,
                 epgUrl: epgUrl,
                 enabled: enabled,
@@ -7838,6 +8627,7 @@ class $$SourcesTableTableManager
                 required SourceKind kind,
                 required String url,
                 Value<String?> username = const Value.absent(),
+                Value<String?> reportedUrl = const Value.absent(),
                 Value<String?> credentialRef = const Value.absent(),
                 Value<String?> epgUrl = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
@@ -7850,6 +8640,7 @@ class $$SourcesTableTableManager
                 kind: kind,
                 url: url,
                 username: username,
+                reportedUrl: reportedUrl,
                 credentialRef: credentialRef,
                 epgUrl: epgUrl,
                 enabled: enabled,
@@ -11143,6 +11934,410 @@ typedef $$SyncOutboxTableProcessedTableManager =
       SyncOutboxData,
       PrefetchHooks Function()
     >;
+typedef $$ProviderAliasesTableCreateCompanionBuilder =
+    ProviderAliasesCompanion Function({
+      required String providerKey,
+      required int sourceId,
+      Value<String?> label,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$ProviderAliasesTableUpdateCompanionBuilder =
+    ProviderAliasesCompanion Function({
+      Value<String> providerKey,
+      Value<int> sourceId,
+      Value<String?> label,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$ProviderAliasesTableFilterComposer
+    extends Composer<_$OpenTvDatabase, $ProviderAliasesTable> {
+  $$ProviderAliasesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get providerKey => $composableBuilder(
+    column: $table.providerKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ProviderAliasesTableOrderingComposer
+    extends Composer<_$OpenTvDatabase, $ProviderAliasesTable> {
+  $$ProviderAliasesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get providerKey => $composableBuilder(
+    column: $table.providerKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ProviderAliasesTableAnnotationComposer
+    extends Composer<_$OpenTvDatabase, $ProviderAliasesTable> {
+  $$ProviderAliasesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get providerKey => $composableBuilder(
+    column: $table.providerKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ProviderAliasesTableTableManager
+    extends
+        RootTableManager<
+          _$OpenTvDatabase,
+          $ProviderAliasesTable,
+          ProviderAliase,
+          $$ProviderAliasesTableFilterComposer,
+          $$ProviderAliasesTableOrderingComposer,
+          $$ProviderAliasesTableAnnotationComposer,
+          $$ProviderAliasesTableCreateCompanionBuilder,
+          $$ProviderAliasesTableUpdateCompanionBuilder,
+          (
+            ProviderAliase,
+            BaseReferences<
+              _$OpenTvDatabase,
+              $ProviderAliasesTable,
+              ProviderAliase
+            >,
+          ),
+          ProviderAliase,
+          PrefetchHooks Function()
+        > {
+  $$ProviderAliasesTableTableManager(
+    _$OpenTvDatabase db,
+    $ProviderAliasesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProviderAliasesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProviderAliasesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProviderAliasesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> providerKey = const Value.absent(),
+                Value<int> sourceId = const Value.absent(),
+                Value<String?> label = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ProviderAliasesCompanion(
+                providerKey: providerKey,
+                sourceId: sourceId,
+                label: label,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String providerKey,
+                required int sourceId,
+                Value<String?> label = const Value.absent(),
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ProviderAliasesCompanion.insert(
+                providerKey: providerKey,
+                sourceId: sourceId,
+                label: label,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ProviderAliasesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$OpenTvDatabase,
+      $ProviderAliasesTable,
+      ProviderAliase,
+      $$ProviderAliasesTableFilterComposer,
+      $$ProviderAliasesTableOrderingComposer,
+      $$ProviderAliasesTableAnnotationComposer,
+      $$ProviderAliasesTableCreateCompanionBuilder,
+      $$ProviderAliasesTableUpdateCompanionBuilder,
+      (
+        ProviderAliase,
+        BaseReferences<_$OpenTvDatabase, $ProviderAliasesTable, ProviderAliase>,
+      ),
+      ProviderAliase,
+      PrefetchHooks Function()
+    >;
+typedef $$UnlinkedProvidersTableCreateCompanionBuilder =
+    UnlinkedProvidersCompanion Function({
+      required String providerKey,
+      Value<String?> name,
+      Value<String?> address,
+      Value<int> records,
+      required DateTime seenAt,
+      Value<int> rowid,
+    });
+typedef $$UnlinkedProvidersTableUpdateCompanionBuilder =
+    UnlinkedProvidersCompanion Function({
+      Value<String> providerKey,
+      Value<String?> name,
+      Value<String?> address,
+      Value<int> records,
+      Value<DateTime> seenAt,
+      Value<int> rowid,
+    });
+
+class $$UnlinkedProvidersTableFilterComposer
+    extends Composer<_$OpenTvDatabase, $UnlinkedProvidersTable> {
+  $$UnlinkedProvidersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get providerKey => $composableBuilder(
+    column: $table.providerKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get records => $composableBuilder(
+    column: $table.records,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get seenAt => $composableBuilder(
+    column: $table.seenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$UnlinkedProvidersTableOrderingComposer
+    extends Composer<_$OpenTvDatabase, $UnlinkedProvidersTable> {
+  $$UnlinkedProvidersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get providerKey => $composableBuilder(
+    column: $table.providerKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get records => $composableBuilder(
+    column: $table.records,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get seenAt => $composableBuilder(
+    column: $table.seenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$UnlinkedProvidersTableAnnotationComposer
+    extends Composer<_$OpenTvDatabase, $UnlinkedProvidersTable> {
+  $$UnlinkedProvidersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get providerKey => $composableBuilder(
+    column: $table.providerKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get address =>
+      $composableBuilder(column: $table.address, builder: (column) => column);
+
+  GeneratedColumn<int> get records =>
+      $composableBuilder(column: $table.records, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get seenAt =>
+      $composableBuilder(column: $table.seenAt, builder: (column) => column);
+}
+
+class $$UnlinkedProvidersTableTableManager
+    extends
+        RootTableManager<
+          _$OpenTvDatabase,
+          $UnlinkedProvidersTable,
+          UnlinkedProvider,
+          $$UnlinkedProvidersTableFilterComposer,
+          $$UnlinkedProvidersTableOrderingComposer,
+          $$UnlinkedProvidersTableAnnotationComposer,
+          $$UnlinkedProvidersTableCreateCompanionBuilder,
+          $$UnlinkedProvidersTableUpdateCompanionBuilder,
+          (
+            UnlinkedProvider,
+            BaseReferences<
+              _$OpenTvDatabase,
+              $UnlinkedProvidersTable,
+              UnlinkedProvider
+            >,
+          ),
+          UnlinkedProvider,
+          PrefetchHooks Function()
+        > {
+  $$UnlinkedProvidersTableTableManager(
+    _$OpenTvDatabase db,
+    $UnlinkedProvidersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$UnlinkedProvidersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$UnlinkedProvidersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$UnlinkedProvidersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> providerKey = const Value.absent(),
+                Value<String?> name = const Value.absent(),
+                Value<String?> address = const Value.absent(),
+                Value<int> records = const Value.absent(),
+                Value<DateTime> seenAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => UnlinkedProvidersCompanion(
+                providerKey: providerKey,
+                name: name,
+                address: address,
+                records: records,
+                seenAt: seenAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String providerKey,
+                Value<String?> name = const Value.absent(),
+                Value<String?> address = const Value.absent(),
+                Value<int> records = const Value.absent(),
+                required DateTime seenAt,
+                Value<int> rowid = const Value.absent(),
+              }) => UnlinkedProvidersCompanion.insert(
+                providerKey: providerKey,
+                name: name,
+                address: address,
+                records: records,
+                seenAt: seenAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$UnlinkedProvidersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$OpenTvDatabase,
+      $UnlinkedProvidersTable,
+      UnlinkedProvider,
+      $$UnlinkedProvidersTableFilterComposer,
+      $$UnlinkedProvidersTableOrderingComposer,
+      $$UnlinkedProvidersTableAnnotationComposer,
+      $$UnlinkedProvidersTableCreateCompanionBuilder,
+      $$UnlinkedProvidersTableUpdateCompanionBuilder,
+      (
+        UnlinkedProvider,
+        BaseReferences<
+          _$OpenTvDatabase,
+          $UnlinkedProvidersTable,
+          UnlinkedProvider
+        >,
+      ),
+      UnlinkedProvider,
+      PrefetchHooks Function()
+    >;
 
 class $OpenTvDatabaseManager {
   final _$OpenTvDatabase _db;
@@ -11173,4 +12368,8 @@ class $OpenTvDatabaseManager {
       $$PreferencesTableTableManager(_db, _db.preferences);
   $$SyncOutboxTableTableManager get syncOutbox =>
       $$SyncOutboxTableTableManager(_db, _db.syncOutbox);
+  $$ProviderAliasesTableTableManager get providerAliases =>
+      $$ProviderAliasesTableTableManager(_db, _db.providerAliases);
+  $$UnlinkedProvidersTableTableManager get unlinkedProviders =>
+      $$UnlinkedProvidersTableTableManager(_db, _db.unlinkedProviders);
 }

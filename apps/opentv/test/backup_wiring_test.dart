@@ -92,6 +92,53 @@ void main() {
     });
   });
 
+  group('a phrase before a bucket', () {
+    final mobile = File('lib/mobile/mobile_backup.dart').readAsStringSync();
+
+    /// Where a screen puts its recovery phrase field, against its endpoint.
+    void expectPhraseFirst(String source, String screen) {
+      final phrase = source.indexOf("'Recovery phrase'");
+      final endpoint = source.indexOf("'Endpoint'");
+      expect(phrase, isNot(-1), reason: '$screen has no phrase field');
+      expect(endpoint, isNot(-1), reason: '$screen has no endpoint field');
+      expect(
+        phrase,
+        lessThan(endpoint),
+        reason: 'the phrase is what opens the folder, so it is asked for '
+            'before the bucket rather than after it — a folder claimed under '
+            'nothing but a provider password is the case with no way out',
+      );
+    }
+
+    test('the television asks for it first', () {
+      expectPhraseFirst(settings, 'the television');
+    });
+
+    test('and so does the phone', () {
+      expectPhraseFirst(mobile, 'the phone');
+    });
+
+    test('and neither will save a bucket without one', () {
+      // Not optional, because the provider password is only a shortcut past
+      // typing this. A device set up without a phrase cannot get back in when
+      // a provider reissues a password, and cannot let in a device whose own
+      // provider has not been added yet.
+      // The gate itself, not merely the word appearing somewhere in the
+      // panel: `!_hasPhrase` also reads the emphasis on the phrase button
+      // above, so a looser match passed with this removed entirely.
+      expect(
+        settings,
+        contains('_endpoint.isEmpty || _bucket.isEmpty || !_hasPhrase'),
+        reason: 'the television would save a bucket with no way back into it',
+      );
+      expect(
+        mobile,
+        contains('_busy || !_hasPhrase ? null : _save'),
+        reason: 'the phone would save a bucket with no way back into it',
+      );
+    });
+  });
+
   group('being asked for a recovery phrase', () {
     test('saving one on the television tries again with it', () {
       // A device turned away because its provider does not open the folder is

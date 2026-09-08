@@ -155,6 +155,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _regionNeeded = false;
   bool _checkingBackup = false;
   String? _backupNote;
+
+  /// Providers another device syncs that this one could not place.
+  List<UnlinkedProvider> _unlinked = const [];
+  bool _linking = false;
   bool _checking = false;
 
   XtreamAccount? _account;
@@ -963,6 +967,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // exactly the thing this screen exists to make visible.
       _backupNote = widget.sync?.failure;
     });
+    final waiting = await widget.db.unlinkedProvidersSeen();
+    if (mounted) setState(() => _unlinked = waiting);
     final identities = await _backup.providerIdentities();
     if (mounted) setState(() => _identities = identities);
   }
@@ -1033,6 +1039,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // received plenty and applied none are entirely different faults, and
       // "Synced" describes both.
       _backupNote = sync.summary;
+      // A pass is where a provider nobody could place turns up, so this is
+      // the moment the offer to link one can appear.
+      _unlinked = sync.unlinked;
     });
   }
 
@@ -1064,8 +1073,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _generatePhrase() {
     setState(() {
       _phrase = newBackupPhrase();
-      _backupNote = 'Write this down before saving it. It is the way back in '
-          'if your provider password changes.';
+      _backupNote = 'Write this down before saving it. It is the only way '
+          'back into the folder, and nobody can reissue it.';
+    });
+  }
+
+  /// Accepts that a provider another device syncs is one of this device's.
+  ///
+  /// Deliberately a viewer's decision rather than a guess. Two households
+  /// merged into one history is not undone by somebody noticing, where a
+  /// split one is — so the addresses go on screen and the answer is asked
+  /// for.
+  Future<void> _linkProvider(String key) async {
+    final sync = widget.sync;
+    if (sync == null) return;
+    setState(() {
+      _linking = true;
+      _backupNote = null;
+    });
+    await sync.link(key: key, sourceId: widget.active.id);
+    final waiting = await widget.db.unlinkedProvidersSeen();
+    if (!mounted) return;
+    setState(() {
+      _linking = false;
+      _unlinked = waiting;
+      _backupNote = sync.summary;
     });
   }
 
@@ -1229,6 +1261,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // reason for the column is that stacked fields do not traverse on their
     // own. Onboarding never hit this: it shows one field at a time.
     final rows = <Widget>[
+      // First, and not optional. The phrase is what opens the folder; the
+      // provider password is only a shortcut past typing it, and a device set
+      // up without one is a device that cannot get back in when a provider
+      // reissues a password — or when the next device is added before its
+      // provider is. Asked for before the bucket, because a folder claimed
+      // under nothing but a provider is the situation there is no way out of.
+      Padding(
+        padding: const EdgeInsets.only(bottom: OpenTvSpace.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Recovery phrase', style: OpenTvType.section),
+            const SizedBox(height: OpenTvSpace.xs),
+            Text(
+              _hasPhrase
+                  ? 'A phrase is set on this device. Use the same one on your '
+                      'other devices — it is what lets them read the same '
+                      'folder.'
+                  : 'This is what unlocks the folder, and the same one has to '
+                      'be set on every device. Write it down: nobody can '
+                      'reissue it, because nobody else has it — not us, and '
+                      'not the company holding the bucket.',
+              style: OpenTvType.bodyMuted,
+            ),
+            const SizedBox(height: OpenTvSpace.sm),
+            _field(
+              'Recovery phrase',
+              _phrase,
+              'A few unrelated words, or generate one',
+              (text) => setState(() => _phrase = text),
+            ),
+          ],
+        ),
+      ),
+      Row(
+        children: [
+          PlayerButton(
+            label: 'SAVE PHRASE',
+            emphasis: !_hasPhrase,
+            onSelect: _phrase.isEmpty ? null : _savePhrase,
+          ),
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(label: 'GENERATE', onSelect: _generatePhrase),
+        ],
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: OpenTvSpace.md),
+        child: Text('Where it goes', style: OpenTvType.section),
+      ),
       _field(
         'Endpoint',
         _endpoint,
@@ -1268,9 +1349,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           PlayerButton(
             label: 'SAVE',
-            emphasis: true,
-            onSelect:
-                _endpoint.isEmpty || _bucket.isEmpty ? null : _saveBackup,
+            emphasis: _hasPhrase,
+            onSelect: _endpoint.isEmpty || _bucket.isEmpty || !_hasPhrase
+                ? null
+                : _saveBackup,
           ),
           const SizedBox(width: OpenTvSpace.sm),
           PlayerButton(
@@ -1293,34 +1375,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: OpenTvType.body.copyWith(color: OpenTvColors.tally),
           ),
         ),
-      Padding(
-        padding: const EdgeInsets.only(top: OpenTvSpace.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Recovery phrase', style: OpenTvType.section),
-            const SizedBox(height: OpenTvSpace.xs),
-            Text(
-              _hasPhrase
-                  ? 'A phrase is set on this device. Use the same one on your '
-                      'other devices.'
-                  : 'Your devices normally open the folder with your provider '
-                      'password, and no phrase is needed. This is the way back '
-                      'in when that password changes — which providers do on '
-                      'renewal — and the only way in for a device that has no '
-                      'provider yet.',
-              style: OpenTvType.bodyMuted,
-            ),
-            const SizedBox(height: OpenTvSpace.sm),
-            _field(
-              'Recovery phrase',
-              _phrase,
-              'A few unrelated words, or generate one',
-              (text) => setState(() => _phrase = text),
-            ),
-          ],
-        ),
-      ),
       // What this device calls its providers, so two that ought to match can
       // be compared. The commonest way for this to do nothing is two devices
       // holding the same portal typed differently — a trailing slash, http
@@ -1353,24 +1407,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
-      Row(
-        children: [
-          // Nothing else on this screen says the sync has ever run. It runs
-          // when the app opens and when it leaves the foreground, which is
-          // exactly when nobody is looking at it.
-          PlayerButton(
-            label: _syncing ? 'SYNCING…' : 'SYNC NOW',
-            onSelect: widget.sync == null || _syncing ? null : _runSync,
+      // What another device is syncing that this one could not place. The
+      // derived variants cover an address typed with the other scheme, and
+      // the portal's own name covers two vanity addresses; neither covers a
+      // provider that genuinely moved. That last one is not something to
+      // guess at, so it is asked.
+      if (_unlinked.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: OpenTvSpace.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Waiting to be linked', style: OpenTvType.section),
+              const SizedBox(height: OpenTvSpace.xs),
+              Text(
+                'Another device is syncing a provider this one does not '
+                'recognise. If it is the same account under a different '
+                'address, linking it applies everything already in the folder '
+                'as well as what comes next.',
+                style: OpenTvType.bodyMuted,
+              ),
+            ],
           ),
-          const SizedBox(width: OpenTvSpace.sm),
-          PlayerButton(
-            label: 'SAVE PHRASE',
-            emphasis: true,
-            onSelect: _phrase.isEmpty ? null : _savePhrase,
+        ),
+      for (final waiting in _unlinked)
+        Padding(
+          padding: const EdgeInsets.only(top: OpenTvSpace.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${waiting.name ?? waiting.providerKey} — '
+                '${waiting.address ?? 'address not given'}   '
+                '(${waiting.records} records)',
+                style: OpenTvType.data,
+              ),
+              const SizedBox(height: OpenTvSpace.xs),
+              Row(
+                children: [
+                  PlayerButton(
+                    label: 'LINK TO ${widget.active.name.toUpperCase()}',
+                    onSelect: _linking
+                        ? null
+                        : () => _linkProvider(waiting.providerKey),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(width: OpenTvSpace.sm),
-          PlayerButton(label: 'GENERATE', onSelect: _generatePhrase),
-        ],
+        ),
+      Padding(
+        padding: const EdgeInsets.only(top: OpenTvSpace.md),
+        child: Row(
+          children: [
+            // Nothing else on this screen says the sync has ever run. It runs
+            // when the app opens and when it leaves the foreground, which is
+            // exactly when nobody is looking at it.
+            PlayerButton(
+              label: _syncing ? 'SYNCING…' : 'SYNC NOW',
+              onSelect: widget.sync == null || _syncing ? null : _runSync,
+            ),
+          ],
+        ),
       ),
     ];
 
