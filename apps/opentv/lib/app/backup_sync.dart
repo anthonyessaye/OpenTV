@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:opentv_core/opentv_core.dart';
 
 import 'backup_service.dart';
@@ -55,6 +55,25 @@ class BackupSync {
   /// Why the last attempt failed, or null when it did not.
   String? failure;
 
+  /// What the last pass actually moved.
+  ///
+  /// "Synced" is not a fact anybody can act on. These are: a pass that sent
+  /// nothing means this device queued nothing, and one that received plenty
+  /// and applied none means the records are addressed to a provider this
+  /// device does not have — two entirely different faults that look identical
+  /// from the outside.
+  int sent = 0;
+  int received = 0;
+  int applied = 0;
+
+  /// Bumped whenever records from elsewhere changed something here.
+  ///
+  /// A notifier rather than a callback, because the screens that show this
+  /// state are not the widget that owns the sync — a `setState` on the root
+  /// rebuilds them without their loaders running again, so what arrived sat
+  /// in the database until the next launch.
+  final revision = ValueNotifier<int>(0);
+
   /// Whether a folder is set up at all.
   Future<bool> get isConfigured async => (await backup.config()) != null;
 
@@ -83,6 +102,7 @@ class BackupSync {
       // phone should find it there, and a pass that pulled before pushing
       // would leave this device's own news until the next one.
       final outbox = await db.drainSyncOutbox(deviceId: engine.deviceId);
+      sent = outbox.records.length;
       if (!outbox.isEmpty) {
         await engine.push(outbox.records);
         // Only now, and never before: a failed upload would otherwise take
@@ -92,11 +112,16 @@ class BackupSync {
 
       final marks = await _watermarks();
       final pulled = await engine.pull(watermarks: marks);
+      received = pulled.records.length;
+      applied = 0;
       if (pulled.records.isNotEmpty) {
-        final applied = await db.applyBackupRecords(
+        applied = await db.applyBackupRecords(
           BackupEngine.merge(pulled.records).values,
         );
-        if (applied > 0) onApplied?.call();
+        if (applied > 0) {
+          revision.value++;
+          onApplied?.call();
+        }
       }
       await _saveWatermarks(pulled.watermarks);
 
@@ -126,6 +151,26 @@ class BackupSync {
     await host.writeSecret(dataKeyReference, base64.encode(key));
     await db.setPreference(_keyForPreference, fingerprint);
     return key;
+  }
+
+  /// What the last pass did, in a sentence.
+  String get summary {
+    if (failure != null) return failure!;
+    if (sent == 0 && received == 0) {
+      return 'Nothing to send and nothing waiting. Watch something and it '
+          'will go on the next pass.';
+    }
+    final parts = <String>[
+      'Sent $sent',
+      'received $received',
+      if (received > 0) 'applied $applied',
+    ];
+    if (received > 0 && applied == 0) {
+      return '${parts.join(', ')}. Nothing was applied, which means those '
+          'records belong to a provider this device does not have — compare '
+          'the codes below with the other device.';
+    }
+    return '${parts.join(', ')}.';
   }
 
   Future<Map<String, int>> _watermarks() async {

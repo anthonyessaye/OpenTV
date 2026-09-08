@@ -148,9 +148,7 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
     if (!mounted) return;
     setState(() {
       _busy = false;
-      _note = sync.failure ??
-          'Synced. This happens on its own when the app opens, when it is '
-              'left, and after something is watched.';
+      _note = sync.summary;
     });
   }
 

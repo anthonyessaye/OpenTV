@@ -671,6 +671,11 @@ class _MobileHomeState extends State<MobileHome> {
   @override
   void initState() {
     super.initState();
+    // What arrives from another device lands in the database, and these
+    // shelves were read at launch. Without listening, a position set on the
+    // television sat there unseen until the next launch — the sync worked and
+    // looked exactly as though it had not.
+    widget.sync?.revision.addListener(_refreshShelves);
     _loadRegions();
   }
 
@@ -687,6 +692,7 @@ class _MobileHomeState extends State<MobileHome> {
 
   @override
   void dispose() {
+    widget.sync?.revision.removeListener(_refreshShelves);
     _noticeTimer?.cancel();
     super.dispose();
   }

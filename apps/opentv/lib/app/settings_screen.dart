@@ -1029,9 +1029,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() {
       _syncing = false;
-      _backupNote = sync.failure ??
-          'Synced. This happens on its own when the app opens, when it is '
-              'left, and after something is watched.';
+      // What it moved, not that it ran. A pass that sent nothing and one that
+      // received plenty and applied none are entirely different faults, and
+      // "Synced" describes both.
+      _backupNote = sync.summary;
     });
   }
 

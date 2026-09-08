@@ -581,6 +581,18 @@ it is felt on a television. The result is cached in the keystore against a
 fingerprint of the bucket, so pointing the app at a different folder does not
 quietly reuse the old key against it.
 
+**A `setState` on the widget that owns the sync does not reload a shelf.**
+The home screens hold their lists in their own state, read once, so records
+arriving from another device landed in the database and stayed invisible
+until the next launch — the sync working and not working look identical.
+`BackupSync.revision` is a notifier both homes listen to.
+
+**"Synced" is not a fact anybody can act on.** A pass that sent nothing and a
+pass that received plenty and applied none are entirely different faults — the
+first means this device queued nothing, the second that the records belong to
+a provider it does not have — and one word describes both. The pass counts
+what it moved and says so.
+
 **Something has to tell the screen.** Records land in the database and the
 shelves were drawn from what was there at launch, so without `onApplied` the
 sync works and looks exactly as though it had not.

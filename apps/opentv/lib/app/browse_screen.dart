@@ -201,6 +201,13 @@ class _BrowseScreenState extends State<BrowseScreen> {
     super.initState();
     _readRegions().then((_) => _loadSection());
     _readTmdbKey();
+    // Same reason as the phone: what arrives from another device lands in the
+    // database, and these shelves were read at launch.
+    widget.sync?.revision.addListener(_reloadAfterSync);
+  }
+
+  void _reloadAfterSync() {
+    if (mounted) _loadSection();
   }
 
   /// Read before the first query rather than alongside it, or the first
@@ -213,6 +220,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   @override
   void dispose() {
+    widget.sync?.revision.removeListener(_reloadAfterSync);
     _transport.close();
     super.dispose();
   }

@@ -295,6 +295,90 @@ void main() {
     // And the region still comes out of the endpoint.
     expect(config.region, 'us-west-004');
   });
+
+  test('a pass says what it moved, not that it ran', () async {
+    // "Synced" describes a pass that sent nothing and a pass that received
+    // plenty and applied none equally well, and those are entirely different
+    // faults — the first means this device queued nothing, the second that
+    // the records belong to a provider it does not have.
+    final onTv = await addProvider(tvDb);
+    await addProvider(phoneDb, padding: 2);
+    await tvDb.recordPlayback(
+      sourceId: onTv,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 8, 20),
+      positionMs: 10,
+    );
+
+    final tvSync = syncFor(tvDb);
+    await tvSync.run();
+    expect(tvSync.sent, 1);
+    expect(tvSync.summary, contains('Sent 1'));
+
+    final phoneSync = syncFor(phoneDb);
+    await phoneSync.run();
+    expect(phoneSync.received, 1);
+    expect(phoneSync.applied, 1);
+  });
+
+  test('and says so plainly when nothing matched', () async {
+    // The failure a viewer cannot otherwise tell from working: records
+    // arrive, belong to another provider, and are skipped in silence.
+    final onTv = await addProvider(tvDb);
+    // A shared phrase, so the folder opens on both and the only thing that
+    // differs is which provider the records belong to. Without it the phone
+    // cannot get in at all, which is a different failure wearing the same
+    // symptom — and is what the first version of this test measured.
+    secrets['backup-phrase'] = 'marmalade harbour lantern';
+    await phoneDb.addSource(SourcesCompanion.insert(
+      name: 'Other',
+      kind: SourceKind.xtream,
+      url: 'http://elsewhere.example',
+      username: const Value('someone'),
+      credentialRef: const Value('other-password'),
+      createdAt: DateTime.utc(2026),
+    ));
+    secrets['other-password'] = 'different';
+    await tvDb.recordPlayback(
+      sourceId: onTv,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 8, 20),
+      positionMs: 10,
+    );
+    await syncFor(tvDb).run();
+
+    final phoneSync = syncFor(phoneDb);
+    await phoneSync.run();
+
+    expect(phoneSync.received, 1);
+    expect(phoneSync.applied, 0);
+    expect(phoneSync.summary, contains('provider this device does not have'));
+  });
+
+  test('and something landing tells the screens to read again', () async {
+    final onTv = await addProvider(tvDb);
+    await addProvider(phoneDb);
+    await tvDb.recordPlayback(
+      sourceId: onTv,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 8, 20),
+      positionMs: 10,
+    );
+    await syncFor(tvDb).run();
+
+    final phoneSync = syncFor(phoneDb);
+    var told = 0;
+    phoneSync.revision.addListener(() => told++);
+    await phoneSync.run();
+
+    // A setState on the widget that owns the sync rebuilds the shelves
+    // without their loaders running, so what arrived sat in the database
+    // until the next launch.
+    expect(told, 1);
+  });
 }
 
 /// A service whose folder is the store held in memory.
