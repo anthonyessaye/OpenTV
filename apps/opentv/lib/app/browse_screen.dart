@@ -867,6 +867,13 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
     await _openPlayer(playable, url, startAt: startAt, replace: false);
     if (mounted) await _loadSection();
+
+    // The player has closed, so the position is written and this is the
+    // moment there is something worth sending. Launch and backgrounding are
+    // the other two, and between them sits the whole of an evening's
+    // watching — a viewer who finishes an episode and picks up their phone
+    // should not have to close the app first.
+    unawaited(widget.sync?.run());
   }
 
   Future<void> _openPlayer(

@@ -224,6 +224,45 @@ void main() {
       reason: 'the queue was emptied by an upload that never happened',
     );
   });
+
+  test('a folder that was just set up gets written to, not waited on',
+      () async {
+    // The fault a viewer actually hit: a pass runs at launch and on leaving,
+    // and saving a bucket happens between the two. TEST connected, the bucket
+    // stayed empty, and nothing anywhere said why — nothing had gone wrong,
+    // it had simply not been asked yet.
+    //
+    // One pass on a configured folder must leave something behind even with
+    // nothing watched, because unlocking writes the keyring.
+    await addProvider(tvDb);
+    await syncFor(tvDb).run();
+
+    expect(
+      store.files.keys.where((path) => path.startsWith('keyring/')),
+      isNotEmpty,
+      reason: 'a first sync left the folder completely empty, which is '
+          'indistinguishable from never having run',
+    );
+  });
+
+  test('and what was watched reaches it', () async {
+    final onTv = await addProvider(tvDb);
+    await tvDb.recordPlayback(
+      sourceId: onTv,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 8, 20),
+      positionMs: 60000,
+    );
+
+    await syncFor(tvDb).run();
+
+    expect(
+      store.files.keys.where((path) => path.startsWith('devices/')),
+      isNotEmpty,
+      reason: 'the position was queued and never written',
+    );
+  });
 }
 
 /// A service whose folder is the store held in memory.

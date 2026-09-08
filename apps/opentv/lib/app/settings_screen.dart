@@ -958,6 +958,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _accessKey = '';
       _secretKey = '';
       _regionNeeded = _endpointNeedsRegion(settings?.endpoint.toString() ?? '');
+      // Whatever the last pass said, shown without anybody pressing
+      // anything. A sync that has been failing quietly since it was set up is
+      // exactly the thing this screen exists to make visible.
+      _backupNote = widget.sync?.failure;
     });
   }
 
@@ -983,8 +987,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _backupNote = _regionNeeded && _region.trim().isEmpty
           ? 'Saved. This endpoint does not say which region it is in, so that '
               'field has to be filled in too.'
-          : 'Saved.';
+          : 'Saved. Syncing…';
     });
+
+    // Straight away, rather than waiting for the next launch.
+    //
+    // A pass runs when the app opens and when it leaves the foreground, and
+    // saving a bucket happens between the two — so a viewer who set one up,
+    // pressed TEST, saw it connect and then looked in the bucket found it
+    // empty, with nothing anywhere saying why. Nothing had gone wrong; it had
+    // simply not been asked yet.
+    if (_regionNeeded && _region.trim().isEmpty) return;
+    await _runSync();
   }
 
   Future<void> _testBackup() async {
@@ -1002,20 +1016,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _syncing = false;
 
-  Future<void> _syncNow() async {
+  Future<void> _runSync() async {
     final sync = widget.sync;
     if (sync == null) return;
-    setState(() {
-      _syncing = true;
-      _backupNote = null;
-    });
+    setState(() => _syncing = true);
     await sync.run();
     if (!mounted) return;
     setState(() {
       _syncing = false;
       _backupNote = sync.failure ??
-          'Synced. This also happens when the app opens and when it is left, '
-              'so there is normally nothing to press.';
+          'Synced. This happens on its own when the app opens, when it is '
+              'left, and after something is watched.';
     });
   }
 
@@ -1305,7 +1316,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // exactly when nobody is looking at it.
           PlayerButton(
             label: _syncing ? 'SYNCING…' : 'SYNC NOW',
-            onSelect: widget.sync == null || _syncing ? null : _syncNow,
+            onSelect: widget.sync == null || _syncing ? null : _runSync,
           ),
           const SizedBox(width: OpenTvSpace.sm),
           PlayerButton(

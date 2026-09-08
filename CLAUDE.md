@@ -542,6 +542,13 @@ on every device that still remembered it. Draining does not clear it — the
 caller clears only once the records are written, or a failed upload takes the
 viewer's changes with it.
 
+**A sync runs at four moments, and three of them were missing.** It ran at
+launch and on leaving the foreground — and everything a viewer does happens
+between those two. A bucket set up mid-session stayed empty, TEST connected
+perfectly, and nothing anywhere said why: nothing had gone wrong, it had
+simply not been asked. Saving a folder now runs one, and so does closing the
+player, which is the moment there is news worth sending.
+
 **A sync pass may never throw.** No internet, a deleted bucket and rotated
 keys all arrive in `BackupSync.run`, and none of them is a reason for an app
 to stop working. The failure is kept and shown on the settings screen, which
