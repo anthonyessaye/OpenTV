@@ -266,6 +266,16 @@ working software in a screenshot. **If a feature is silent, grep both ends
 before redesigning either** — `grep -c` on the parameter name is usually
 enough to find it.
 
+**Browsing a category is a filter and a sort at once, and schema 8 exists
+because no index served both.** `movie_counts` filters and cannot order;
+`movie_name` orders and cannot filter. SQLite took the ordering one and walked
+the catalogue in name order discarding other categories until it had a
+screenful — **fast for the category holding a third of the films and ruinous
+for a small one, which is most of them.** Measured at 180,000 films: 2ms for
+the huge category, 354ms for a small one, in memory on a fast machine. The
+composite `(source_id, category_remote_id, name)` makes it 1ms. Note the
+shape: the cost is inverted from what anyone would test by hand.
+
 **Moving SQLite to its own isolate made every per-row query expensive.** A
 loop of sixty single-channel guide lookups was nearly free while the database
 ran on the isolate drawing the screen; afterwards each one is a round trip

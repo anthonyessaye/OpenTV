@@ -44,7 +44,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// upgrade that rebuilds a search index over a real catalogue is long
   /// enough that the viewer deserves to be told which of the two is
   /// happening.
-  static const latestSchema = 7;
+  static const latestSchema = 8;
 
   @override
   int get schemaVersion => latestSchema;
@@ -139,6 +139,36 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // could sync is not something the other devices are missing, it is
       // something they were never promised.
       if (from < 7) await m.createTable(syncOutbox);
+
+      // 8 puts the category beside the order it is read in.
+      //
+      // Browsing a category is `WHERE category = ? ORDER BY name LIMIT 180`,
+      // and the indexes it had served one half each: `movie_counts` filters
+      // and cannot order, `movie_name` orders and cannot filter. SQLite chose
+      // the ordering one and walked the catalogue in name order discarding
+      // everything in other categories until it had a screenful — which is
+      // fast for a category holding a third of the films and ruinous for a
+      // small one, and most are small. Measured on 180,000 films: 2ms for the
+      // huge category, 354ms for a small one, in memory on a fast machine.
+      // On a television reading eMMC it is the seconds a viewer sees.
+      //
+      // Channels carry number as well, because that is what they are ordered
+      // by and an index that stops short of the sort is only half an answer.
+      if (from < 8) {
+        for (final index in [
+          Index('movie_category_name',
+              'CREATE INDEX movie_category_name ON movies '
+              '(source_id, category_remote_id, name)'),
+          Index('series_category_name',
+              'CREATE INDEX series_category_name ON series_entries '
+              '(source_id, category_remote_id, name)'),
+          Index('channel_category_order',
+              'CREATE INDEX channel_category_order ON channels '
+              '(source_id, category_remote_id, number, name)'),
+        ]) {
+          await m.createIndex(index);
+        }
+      }
     },
     onCreate: (m) async {
       await m.createAll();

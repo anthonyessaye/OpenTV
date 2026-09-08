@@ -7435,6 +7435,10 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
     'channel_search',
     'CREATE INDEX channel_search ON channels (source_id, search_name)',
   );
+  late final Index channelCategoryOrder = Index(
+    'channel_category_order',
+    'CREATE INDEX channel_category_order ON channels (source_id, category_remote_id, number, name)',
+  );
   late final Index channelEpg = Index(
     'channel_epg',
     'CREATE INDEX channel_epg ON channels (source_id, epg_channel_id)',
@@ -7454,6 +7458,10 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
   late final Index movieSearch = Index(
     'movie_search',
     'CREATE INDEX movie_search ON movies (source_id, search_name)',
+  );
+  late final Index movieCategoryName = Index(
+    'movie_category_name',
+    'CREATE INDEX movie_category_name ON movies (source_id, category_remote_id, name)',
   );
   late final Index movieCounts = Index(
     'movie_counts',
@@ -7478,6 +7486,10 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
   late final Index seriesSearch = Index(
     'series_search',
     'CREATE INDEX series_search ON series_entries (source_id, search_name)',
+  );
+  late final Index seriesCategoryName = Index(
+    'series_category_name',
+    'CREATE INDEX series_category_name ON series_entries (source_id, category_remote_id, name)',
   );
   late final Index seriesCounts = Index(
     'series_counts',
@@ -7532,17 +7544,20 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
     categorySourceKind,
     channelSourceCategory,
     channelSearch,
+    channelCategoryOrder,
     channelEpg,
     channelOrder,
     channelCounts,
     movieSourceCategory,
     movieSearch,
+    movieCategoryName,
     movieCounts,
     movieRating,
     movieAdded,
     movieName,
     seriesSourceCategory,
     seriesSearch,
+    seriesCategoryName,
     seriesCounts,
     seriesRating,
     seriesModified,

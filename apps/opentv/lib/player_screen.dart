@@ -29,6 +29,9 @@ class PlayerScreen extends StatefulWidget {
     this.onEnded,
     this.nextLabel,
     this.onNext,
+    this.episodes = const [],
+    this.episodeIndex,
+    this.onChooseEpisode,
     this.channelName,
     this.channelNumber,
     this.nowTitle,
@@ -62,6 +65,18 @@ class PlayerScreen extends StatefulWidget {
   /// What comes after this, when there is something. Shown on the end card
   /// and on a transport button.
   final String? nextLabel;
+
+  /// Every episode of this series, in order, as a viewer would read them.
+  ///
+  /// Labels rather than rows: the player has never known what an episode is,
+  /// and giving it one now would put the catalogue inside the one screen that
+  /// has managed without it.
+  final List<String> episodes;
+
+  /// Which of them is playing, so the list can say so.
+  final int? episodeIndex;
+
+  final void Function(int index)? onChooseEpisode;
   final VoidCallback? onNext;
 
   final String? channelName;
@@ -525,6 +540,26 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Widget _chooser() {
     switch (_sheet!) {
+      case _Sheet.episodes:
+        return TrackSheet(
+          title: 'Episodes',
+          note: 'Everything in this series. The one playing is marked.',
+          options: [
+            for (var i = 0; i < widget.episodes.length; i++)
+              SheetOption(
+                id: '$i',
+                label: widget.episodes[i],
+                selected: i == widget.episodeIndex,
+              ),
+          ],
+          onSelect: (id) {
+            final index = id == null ? null : int.tryParse(id);
+            setState(() => _sheet = null);
+            if (index != null) widget.onChooseEpisode?.call(index);
+          },
+          onDismiss: () => setState(() => _sheet = null),
+        );
+
       case _Sheet.aspect:
         return TrackSheet(
           title: 'Picture',
@@ -775,6 +810,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                 onAspect: () => setState(() => _sheet = _Sheet.aspect),
                 nextLabel: widget.nextLabel,
                 onNext: widget.onNext,
+                onEpisodes: widget.episodes.length < 2
+                    ? null
+                    : () => setState(() => _sheet = _Sheet.episodes),
                 onSeek: (position) => _channel?.invokeMethod<void>('seek', {
                   'positionMs': position.inMilliseconds,
                 }),
@@ -804,7 +842,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 }
 
 /// Which chooser is open over the video.
-enum _Sheet { audio, subtitles, aspect, find }
+enum _Sheet { audio, subtitles, aspect, find, episodes }
 
 /// What is offered when an episode finishes.
 ///
@@ -813,7 +851,7 @@ enum _Sheet { audio, subtitles, aspect, find }
 /// countdown: a television that starts the next episode on its own has
 /// decided something the viewer did not, and the one time that is wrong it is
 /// wrong for the rest of the evening.
-class _EndCard extends StatelessWidget {
+class _EndCard extends StatefulWidget {
   const _EndCard({
     required this.nextLabel,
     required this.onNext,
@@ -823,6 +861,43 @@ class _EndCard extends StatelessWidget {
   final String nextLabel;
   final VoidCallback onNext;
   final VoidCallback onBack;
+
+  @override
+  State<_EndCard> createState() => _EndCardState();
+}
+
+class _EndCardState extends State<_EndCard> {
+  final _next = FocusNode(debugLabel: 'play next');
+  Timer? _retry;
+
+  /// Claims the highlight rather than asking for it.
+  ///
+  /// `autofocus` is only honoured while the scope has no focused child, and
+  /// when this card appears the controls are already holding one — so the
+  /// card was drawn with the player's buttons still selected, and pressing
+  /// select did whatever they did. The chrome learned this the same way and
+  /// names its destination for the same reason.
+  ///
+  /// Twice, and the second is not superstition: the first lands in the same
+  /// turn as the route's own scope restoring whichever child it remembers,
+  /// and which settles last is not something to depend on.
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _claim());
+    _retry = Timer(OpenTvMotion.focus, _claim);
+  }
+
+  void _claim() {
+    if (mounted && _next.canRequestFocus) _next.requestFocus();
+  }
+
+  @override
+  void dispose() {
+    _retry?.cancel();
+    _next.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -842,7 +917,7 @@ class _EndCard extends StatelessWidget {
             SizedBox(
               width: 1200,
               child: Text(
-                nextLabel,
+                widget.nextLabel,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: OpenTvType.hero,
@@ -854,11 +929,14 @@ class _EndCard extends StatelessWidget {
                 PlayerButton(
                   label: 'PLAY NEXT',
                   emphasis: true,
-                  autofocus: true,
-                  onSelect: onNext,
+                  focusNode: _next,
+                  onSelect: widget.onNext,
                 ),
                 const SizedBox(width: OpenTvSpace.sm),
-                PlayerButton(label: 'BACK TO THE SERIES', onSelect: onBack),
+                PlayerButton(
+                  label: 'BACK TO THE SERIES',
+                  onSelect: widget.onBack,
+                ),
               ],
             ),
           ],

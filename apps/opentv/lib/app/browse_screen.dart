@@ -883,6 +883,13 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (!mounted) return;
 
     final next = _after(playable);
+    // The whole series, so the player can offer it. Only for episodes: a
+    // queue of channels is what the zap buttons are for, and a film has no
+    // list to be part of.
+    final episodes = playable.itemKind == ItemKind.episode
+        ? [for (final item in _queue) item.title]
+        : const <String>[];
+    final at = _queue.indexWhere((item) => item.remoteId == playable.remoteId);
 
     final route = _fade(
       (context) => _PlayerRoute(
@@ -897,6 +904,11 @@ class _BrowseScreenState extends State<BrowseScreen> {
         onZap: (step) => _zapTo(playable, step),
         next: next,
         onNext: next == null ? null : () => _playNext(next),
+        episodes: episodes,
+        episodeIndex: at < 0 ? null : at,
+        onChooseEpisode: episodes.isEmpty
+            ? null
+            : (index) => _playNext(_queue[index]),
       ),
     );
 
@@ -1398,6 +1410,9 @@ class _PlayerRoute extends StatefulWidget {
     this.startAt,
     this.next,
     this.onNext,
+    this.episodes = const [],
+    this.episodeIndex,
+    this.onChooseEpisode,
   });
 
   final OpenTvDatabase db;
@@ -1416,6 +1431,12 @@ class _PlayerRoute extends StatefulWidget {
   final Future<void> Function(int) onZap;
 
   final Duration? startAt;
+
+  /// The series this episode belongs to, as labels, so the player can offer
+  /// the list without knowing what an episode is.
+  final List<String> episodes;
+  final int? episodeIndex;
+  final void Function(int index)? onChooseEpisode;
 
   /// The episode that follows this one, when there is one.
   ///
@@ -1515,6 +1536,9 @@ class _PlayerRouteState extends State<_PlayerRoute> {
       // offering one would be a button that lies.
       onPreviousChannel: live ? () => widget.onZap(-1) : null,
       onNextChannel: live ? () => widget.onZap(1) : null,
+      episodes: widget.episodes,
+      episodeIndex: widget.episodeIndex,
+      onChooseEpisode: widget.onChooseEpisode,
       nextLabel: widget.next?.title,
       onNext: widget.next == null ? null : widget.onNext,
     );

@@ -85,6 +85,9 @@ class Categories extends Table {
   columns: {#sourceId, #categoryRemoteId},
 )
 @TableIndex(name: 'channel_search', columns: {#sourceId, #searchName})
+@TableIndex(
+    name: 'channel_category_order',
+    columns: {#sourceId, #categoryRemoteId, #number, #name})
 @TableIndex(name: 'channel_epg', columns: {#sourceId, #epgChannelId})
 // Browsing order. Without it, listing a source means sorting every channel
 // it has before the first screenful can be drawn.
@@ -152,6 +155,11 @@ class Channels extends Table {
   columns: {#sourceId, #categoryRemoteId},
 )
 @TableIndex(name: 'movie_search', columns: {#sourceId, #searchName})
+// Browsing a category is a filter and a sort together, and an index that
+// serves one of those leaves SQLite walking the catalogue for the other.
+@TableIndex(
+    name: 'movie_category_name',
+    columns: {#sourceId, #categoryRemoteId, #name})
 // The three orders the shelves and the grid ask for.
 //
 // These are the difference between a screen that opens and one that takes
@@ -215,6 +223,9 @@ class Movies extends Table {
   columns: {#sourceId, #categoryRemoteId},
 )
 @TableIndex(name: 'series_search', columns: {#sourceId, #searchName})
+@TableIndex(
+    name: 'series_category_name',
+    columns: {#sourceId, #categoryRemoteId, #name})
 @TableIndex(name: 'series_counts', columns: {#sourceId, #hidden, #categoryRemoteId})
 @TableIndex(name: 'series_rating', columns: {#sourceId, #rating})
 @TableIndex(name: 'series_modified', columns: {#sourceId, #lastModified})
