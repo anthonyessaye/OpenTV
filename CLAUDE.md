@@ -284,6 +284,17 @@ reported as a category that used to appear instantly now showing "Reading…".
 `programmesForChannels` had existed all along and nothing called it. **After
 that change, a query inside a loop over rows is a bug.**
 
+**Stacked fields do not traverse on a television.** Onboarding never hit
+this because it shows one field at a time; the first settings panel with five
+of them had focus bounce back to the rail after the first. A column of
+focusable rows needs `FocusColumn`, which names its destination rather than
+measuring towards one — and the sections it holds must all be focusable, or
+it has to skip over the ones that are not. Prose goes above it, not in it.
+
+**The panel is not the screen.** It is what is left of 960 logical pixels
+after a 380-pixel rail, so the `width: 900` that onboarding uses — which has
+the whole screen — runs off both edges. Do not copy a width between them.
+
 **A screen with no route to it is the same bug.** The television had the
 handover offer screen and nothing that navigated to it.
 

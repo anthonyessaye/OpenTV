@@ -1156,169 +1156,182 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Deliberately says what it cannot do as well as what it can, which is the
   /// same voice the tunnel screen uses about what a tunnel is not.
   Widget _backupPanel() {
-    return ListView(
+    // The prose sits above rather than inside, because a section a viewer
+    // cannot focus is a section the column has to skip over — and the whole
+    // reason for the column is that stacked fields do not traverse on their
+    // own. Onboarding never hit this: it shows one field at a time.
+    final rows = <Widget>[
+      _field(
+        'Endpoint',
+        _endpoint,
+        'https://s3.us-west-004.backblazeb2.com',
+        (text) => setState(() => _endpoint = text),
+      ),
+      _field(
+        'Bucket',
+        _bucket,
+        'The private bucket you made',
+        (text) => setState(() => _bucket = text),
+      ),
+      _field(
+        'Access key ID',
+        _accessKey,
+        _storedHint,
+        (text) => setState(() => _accessKey = text),
+        obscure: true,
+      ),
+      _field(
+        'Secret access key',
+        _secretKey,
+        _storedHint,
+        (text) => setState(() => _secretKey = text),
+        obscure: true,
+      ),
+      // Only when the endpoint does not say it. Most do, and asking anyway is
+      // asking a viewer to copy half of what they have just typed.
+      if (_needsRegion)
+        _field(
+          'Region',
+          _region,
+          'This endpoint does not say, so it has to be given',
+          (text) => setState(() => _region = text),
+        ),
+      Row(
+        children: [
+          PlayerButton(
+            label: 'SAVE',
+            emphasis: true,
+            onSelect:
+                _endpoint.isEmpty || _bucket.isEmpty ? null : _saveBackup,
+          ),
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(
+            label: _checkingBackup ? 'TESTING…' : 'TEST',
+            onSelect: _checkingBackup ? null : _testBackup,
+          ),
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(label: 'REMOVE', onSelect: _removeBackup),
+        ],
+      ),
+      // Directly under the buttons, which is where somebody who has just
+      // pressed TEST is looking. It used to sit below the recovery phrase,
+      // off the bottom of the screen, so pressing TEST appeared to do nothing
+      // at all.
+      if (_backupNote != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: OpenTvSpace.sm),
+          child: Text(
+            _backupNote!,
+            style: OpenTvType.body.copyWith(color: OpenTvColors.tally),
+          ),
+        ),
+      Padding(
+        padding: const EdgeInsets.only(top: OpenTvSpace.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Recovery phrase', style: OpenTvType.section),
+            const SizedBox(height: OpenTvSpace.xs),
+            Text(
+              _hasPhrase
+                  ? 'A phrase is set on this device. Use the same one on your '
+                      'other devices.'
+                  : 'Your devices normally open the folder with your provider '
+                      'password, and no phrase is needed. This is the way back '
+                      'in when that password changes — which providers do on '
+                      'renewal — and the only way in for a device that has no '
+                      'provider yet.',
+              style: OpenTvType.bodyMuted,
+            ),
+            const SizedBox(height: OpenTvSpace.sm),
+            _field(
+              'Recovery phrase',
+              _phrase,
+              'A few unrelated words, or generate one',
+              (text) => setState(() => _phrase = text),
+            ),
+          ],
+        ),
+      ),
+      Row(
+        children: [
+          PlayerButton(
+            label: 'SAVE PHRASE',
+            emphasis: true,
+            onSelect: _phrase.isEmpty ? null : _savePhrase,
+          ),
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(label: 'GENERATE', onSelect: _generatePhrase),
+        ],
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Your devices leave what you have watched in a folder you own, so a '
           'film paused on one carries on where you left it on another. '
           'Nothing goes to us — this app has no server. Everything written '
           'there is encrypted before it leaves the device, so the company '
-          'holding the bucket cannot read it.',
+          'holding the bucket cannot read it. Any S3-compatible storage '
+          'works: Backblaze B2, Cloudflare R2, Wasabi, Storj, or your own '
+          'MinIO.',
           style: OpenTvType.bodyMuted,
         ),
         const SizedBox(height: OpenTvSpace.md),
-        Text(
-          'Any S3-compatible storage works: Backblaze B2, Cloudflare R2, '
-          'Wasabi, Storj, or your own MinIO. B2 is the shortest route — make '
-          'a private bucket, create an application key, and copy the two '
-          'strings it gives you.',
-          style: OpenTvType.bodyMuted,
-        ),
-        const SizedBox(height: OpenTvSpace.lg),
-        SizedBox(
-          width: 900,
-          child: TextEntryField(
-            label: 'Endpoint',
-            value: _endpoint,
-            hint: 'https://s3.us-west-004.backblazeb2.com',
-            active: true,
-            onChanged: (text) => setState(() => _endpoint = text),
-          ),
-        ),
-        const SizedBox(height: OpenTvSpace.sm),
-        SizedBox(
-          width: 900,
-          child: TextEntryField(
-            label: 'Region',
-            value: _region,
-            hint: 'us-west-004, or auto on R2',
-            active: true,
-            onChanged: (text) => setState(() => _region = text),
-          ),
-        ),
-        const SizedBox(height: OpenTvSpace.sm),
-        SizedBox(
-          width: 900,
-          child: TextEntryField(
-            label: 'Bucket',
-            value: _bucket,
-            hint: 'The private bucket you made',
-            active: true,
-            onChanged: (text) => setState(() => _bucket = text),
-          ),
-        ),
-        const SizedBox(height: OpenTvSpace.sm),
-        SizedBox(
-          width: 900,
-          child: TextEntryField(
-            label: 'Access key ID',
-            value: _accessKey,
-            hint: _endpoint.isEmpty ? 'From your storage account' : 'Stored',
-            active: true,
-            obscure: true,
-            onChanged: (text) => setState(() => _accessKey = text),
-          ),
-        ),
-        const SizedBox(height: OpenTvSpace.sm),
-        SizedBox(
-          width: 900,
-          child: TextEntryField(
-            label: 'Secret access key',
-            value: _secretKey,
-            hint: _endpoint.isEmpty ? 'From your storage account' : 'Stored',
-            active: true,
-            obscure: true,
-            onChanged: (text) => setState(() => _secretKey = text),
-          ),
-        ),
-        const SizedBox(height: OpenTvSpace.md),
-        Row(
-          children: [
-            PlayerButton(
-              label: 'SAVE',
-              emphasis: true,
-              onSelect: _endpoint.isEmpty || _bucket.isEmpty
-                  ? null
-                  : _saveBackup,
+        Expanded(
+          child: FocusColumn(
+            itemCount: rows.length,
+            itemBuilder: (context, index) => Padding(
+              padding: const EdgeInsets.only(bottom: OpenTvSpace.sm),
+              child: rows[index],
             ),
-            const SizedBox(width: OpenTvSpace.sm),
-            // A screen can say a key is stored; it cannot say it works, and
-            // those are different facts. The same reason there is a test
-            // button beside the TMDB key.
-            PlayerButton(
-              label: _checkingBackup ? 'TESTING…' : 'TEST',
-              onSelect: _checkingBackup ? null : _testBackup,
-            ),
-            const SizedBox(width: OpenTvSpace.sm),
-            PlayerButton(
-              label: 'REMOVE',
-              onSelect: () async {
-                await _backup.forget();
-                if (!mounted) return;
-                setState(() {
-                  _endpoint = '';
-                  _region = '';
-                  _bucket = '';
-                  _backupNote = 'Removed. Nothing was deleted from the bucket.';
-                });
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: OpenTvSpace.xl),
-        Text('Recovery phrase', style: OpenTvType.section),
-        const SizedBox(height: OpenTvSpace.sm),
-        Text(
-          _hasPhrase
-              ? 'A phrase is set on this device. Use the same one on your '
-                  'other devices.'
-              : 'Your devices normally open the folder with your provider '
-                  'password, and no phrase is needed. This is the way back in '
-                  'when that password changes — which providers do on renewal '
-                  '— and the only way in for a device that has no provider '
-                  'yet.',
-          style: OpenTvType.bodyMuted,
-        ),
-        const SizedBox(height: OpenTvSpace.md),
-        SizedBox(
-          width: 900,
-          child: TextEntryField(
-            label: 'Recovery phrase',
-            value: _phrase,
-            hint: 'A few unrelated words, or generate one',
-            active: true,
-            onChanged: (text) => setState(() => _phrase = text),
           ),
-        ),
-        const SizedBox(height: OpenTvSpace.md),
-        Row(
-          children: [
-            PlayerButton(
-              label: 'SAVE PHRASE',
-              emphasis: true,
-              onSelect: _phrase.isEmpty ? null : _savePhrase,
-            ),
-            const SizedBox(width: OpenTvSpace.sm),
-            PlayerButton(label: 'GENERATE', onSelect: _generatePhrase),
-          ],
-        ),
-        if (_backupNote != null) ...[
-          const SizedBox(height: OpenTvSpace.md),
-          Text(
-            _backupNote!,
-            style: OpenTvType.data.copyWith(color: OpenTvColors.tally),
-          ),
-        ],
-        const SizedBox(height: OpenTvSpace.lg),
-        Text(
-          'What crosses is what you have watched, where you stopped, and what '
-          'you have favourited. Your catalogue is not copied — each device '
-          'reads that from your provider — and neither is anything you have '
-          'hidden or locked.',
-          style: OpenTvType.data.copyWith(color: OpenTvColors.inkFaint),
         ),
       ],
     );
+  }
+
+  /// Whether the endpoint leaves the region to be typed.
+  bool get _needsRegion {
+    final parsed = Uri.tryParse(_endpoint.trim());
+    if (parsed == null || parsed.host.isEmpty) return false;
+    return s3RegionFor(parsed) == null;
+  }
+
+  String get _storedHint => _bucket.isEmpty ? 'From your storage account' : 'Stored';
+
+  /// One row of the form.
+  ///
+  /// No fixed width. The panel is what is left of a 960-pixel screen after a
+  /// 380-pixel rail, and the 900 these were written with — copied from the
+  /// onboarding step, which has the whole screen — ran off both edges.
+  Widget _field(
+    String label,
+    String value,
+    String hint,
+    ValueChanged<String> onChanged, {
+    bool obscure = false,
+  }) =>
+      TextEntryField(
+        label: label,
+        value: value,
+        hint: hint,
+        active: true,
+        obscure: obscure,
+        onChanged: onChanged,
+      );
+
+  Future<void> _removeBackup() async {
+    await _backup.forget();
+    if (!mounted) return;
+    setState(() {
+      _endpoint = '';
+      _region = '';
+      _bucket = '';
+      _backupNote = 'Removed. Nothing was deleted from the bucket.';
+    });
   }
 
   /// Where downloaded subtitles come from, and what it costs.

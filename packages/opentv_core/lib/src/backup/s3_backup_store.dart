@@ -7,6 +7,42 @@ import 'backup_http.dart';
 import 'backup_store.dart';
 import 's3_signer.dart';
 
+/// The region an endpoint already names, or null when it does not.
+///
+/// Asking for it separately is asking a viewer to copy half of what they just
+/// typed. `s3.us-west-004.backblazeb2.com` says the region in the middle of
+/// the hostname, and so do AWS, Wasabi and Storj; R2 has no regions and wants
+/// the literal `auto`. Only a service this does not recognise needs the field
+/// filled in, and it stays there for exactly that.
+///
+/// A wrong region fails identically to a wrong key — `SignatureDoesNotMatch`
+/// and nothing else — so guessing it correctly is worth more here than in
+/// most places.
+String? s3RegionFor(Uri endpoint) {
+  final host = endpoint.host.toLowerCase();
+
+  // Cloudflare R2 is <account>.r2.cloudflarestorage.com and has no regions.
+  if (host.endsWith('.r2.cloudflarestorage.com')) return 'auto';
+
+  for (final suffix in const [
+    '.backblazeb2.com',
+    '.amazonaws.com',
+    '.wasabisys.com',
+    '.storjshare.io',
+  ]) {
+    if (!host.endsWith(suffix)) continue;
+    final parts = host.substring(0, host.length - suffix.length).split('.');
+    // `s3.us-west-004` and `s3-eu-central-1` are both written.
+    for (final part in parts.reversed) {
+      final region = part.startsWith('s3-') ? part.substring(3) : part;
+      if (region == 's3' || region.isEmpty) continue;
+      return region;
+    }
+  }
+
+  return null;
+}
+
 /// Where a folder lives, and what opens it.
 ///
 /// One shape for Backblaze B2, Cloudflare R2, Wasabi, Storj and a self-hosted

@@ -62,14 +62,22 @@ class BackupService {
     final accessKey = await host.readSecret(accessKeyReference);
     final secretKey = await host.readSecret(secretKeyReference);
 
-    if (endpoint == null || region == null || bucket == null) return null;
+    if (endpoint == null || bucket == null) return null;
     if (accessKey == null || secretKey == null) return null;
     final parsed = Uri.tryParse(endpoint);
     if (parsed == null || parsed.host.isEmpty) return null;
 
+    // The endpoint usually names the region, so a viewer is not asked to copy
+    // half of what they have just typed. The field remains for a service this
+    // cannot read, and what they put there wins.
+    final resolved = (region == null || region.trim().isEmpty)
+        ? s3RegionFor(parsed)
+        : region.trim();
+    if (resolved == null) return null;
+
     return S3Config(
       endpoint: parsed,
-      region: region,
+      region: resolved,
       bucket: bucket,
       accessKeyId: accessKey,
       secretAccessKey: secretKey,
@@ -124,7 +132,15 @@ class BackupService {
   Future<String> check() async {
     final target = await store();
     if (target == null) {
-      return 'Fill in the endpoint, region, bucket and both keys first.';
+      final endpoint = await db.preference(_endpointKey);
+      final parsed = endpoint == null ? null : Uri.tryParse(endpoint);
+      if (parsed != null &&
+          parsed.host.isNotEmpty &&
+          s3RegionFor(parsed) == null) {
+        return 'This endpoint does not say which region it is in, so that '
+            'field has to be filled in as well.';
+      }
+      return 'Fill in the endpoint, bucket and both keys first.';
     }
     try {
       final found = await target.list('');
