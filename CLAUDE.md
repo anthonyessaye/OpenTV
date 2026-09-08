@@ -266,6 +266,14 @@ working software in a screenshot. **If a feature is silent, grep both ends
 before redesigning either** — `grep -c` on the parameter name is usually
 enough to find it.
 
+**Moving SQLite to its own isolate made every per-row query expensive.** A
+loop of sixty single-channel guide lookups was nearly free while the database
+ran on the isolate drawing the screen; afterwards each one is a round trip
+across an isolate boundary, and the whole loop is seconds on a television —
+reported as a category that used to appear instantly now showing "Reading…".
+`programmesForChannels` had existed all along and nothing called it. **After
+that change, a query inside a loop over rows is a bug.**
+
 **A screen with no route to it is the same bug.** The television had the
 handover offer screen and nothing that navigated to it.
 

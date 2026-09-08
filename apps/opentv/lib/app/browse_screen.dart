@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
@@ -92,19 +93,39 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (_kind != ItemKind.live) return items;
 
     final now = DateTime.now();
-    final out = <_Item>[];
-    for (final item in items) {
-      final channel = item.channel;
-      final epgId = channel?.epgChannelId;
-      if (channel == null || epgId == null || out.length > 60) {
-        out.add(item);
-        continue;
-      }
-      final rows = await widget.db.nowAndNext(sourceId, epgId, now, count: 1);
-      out.add(_Item.channel(channel, nowTitle: rows.firstOrNull?.title));
-    }
-    return out;
+    final ids = <String>[
+      for (final item in items)
+        if (item.channel?.epgChannelId case final String id) id,
+    ];
+    if (ids.isEmpty) return items;
+
+    // One query for the lot, which is what `programmesForChannels` was
+    // written for and nothing called.
+    //
+    // This used to ask per channel, and that was nearly free while SQLite ran
+    // on the isolate drawing the screen. It stopped being free the moment the
+    // database moved to its own: sixty-one round trips, each serialised
+    // across an isolate boundary, is seconds on a television — and is why a
+    // category that used to appear instantly started showing "Reading…".
+    final guide = await widget.db.programmesForChannels(
+      sourceId,
+      ids,
+      now,
+      now.add(const Duration(minutes: 1)),
+    );
+
+    return [
+      for (final item in items)
+        if (item.channel case final Channel channel)
+          _Item.channel(
+            channel,
+            nowTitle: guide[channel.epgChannelId]?.firstOrNull?.title,
+          )
+        else
+          item,
+    ];
   }
+
 
   /// The shelves shown when no category is chosen.
   ///
@@ -114,6 +135,23 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// instead: what is worth watching, what you were watching, what you kept.
   List<({String label, List<_Item> items})> _shelves = const [];
   bool _loading = true;
+
+  /// How many rows have been asked for, and whether there are more.
+  ///
+  /// The grid used to stop at one window and stay there. On a provider whose
+  /// categories run to thousands, that is a list a viewer can see the end of
+  /// and cannot get past — and `moviesIn` has taken an offset the whole time.
+  int _fetched = 0;
+  bool _exhausted = true;
+  bool _loadingMore = false;
+
+  /// The episode each series in Continue would carry on with.
+  ///
+  /// `continueSeries` works this out — its own comment says it is returned
+  /// "so the caller does not work it out again" — and this screen threw both
+  /// the episode and the resuming flag away, walked the viewer to a series
+  /// page, and left them to find their place by hand.
+  Map<String, Episode> _continueNext = const {};
 
   /// The address the live hero is currently playing, and what to play it
   /// with. Null while it is being resolved, or when it cannot be.
@@ -271,6 +309,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
       if (!mounted || generation != _generation) return;
       setState(() {
         _items = resolved;
+        // Cleared, or the grid keeps drawing the shelves All left behind and
+        // the list never appears. Coming from any other category worked,
+        // because that path clears them on the way through — which is why
+        // this looked like an index bug rather than a stale one.
+        _shelves = const [];
+        _exhausted = true;
         _loading = false;
       });
       return;
@@ -282,43 +326,17 @@ class _BrowseScreenState extends State<BrowseScreen> {
         ? await widget.db.lockedCategories(sourceId)
         : const <String>{};
 
-    var items = switch (_section) {
-      TvSection.films => [
-        for (final film in await widget.db.moviesIn(
-          sourceId,
-          categoryRemoteId: _category,
-          limit: window,
-          hiddenRegions: _regions.forKind(ItemKind.movie),
-        ))
-          if (!hidden.contains(film.categoryRemoteId)) _Item.film(film),
-      ],
-      TvSection.series => [
-        for (final entry in await widget.db.seriesIn(
-          sourceId,
-          categoryRemoteId: _category,
-          limit: window,
-          hiddenRegions: _regions.forKind(ItemKind.series),
-        ))
-          if (!hidden.contains(entry.categoryRemoteId)) _Item.series(entry),
-      ],
-      _ => [
-        for (final channel in await widget.db.channelsIn(
-          sourceId,
-          categoryRemoteId: _category,
-          limit: window,
-          hiddenRegions: _regions.forKind(ItemKind.live),
-        ))
-          if (!hidden.contains(channel.categoryRemoteId))
-            _Item.channel(channel),
-      ],
-    };
+    final page = await _page(sourceId, offset: 0, hidden: hidden);
+    var items = page.items;
+    // Fewer than a full window came back, so there is nothing after it. Asked
+    // of the rows the query returned rather than the ones kept, or a category
+    // that is mostly hidden regions looks exhausted when it is not.
+    _fetched = page.raw;
+    _exhausted = page.raw < window;
 
-    // What is on each of those channels now.
-    //
-    // One query per channel and only for the ones actually on screen. The
-    // guide is already imported and the phone has always read it; the
-    // television asked for none of it and printed "No guide data" over a
-    // catalogue that had plenty.
+    // What is on each of those channels now. The guide is already imported
+    // and the phone has always read it; the television asked for none of it
+    // and printed "No guide data" over a catalogue that had plenty.
     items = await _withNowPlaying(sourceId, items);
 
     // Shelves replace the grid when nothing is filtered. Live gets them too:
@@ -407,11 +425,116 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// the generic one excludes completed rows — which is right for a film and
   /// removes a show from the shelf the moment an episode is finished, exactly
   /// when the next one is most wanted.
+  /// One window of a category, and how many rows the query actually returned.
+  ///
+  /// The two differ: locked categories and hidden regions are filtered after
+  /// the fact, so a page can return a full window and keep almost none of it.
+  /// Paging has to count what was asked for, not what survived.
+  Future<({List<_Item> items, int raw})> _page(
+    int sourceId, {
+    required int offset,
+    required Set<String> hidden,
+  }) async {
+    const window = 180;
+
+    switch (_section) {
+      case TvSection.films:
+        final rows = await widget.db.moviesIn(
+          sourceId,
+          categoryRemoteId: _category,
+          limit: window,
+          offset: offset,
+          hiddenRegions: _regions.forKind(ItemKind.movie),
+        );
+        return (
+          items: [
+            for (final film in rows)
+              if (!hidden.contains(film.categoryRemoteId)) _Item.film(film),
+          ],
+          raw: rows.length,
+        );
+      case TvSection.series:
+        final rows = await widget.db.seriesIn(
+          sourceId,
+          categoryRemoteId: _category,
+          limit: window,
+          offset: offset,
+          hiddenRegions: _regions.forKind(ItemKind.series),
+        );
+        return (
+          items: [
+            for (final entry in rows)
+              if (!hidden.contains(entry.categoryRemoteId)) _Item.series(entry),
+          ],
+          raw: rows.length,
+        );
+      default:
+        final rows = await widget.db.channelsIn(
+          sourceId,
+          categoryRemoteId: _category,
+          limit: window,
+          offset: offset,
+          hiddenRegions: _regions.forKind(ItemKind.live),
+        );
+        return (
+          items: [
+            for (final channel in rows)
+              if (!hidden.contains(channel.categoryRemoteId))
+                _Item.channel(channel),
+          ],
+          raw: rows.length,
+        );
+    }
+  }
+
+  /// Asks for the next window as the end of this one comes into view.
+  ///
+  /// Driven from the builder rather than a scroll offset, because the grid is
+  /// moved by a d-pad and the last row is reached by focus rather than by
+  /// dragging.
+  void _maybeLoadMore(int index) {
+    if (_exhausted || _loadingMore || _loading) return;
+    if (index < _items.length - 18) return;
+    _loadingMore = true;
+    unawaited(_loadMore());
+  }
+
+  Future<void> _loadMore() async {
+    final generation = _generation;
+    final sourceId = widget.source.id;
+    try {
+      final hidden = _category == null
+          ? await widget.db.lockedCategories(sourceId)
+          : const <String>{};
+      final page = await _page(sourceId, offset: _fetched, hidden: hidden);
+      final grown = await _withNowPlaying(sourceId, page.items);
+
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _items = [..._items, ...grown];
+        _fetched += page.raw;
+        _exhausted = page.raw < 180;
+      });
+    } on Object {
+      // A page that did not arrive is a page to ask for again, not a reason
+      // to lose the ones already on screen.
+      _exhausted = false;
+    } finally {
+      _loadingMore = false;
+    }
+  }
+
   Future<List<String>> _continueIds(int sourceId, int window) async {
     if (_kind == ItemKind.series) {
       final rows = await widget.db.continueSeries(sourceId, limit: window);
+      // Kept, not discarded. Selecting a show on Continue should carry on
+      // with it, and the query has already decided which episode that is.
+      _continueNext = {
+        for (final row in rows) row.seriesRemoteId: row.next,
+      };
       return [for (final row in rows) row.seriesRemoteId];
     }
+    _continueNext = const {};
     return _resumableIds(
       await widget.db.continueWatching(sourceId: sourceId, limit: window),
       _kind,
@@ -616,6 +739,24 @@ class _BrowseScreenState extends State<BrowseScreen> {
   Future<void> _openInner(_Item item) async {
     // A series is not a stream; it is a list of them. It gets its own screen,
     // which fetches the episodes the bulk sync deliberately skipped.
+    // On Continue, a show carries on rather than opening its page. Everywhere
+    // else a series is a list to choose from, which is what the page is for —
+    // the difference is what the viewer asked for by being on this shelf.
+    if (_category == _continueId && item.series != null) {
+      final next = _continueNext[item.series!.remoteId];
+      if (next != null) {
+        final episodes = await widget.db.episodesOf(
+          widget.source.id,
+          item.series!.remoteId,
+        );
+        await _play(
+          Playable.episode(next),
+          queue: [for (final row in episodes) Playable.episode(row)],
+        );
+        return;
+      }
+    }
+
     if (item.series case final SeriesEntry entry) {
       await Navigator.of(context).push(
         _fade(
@@ -1156,6 +1297,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
       ),
       itemCount: _items.length,
       itemBuilder: (context, index) {
+        _maybeLoadMore(index);
         final item = _items[index];
         final cleaned = TitleCleaner.clean(item.name);
         return portrait
