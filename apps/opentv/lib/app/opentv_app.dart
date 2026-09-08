@@ -770,6 +770,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       onStartHandover: () => setState(() => _offering = true),
       db: db,
       vpn: _vpn,
+      sync: _sync,
       source: source,
       resolver: _resolver!,
       service: service,

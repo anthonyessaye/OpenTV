@@ -7,6 +7,7 @@ import '../http_transport.dart';
 import '../player_screen.dart';
 import 'film_screen.dart';
 import 'guide_screen.dart';
+import 'backup_sync.dart';
 import 'host.dart';
 import 'search_screen.dart';
 import 'series_screen.dart';
@@ -42,6 +43,7 @@ class BrowseScreen extends StatefulWidget {
     this.onStartHandover,
     required this.service,
     required this.vpn,
+    this.sync,
   });
 
   final OpenTvDatabase db;
@@ -64,6 +66,10 @@ class BrowseScreen extends StatefulWidget {
   /// One tunnel, owned by the app. Two services would each hold their own
   /// idea of whether it is up, and one of them would be wrong.
   final VpnService vpn;
+
+  /// Carries watch state to the viewer's other devices, so the settings panel
+  /// can run one on demand and say when the last one was.
+  final BackupSync? sync;
 
   @override
   State<BrowseScreen> createState() => _BrowseScreenState();
@@ -1109,6 +1115,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
           onAddSource: () => widget.onAddSource?.call(),
           onRemoveSource: (source) => widget.onRemoveSource?.call(source),
           onStartHandover: widget.onStartHandover,
+          sync: widget.sync,
         );
 
       case TvSection.search:

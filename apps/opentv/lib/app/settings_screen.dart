@@ -3,6 +3,7 @@ import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
 import 'backup_service.dart';
+import 'backup_sync.dart';
 import 'host.dart';
 import 'source_service.dart';
 import 'subtitle_service.dart';
@@ -25,6 +26,7 @@ class SettingsScreen extends StatefulWidget {
     this.onStartHandover,
     required this.service,
     required this.vpn,
+    this.sync,
     this.host = const Host(),
   });
 
@@ -46,6 +48,10 @@ class SettingsScreen extends StatefulWidget {
   /// The app's one tunnel. Not built here: a panel with its own instance
   /// would report a state nothing else agreed with.
   final VpnService vpn;
+
+  /// The app's own sync, so a viewer can run one and see what happened rather
+  /// than being told it happens sometimes.
+  final BackupSync? sync;
 
   final Host host;
 
@@ -138,6 +144,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _phrase = '';
   bool _hasPhrase = false;
   bool _backupLoaded = false;
+
+  /// Whether the saved endpoint leaves the region to be typed.
+  ///
+  /// Settled when the panel loads and when something is saved, never derived
+  /// from the field as it is typed. Deriving it added and removed a row
+  /// mid-list on almost every keystroke, and every row after it changed
+  /// index — so the column lost track of what was focused and threw focus
+  /// back to the top.
+  bool _regionNeeded = false;
   bool _checkingBackup = false;
   String? _backupNote;
   bool _checking = false;
@@ -942,7 +957,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // no other panel here does it either.
       _accessKey = '';
       _secretKey = '';
+      _regionNeeded = _endpointNeedsRegion(settings?.endpoint.toString() ?? '');
     });
+  }
+
+  static bool _endpointNeedsRegion(String endpoint) {
+    final parsed = Uri.tryParse(endpoint.trim());
+    if (parsed == null || parsed.host.isEmpty) return false;
+    return s3RegionFor(parsed) == null;
   }
 
   Future<void> _saveBackup() async {
@@ -957,7 +979,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _accessKey = '';
       _secretKey = '';
-      _backupNote = 'Saved.';
+      _regionNeeded = _endpointNeedsRegion(_endpoint);
+      _backupNote = _regionNeeded && _region.trim().isEmpty
+          ? 'Saved. This endpoint does not say which region it is in, so that '
+              'field has to be filled in too.'
+          : 'Saved.';
     });
   }
 
@@ -971,6 +997,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _checkingBackup = false;
       _backupNote = result;
+    });
+  }
+
+  bool _syncing = false;
+
+  Future<void> _syncNow() async {
+    final sync = widget.sync;
+    if (sync == null) return;
+    setState(() {
+      _syncing = true;
+      _backupNote = null;
+    });
+    await sync.run();
+    if (!mounted) return;
+    setState(() {
+      _syncing = false;
+      _backupNote = sync.failure ??
+          'Synced. This also happens when the app opens and when it is left, '
+              'so there is normally nothing to press.';
     });
   }
 
@@ -1189,7 +1234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       // Only when the endpoint does not say it. Most do, and asking anyway is
       // asking a viewer to copy half of what they have just typed.
-      if (_needsRegion)
+      if (_regionNeeded)
         _field(
           'Region',
           _region,
@@ -1255,6 +1300,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       Row(
         children: [
+          // Nothing else on this screen says the sync has ever run. It runs
+          // when the app opens and when it leaves the foreground, which is
+          // exactly when nobody is looking at it.
+          PlayerButton(
+            label: _syncing ? 'SYNCING…' : 'SYNC NOW',
+            onSelect: widget.sync == null || _syncing ? null : _syncNow,
+          ),
+          const SizedBox(width: OpenTvSpace.sm),
           PlayerButton(
             label: 'SAVE PHRASE',
             emphasis: true,
@@ -1269,7 +1322,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: OpenTvSpace.sm),
+          child: Text(
           'Your devices leave what you have watched in a folder you own, so a '
           'film paused on one carries on where you left it on another. '
           'Nothing goes to us — this app has no server. Everything written '
@@ -1279,9 +1334,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'MinIO.',
           style: OpenTvType.bodyMuted,
         ),
+        ),
         const SizedBox(height: OpenTvSpace.md),
         Expanded(
+          // Room on both sides for the one per cent a field grows by when it
+          // takes focus. Without it the focused box is a few pixels wider
+          // than the list that clips it, and the edges disappear — which
+          // reads as boxes cut off at the sides, and only the focused one.
           child: FocusColumn(
+            padding: const EdgeInsets.symmetric(horizontal: OpenTvSpace.sm),
             itemCount: rows.length,
             itemBuilder: (context, index) => Padding(
               padding: const EdgeInsets.only(bottom: OpenTvSpace.sm),
@@ -1291,13 +1352,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ],
     );
-  }
-
-  /// Whether the endpoint leaves the region to be typed.
-  bool get _needsRegion {
-    final parsed = Uri.tryParse(_endpoint.trim());
-    if (parsed == null || parsed.host.isEmpty) return false;
-    return s3RegionFor(parsed) == null;
   }
 
   String get _storedHint => _bucket.isEmpty ? 'From your storage account' : 'Stored';
