@@ -13,6 +13,8 @@ import '../app/subtitle_service.dart';
 import '../app/stream_resolver.dart';
 import '../app/vpn_service.dart';
 import 'channel_row.dart';
+import '../app/backup_sync.dart';
+import 'mobile_backup.dart';
 import 'mobile_detail.dart';
 import 'mobile_player.dart';
 import 'poster_card.dart';
@@ -45,6 +47,7 @@ class MobileHome extends StatefulWidget {
     required this.service,
     required this.sources,
     required this.vpn,
+    this.sync,
     required this.onSwitchSource,
     required this.onAddSource,
     required this.onRemoveSource,
@@ -58,6 +61,12 @@ class MobileHome extends StatefulWidget {
   final SourceService service;
   final List<Source> sources;
   final VpnService vpn;
+
+  /// Carries watch state to the viewer's other devices. The phone has always
+  /// run one at launch and on leaving; it had no screen to be pointed at a
+  /// folder from, which made the feature half a feature.
+  final BackupSync? sync;
+
   final ValueChanged<Source> onSwitchSource;
   final VoidCallback onAddSource;
   final Future<void> Function(Source) onRemoveSource;
@@ -197,6 +206,11 @@ class _MobileHomeState extends State<MobileHome> {
     // played straight from the live list never went through a detail screen,
     // so nothing else was going to do this.
     _refreshShelves();
+
+    // And the position is written, so this is the moment there is something
+    // worth sending to the other devices. Launch and leaving are the other
+    // two, and an evening's watching sits between them.
+    unawaited(widget.sync?.run());
   }
 
   /// Writes what was watched, under the kind the shelves ask for.
@@ -938,6 +952,9 @@ class _MobileHomeState extends State<MobileHome> {
           ),
           onOpenTunnel: () => _push(MobileTunnelScreen(vpn: widget.vpn)),
           onScanHandover: widget.onScanHandover,
+          onOpenBackup: () => _push(
+            MobileBackupScreen(db: widget.db, sync: widget.sync),
+          ),
           onOpenSubtitles: () => _push(
             const MobileSubtitlesScreen(),
           ),
@@ -1866,6 +1883,7 @@ class _SettingsTab extends StatelessWidget {
     required this.onOpenAccount,
     required this.onOpenTunnel,
     required this.onScanHandover,
+    required this.onOpenBackup,
   });
 
   final Source source;
@@ -1883,6 +1901,9 @@ class _SettingsTab extends StatelessWidget {
   final VoidCallback onOpenAccount;
   final VoidCallback onOpenTunnel;
   final VoidCallback onScanHandover;
+
+  /// The folder this device shares its watch state through.
+  final VoidCallback onOpenBackup;
 
   @override
   Widget build(BuildContext context) {
@@ -1955,6 +1976,12 @@ class _SettingsTab extends StatelessWidget {
           name: 'Scan another device',
           now: 'Take its setup, or send it this one',
           onTap: onScanHandover,
+          artwork: false,
+        ),
+        ChannelRow(
+          name: 'Device sync',
+          now: 'Carry on watching on your other devices',
+          onTap: onOpenBackup,
           artwork: false,
         ),
         ChannelRow(

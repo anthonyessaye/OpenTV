@@ -542,6 +542,13 @@ on every device that still remembered it. Draining does not clear it — the
 caller clears only once the records are written, or a failed upload takes the
 viewer's changes with it.
 
+**Every screen that exists on the television has to exist on the phone.**
+Device sync was built on one side only, and the phone ran a pass at launch
+and on leaving all along with no way to be pointed at a folder — a feature
+that was exactly half there, on the device most likely to be picked up after
+the television is put down. The same applies to the moments a sync is asked
+for: both players have to trigger one.
+
 **A sync runs at four moments, and three of them were missing.** It ran at
 launch and on leaving the foreground — and everything a viewer does happens
 between those two. A bucket set up mid-session stayed empty, TEST connected

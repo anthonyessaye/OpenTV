@@ -16,6 +16,7 @@ void main() {
   final settings = File('lib/app/settings_screen.dart').readAsStringSync();
   final browse = File('lib/app/browse_screen.dart').readAsStringSync();
   final app = File('lib/app/opentv_app.dart').readAsStringSync();
+  final phone = File('lib/mobile/mobile_home.dart').readAsStringSync();
 
   /// One method's body, and no further.
   ///
@@ -68,5 +69,26 @@ void main() {
       reason: 'a sync failing quietly since setup is exactly what this screen '
           'exists to show',
     );
+  });
+
+  group('the phone, which had the sync and no way to configure it', () {
+    test('has a way in from its settings', () {
+      // It ran a pass at launch and on leaving all along, and could only ever
+      // be pointed at a folder by taking a television's setup over the
+      // handover. A phone set up on its own had no route at all — which made
+      // this half a feature, since the phone is the device most likely to be
+      // picked up after the television is put down.
+      expect(phone, contains("name: 'Device sync'"));
+      expect(phone, contains('MobileBackupScreen('));
+    });
+
+    test('and sends what was watched when its player closes', () {
+      expect(
+        body(phone, 'Future<void> _play('),
+        contains('widget.sync?.run()'),
+        reason: 'the phone queues a position and waits for the app to be '
+            'closed before sending it',
+      );
+    });
   });
 }

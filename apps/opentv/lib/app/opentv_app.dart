@@ -758,6 +758,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         service: service,
         sources: _sources,
         vpn: _vpn,
+        sync: _sync,
         onSwitchSource: (next) => setState(() => _source = next),
         onAddSource: () => setState(() => _addingSource = true),
         onRemoveSource: _removeSource,
