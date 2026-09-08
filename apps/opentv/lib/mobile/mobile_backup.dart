@@ -163,6 +163,11 @@ class _MobileBackupScreenState extends State<MobileBackupScreen> {
       _note = 'Recovery phrase saved. Write it down somewhere that is not '
           'this device.';
     });
+
+    // And try again with it, which is the whole point of having been asked
+    // for one. Saving it and waiting for the next launch is indistinguishable
+    // from it not having worked.
+    await _run();
   }
 
   @override

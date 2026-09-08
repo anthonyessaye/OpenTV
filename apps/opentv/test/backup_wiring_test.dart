@@ -91,4 +91,28 @@ void main() {
       );
     });
   });
+
+  group('being asked for a recovery phrase', () {
+    test('saving one on the television tries again with it', () {
+      // A device turned away because its provider does not open the folder is
+      // told to enter a phrase. Entering one did nothing visible: the next
+      // attempt was at the following launch, which is indistinguishable from
+      // it not having worked.
+      expect(
+        body(settings, 'Future<void> _savePhrase()'),
+        contains('_runSync()'),
+        reason: 'the phrase is stored and nothing retries with it',
+      );
+    });
+
+    test('and so does saving one on the phone', () {
+      final mobile =
+          File('lib/mobile/mobile_backup.dart').readAsStringSync();
+      expect(
+        body(mobile, 'Future<void> _savePhrase()'),
+        contains('_run()'),
+        reason: 'the phrase is stored and nothing retries with it',
+      );
+    });
+  });
 }

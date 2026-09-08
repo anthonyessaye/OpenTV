@@ -179,7 +179,12 @@ void main() {
     await expectLater(
       keyring.unlock(store: store, deviceId: 'other', secrets: [stranger]),
       throwsA(isA<BackupKeyringException>().having(
-          (e) => e.message, 'message', contains('recovery phrase'))),
+        (e) => e.message,
+        'message',
+        // Not just that it failed: where to go. A folder opened by another
+        // provider is a thing a viewer can join, and only if told how.
+        allOf(contains('different provider'), contains('Recovery phrase')),
+      )),
     );
   });
 
@@ -385,6 +390,49 @@ void main() {
       keyring.unlock(store: store, deviceId: 'other', secrets: [phrase]),
       throwsA(isA<BackupKeyringException>()),
     );
+  });
+
+  group('a household with two providers', () {
+    /// The other device's provider, which this folder was set up by.
+    BackupSecret theirs() => BackupSecret(
+          id: BackupSecret.providerId('zzz999'),
+          secret: providerSecretMaterial(
+            providerKey: 'zzz999',
+            username: 'someone',
+            password: 'else',
+          ),
+        );
+
+    test('the second one joins with the phrase and then stops needing it',
+        () async {
+      // Not a fault: one folder, two providers, records scoped by provider so
+      // nothing merges wrongly. The second device simply has to be let in
+      // once, and after that must not ask again — a phrase typed on every
+      // launch is a phrase somebody turns the feature off to avoid.
+      final original = await keyring.unlock(
+        store: store,
+        deviceId: 'tv',
+        secrets: [theirs(), phrase],
+        random: seeded(),
+      );
+
+      final joined = await keyring.unlock(
+        store: store,
+        deviceId: 'phone',
+        secrets: [provider(), phrase],
+      );
+      expect(joined, original);
+
+      // Its own provider opens it now, with nothing typed.
+      expect(
+        await keyring.unlock(
+          store: store,
+          deviceId: 'phone',
+          secrets: [provider()],
+        ),
+        original,
+      );
+    });
   });
 }
 

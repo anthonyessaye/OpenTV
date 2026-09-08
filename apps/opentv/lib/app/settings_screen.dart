@@ -1047,6 +1047,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _backupNote = 'Recovery phrase saved. Write it down somewhere that is '
           'not this device.';
     });
+
+    // And try again with it. A device turned away because its provider does
+    // not open the folder is told to enter a phrase — and entering one did
+    // nothing visible, because the next attempt was at the following launch.
+    // Saving the phrase *is* the retry.
+    await _runSync();
   }
 
   void _generatePhrase() {

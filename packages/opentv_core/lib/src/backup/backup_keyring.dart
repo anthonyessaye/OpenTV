@@ -162,13 +162,20 @@ class BackupKeyring {
     // would look like their history had simply gone.
     if (slots.isEmpty && bids.isEmpty) return null;
 
+    // Two different situations, and a viewer can only act on the second if
+    // they are told where to go. A folder set up by a device with another
+    // provider is not a fault — a household with two providers still wants
+    // one folder, and records are scoped by provider so nothing merges
+    // wrongly — but this device has to be let in by hand, once.
     throw BackupKeyringException(
       secrets.any((s) => s.id == BackupSecret.phraseId)
-          ? 'that recovery phrase does not match the one this backup folder '
-              'was set up with. Use the same phrase on every device, or start '
-              'a new folder.'
-          : 'this provider does not open the backup folder. Enter the '
-              'recovery phrase for it, or check the account is the same one.',
+          ? 'That recovery phrase does not match the one this folder was set '
+              'up with. Use the same phrase on every device, or start a new '
+              'folder.'
+          : 'This folder was set up by a device with a different provider, so '
+              'this one cannot open it on its own. Enter that device\'s '
+              'recovery phrase under Recovery phrase below and save it — or '
+              'set a phrase there first and use the same one on both.',
     );
   }
 
