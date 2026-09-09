@@ -172,4 +172,74 @@ void main() {
       );
     });
   });
+
+  group('what a tab switch costs', () {
+    /// One method's body, and no further.
+    String body(String signature) {
+      final start = source.indexOf(signature);
+      expect(start, isNot(-1), reason: '$signature has been renamed');
+      final end = source.indexOf('\n  }\n', start);
+      expect(end, isNot(-1));
+      return source.substring(start, end);
+    }
+
+    test('its reads are issued together, not one after the next', () {
+      // Nine round trips to the isolate SQLite lives on, for reads where not
+      // one depends on another. No single query was slow — measured against
+      // a provider-sized catalogue across the isolate, the whole switch was
+      // 86ms sequential and 22ms issued together, and the gap is wider on a
+      // television than on the machine that measured it. This is the shape
+      // the guide lookups had, and it reads the same way: a tab that used to
+      // open instantly saying "Reading…".
+      final section = body('Future<void> _loadSection()');
+      expect(
+        section,
+        contains('final (categories, counts, locked, favourites, mine) = await ('),
+        reason: 'the section load is back to a query at a time',
+      );
+      expect(
+        section,
+        contains(').wait'),
+        reason: 'the reads are awaited one by one again',
+      );
+    });
+
+    test('and the page and the shelves are built at once', () {
+      expect(
+        body('Future<void> _loadItems('),
+        contains('final (page, built) = await ('),
+        reason: 'the shelves wait for the grid before they start',
+      );
+    });
+
+    test('the locked list is fetched once, not once per half of the load', () {
+      // `_loadSection` reads it, then hands it on. Asking again inside
+      // `_loadItems` was the same answer fetched twice in one switch.
+      expect(
+        body('Future<void> _loadItems('),
+        contains('locked ?? await widget.db.lockedCategories(sourceId)'),
+        reason: 'the locked categories are read twice per section change',
+      );
+    });
+
+    test('and a wait too short to explain says nothing', () {
+      // A label that appears and vanishes inside a fifth of a second is not
+      // information. The screen answers in tens of milliseconds; saying
+      // "Reading…" for that made it look like one that struggles.
+      expect(source, contains('static const _sayReadingAfter'));
+      expect(
+        body('Widget _grid()'),
+        contains('if (!_sayReading) return const SizedBox.shrink();'),
+        reason: '"Reading…" is drawn the moment a load starts again',
+      );
+      // And it is cleared when the load ends, or the next short one inherits
+      // the last long one's label.
+      expect(source, contains('void _doneReading()'));
+      expect(
+        RegExp(r'_doneReading\(\);').allMatches(source).length,
+        greaterThanOrEqualTo(2),
+        reason: 'a path that finishes loading leaves the label armed',
+      );
+    });
+  });
 }

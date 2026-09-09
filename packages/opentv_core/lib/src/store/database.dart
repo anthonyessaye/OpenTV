@@ -64,29 +64,24 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // rebuilt: on a real catalogue this is a few seconds once, against
       // five seconds on every screen open without them.
       if (from < 3) {
-        for (final index in [
-          Index('channel_order',
-              'CREATE INDEX channel_order ON channels (source_id, number, name)'),
-          Index('movie_rating',
-              'CREATE INDEX movie_rating ON movies (source_id, rating)'),
-          Index('movie_added',
-              'CREATE INDEX movie_added ON movies (source_id, added_at)'),
-          Index('movie_name',
-              'CREATE INDEX movie_name ON movies (source_id, name)'),
-          Index('series_rating',
-              'CREATE INDEX series_rating ON series_entries (source_id, rating)'),
-          Index('series_modified',
-              'CREATE INDEX series_modified ON series_entries (source_id, last_modified)'),
-          Index('series_name',
-              'CREATE INDEX series_name ON series_entries (source_id, name)'),
-          Index('channel_counts',
-              'CREATE INDEX channel_counts ON channels (source_id, hidden, category_remote_id)'),
-          Index('movie_counts',
-              'CREATE INDEX movie_counts ON movies (source_id, hidden, category_remote_id)'),
-          Index('series_counts',
-              'CREATE INDEX series_counts ON series_entries (source_id, hidden, category_remote_id)'),
+        // `IF NOT EXISTS` rather than `createIndex`, because every one of
+        // these is also declared on its table — a fresh install gets them
+        // from `createAll`. A migration that cannot be run twice is one that
+        // cannot be recovered from having been interrupted, and the second
+        // run fails on the index the first one had already made.
+        for (final statement in [
+          'CREATE INDEX IF NOT EXISTS channel_order ON channels (source_id, number, name)',
+          'CREATE INDEX IF NOT EXISTS movie_rating ON movies (source_id, rating)',
+          'CREATE INDEX IF NOT EXISTS movie_added ON movies (source_id, added_at)',
+          'CREATE INDEX IF NOT EXISTS movie_name ON movies (source_id, name)',
+          'CREATE INDEX IF NOT EXISTS series_rating ON series_entries (source_id, rating)',
+          'CREATE INDEX IF NOT EXISTS series_modified ON series_entries (source_id, last_modified)',
+          'CREATE INDEX IF NOT EXISTS series_name ON series_entries (source_id, name)',
+          'CREATE INDEX IF NOT EXISTS channel_counts ON channels (source_id, hidden, category_remote_id)',
+          'CREATE INDEX IF NOT EXISTS movie_counts ON movies (source_id, hidden, category_remote_id)',
+          'CREATE INDEX IF NOT EXISTS series_counts ON series_entries (source_id, hidden, category_remote_id)',
         ]) {
-          await m.createIndex(index);
+          await customStatement(statement);
         }
       }
 
@@ -158,18 +153,15 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // Channels carry number as well, because that is what they are ordered
       // by and an index that stops short of the sort is only half an answer.
       if (from < 8) {
-        for (final index in [
-          Index('movie_category_name',
-              'CREATE INDEX movie_category_name ON movies '
-              '(source_id, category_remote_id, name)'),
-          Index('series_category_name',
-              'CREATE INDEX series_category_name ON series_entries '
-              '(source_id, category_remote_id, name)'),
-          Index('channel_category_order',
-              'CREATE INDEX channel_category_order ON channels '
-              '(source_id, category_remote_id, number, name)'),
+        for (final statement in [
+          'CREATE INDEX IF NOT EXISTS movie_category_name ON movies '
+              '(source_id, category_remote_id, name)',
+          'CREATE INDEX IF NOT EXISTS series_category_name ON series_entries '
+              '(source_id, category_remote_id, name)',
+          'CREATE INDEX IF NOT EXISTS channel_category_order ON channels '
+              '(source_id, category_remote_id, number, name)',
         ]) {
-          await m.createIndex(index);
+          await customStatement(statement);
         }
       }
 

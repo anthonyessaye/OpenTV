@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 704 core, 141 ui, 231 app.
+Tests: 704 core, 141 ui, 235 app.
 
 ## Two interfaces, one app
 
@@ -310,6 +310,28 @@ reported as a category that used to appear instantly now showing "Reading…".
 `programmesForChannels` had existed all along and nothing called it. **After
 that change, a query inside a loop over rows is a bug.**
 
+A third case, and the one that outlasted two attempts at it: **the reads a
+tab switch makes were issued one after the next when not one of them depends
+on another.** No single query was slow. Measured against a provider-sized
+catalogue across the isolate: 86ms sequential, **22ms issued together** — and
+that gap is the whole of what a viewer sees, because the isolate crossing is
+the cost, not the query. `lockedCategories` was also fetched twice per
+switch, in each half of the same load.
+
+**None of that is visible in a laptop benchmark, and the seed hid it twice.**
+`seed_big.dart` writes 120,000 films with no categories at all — built for
+search — so the first run of this benchmark measured `countsByCategory` over
+nothing and reported 0ms. Categories have to be added to it before any
+browsing measurement means anything. And a benchmark on `NativeDatabase`
+rather than `NativeDatabase.createInBackground` measures none of the boundary
+this whole class of bug lives on.
+
+**"Reading…" is only worth saying when a wait is long enough to explain.** A
+label that appears and vanishes inside a fifth of a second is not
+information — it made a screen answering in tens of milliseconds look like
+one that struggles. It waits 200ms now; before that the grid area is simply
+empty, rather than showing the section the viewer has just left.
+
 The series Continue shelf was the same shape and hid for longer, because its
 loop was as long as somebody's watching: two reads per show, and a device only
 knew about shows watched on it. Making the sync deliver series history handed
@@ -441,6 +463,12 @@ the feature looks broken on every existing install.
 **A row with no prefix is never hidden by a region rule.** Most of a well-kept
 catalogue has none, and the alternative loses every unlabelled title the
 moment somebody hides anything.
+
+**Index creation in a migration uses `CREATE INDEX IF NOT EXISTS`.** Every
+one of them is also declared on its table, so a fresh install gets it from
+`createAll` and only an upgrade runs the migration — but a migration that
+cannot be run twice cannot be recovered from having been interrupted, and the
+second attempt fails on the index the first one had already made.
 
 Note that bumping the schema means a 1.1 device cannot hand over to a 1.0 one.
 That is the compatibility check working, not a bug.
