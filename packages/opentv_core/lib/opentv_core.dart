@@ -28,6 +28,7 @@ export 'src/metadata/tmdb_models.dart';
 export 'src/playlist/m3u_parser.dart';
 export 'src/playlist/playlist_entry.dart';
 export 'src/store/database.dart';
+export 'src/store/recovery_snapshot.dart';
 export 'src/store/search_text.dart';
 export 'src/store/tables.dart';
 export 'src/sync/m3u_fetcher.dart';

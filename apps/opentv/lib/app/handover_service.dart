@@ -6,6 +6,7 @@ import 'package:opentv_core/opentv_core.dart';
 import 'backup_service.dart';
 import 'backup_sync.dart';
 import 'host.dart';
+import 'recovery_service.dart';
 import 'settings_screen.dart';
 import 'subtitle_service.dart';
 import 'vpn_service.dart';
@@ -81,6 +82,11 @@ class HandoverService {
     // fingerprint that says which bucket it belongs to rides in the
     // preferences table, which travels with the database.
     await take(BackupSync.dataKeyReference);
+    // What this setup is, for a device whose catalogue the system may delete
+    // out from under it. The receiver's own database says the same thing the
+    // moment it writes its next record; carrying it means a device purged
+    // between the handover and its next launch is still recoverable.
+    await take(RecoveryService.recoveryReference);
 
     return out;
   }

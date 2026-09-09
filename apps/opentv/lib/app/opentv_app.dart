@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'backup_service.dart';
+import 'recovery_service.dart';
 import 'backup_sync.dart';
 import '../l10n/strings.dart';
 import 'package:opentv_core/opentv_core.dart';
@@ -334,12 +335,28 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         // the process is frozen is not guaranteed, which is why the queue
         // survives being drained — the next launch sends whatever did not go.
         unawaited(_sync?.run());
+        // And what this device is set up as, which may have changed during
+        // the session. Recorded here rather than at each place a provider or
+        // a folder is changed: a list of call sites is a list somebody adds
+        // to and forgets, and the cost of being one session behind is a
+        // viewer typing a portal address they had typed once already.
+        unawaited(_rememberSetup());
       case AppLifecycleState.resumed:
         _vpn.connectIfConfigured();
         unawaited(_sync?.run());
       case AppLifecycleState.inactive:
         break;
     }
+  }
+
+  /// Writes down what this device is set up as.
+  ///
+  /// See [RecoveryService]: on tvOS the catalogue lives somewhere the system
+  /// may delete, and this is the part of a setup that cannot be fetched again.
+  Future<void> _rememberSetup() async {
+    final db = _db;
+    if (db == null) return;
+    await RecoveryService(db: db, host: _host).remember();
   }
 
   Future<void> _open() async {
@@ -374,7 +391,18 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         setup: _prepareSqlite,
       ));
 
+      // Before the sources are read, because on a device whose catalogue the
+      // system deleted there are none — and this is what puts them back. Only
+      // ever fills what is missing, so a launch with everything intact is
+      // untouched by it.
+      final recovery = RecoveryService(db: db, host: _host);
+      await recovery.restore();
+
       final sources = await db.allSources();
+      // And record where things stand now, so the next purge is recoverable
+      // too. After the read, so a restore that failed is not written down as
+      // an empty setup.
+      unawaited(recovery.remember());
 
       if (!mounted) {
         await db.close();

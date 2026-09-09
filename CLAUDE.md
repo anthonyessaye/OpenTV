@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 715 core, 141 ui, 245 app.
+Tests: 719 core, 141 ui, 251 app.
 
 ## Two interfaces, one app
 
@@ -904,6 +904,39 @@ sync works and looks exactly as though it had not.
 that echoed each other would hand the same position back and forth for as
 long as both were running. `_writePlayback` and `_writeFavourite` are the
 unqueued halves, and `applyBackupRecords` is the only caller.
+
+## Surviving a purge on tvOS
+
+tvOS reclaims `Library/Caches` whenever it wants the space, and that is where
+the catalogue has to live: Apple guarantees an app about half a megabyte it
+will not touch, and a real provider's catalogue is **240MB** — measured on the
+Apple TV, not estimated. There is no arrangement of files that changes that,
+so the app is built to lose it.
+
+Three kinds of thing, three answers. **The catalogue is a cache and always
+was** — a copy of the provider's listing, rebuilt by one sync, correctly in
+Caches. **Secrets are in the keystore**, which tvOS does not purge. **Watch
+history is in the viewer's own folder**, which is not on the device at all.
+
+What was left over is the gap `RecoveryService` fills: *which* portal, *which*
+account, *which* bucket. A few hundred bytes, not secret, not derivable, and
+sitting in the one file the system may delete — so a purged device held a
+keystore full of passwords with nothing saying what they opened, and could not
+find the folder its history was in to restore either. It goes in the keystore
+beside the secrets, not because it is one but because that is the only durable
+store the platform offers.
+
+**It replaces rather than merges, and that is how a provider gets removed.** A
+record that only ever grew would put back what somebody had just deleted, on
+every launch, for ever.
+
+**Written on leaving the foreground rather than at each place a setup
+changes.** A list of call sites is a list somebody adds to and forgets; the
+cost of being one session behind is a viewer retyping an address they had
+typed once already.
+
+**Restoring runs on every launch and fills only what is missing**, because the
+launch after a purge looks like any other from the inside.
 
 ## Security decisions already made
 
