@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 715 core, 141 ui, 235 app.
+Tests: 715 core, 141 ui, 239 app.
 
 ## Two interfaces, one app
 
@@ -464,6 +464,30 @@ a codec problem and has nothing to do with codecs. This shipped once. A plain
 black `View` above the surface, hidden on `onRenderedFirstFrame`, is what
 `PlayerView` itself does, and `player_contract_test` now fails if `lockCanvas`
 comes back.
+
+**A stream can open, report no error, and never show anything.** VLC does not
+call that a failure: it sits in playing or buffering with no frames, for ever,
+and the chrome spins. An **Apple TV HD meets it on every H.265 channel** — the
+A8 has no hardware decoder for one, so software decoding runs and cannot
+allocate the buffers it needs (`get_buffer() failed` in the device log, and
+nothing at all on screen). Films and series were fine because they are not
+H.265. The player screen now notices no picture after twelve seconds and says
+so, and names H.265 when `hevcHardware` says this box could never have played
+it. `VTIsHardwareDecodeSupported` answers that on Apple; `MediaCodecList` on
+Android, where it is always true and the key exists so the two engines agree.
+
+**The television invented its own failure message and ignored the one the
+device sent.** `error` has been in the snapshot since the contract was
+written, the phone has always read it, and `player_screen` built a sentence
+out of the state string instead — so everything the native knew was thrown
+away on the one platform where a viewer is furthest from a log. That is the
+same fault as a key nobody reads, and it hid behind a key that *was* read.
+
+**`videoCodec` was in the contract, filled by Media3, and empty on Apple** —
+not because libVLC cannot answer it but because it had been written down
+beside `dynamicRange`, which genuinely cannot be answered. `tracksInformation`
+carries a fourcc per track. A reason that applies to one key had quietly been
+extended to its neighbour.
 
 ## The handover
 

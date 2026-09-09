@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opentv/mobile/mobile_player.dart';
@@ -129,5 +130,55 @@ void main() {
     await tester.pump();
 
     expect(find.text('SUBTITLES'), findsNothing);
+  });
+
+  group('a stream that opens and never shows anything', () {
+    // VLC calls this neither an error nor an end: it sits in playing or
+    // buffering with no frames, for ever, and the chrome spins. An Apple TV HD
+    // meets it on every H.265 channel — its A8 has no decoder for one, so
+    // software decoding runs and cannot allocate the buffers it needs. The
+    // first install on real hardware showed a channel that simply did not
+    // start, with nothing on screen saying why.
+    final source = File('lib/player_screen.dart').readAsStringSync();
+
+    test('says so rather than spinning', () {
+      expect(source, contains('bool get _stalled'));
+      expect(
+        source,
+        contains("'No picture from this channel."),
+        reason: 'a stream with no picture reports nothing again',
+      );
+    });
+
+    test('and names H.265 where that is the reason', () {
+      expect(
+        source,
+        contains("raw['hevcHardware'] == false"),
+        reason: 'the message cannot tell a codec this box will never decode '
+            'from a stream that is merely broken',
+      );
+    });
+
+    test('the reason the device gave is preferred to one invented here', () {
+      // The native has always sent `error` and the phone has always read it.
+      // The television built its own sentence out of the state string and
+      // ignored the key, which is the same fault as a key nobody reads.
+      expect(
+        source,
+        contains("final reported = raw['error'];"),
+        reason: 'the television is inventing its own message again',
+      );
+    });
+
+    test('and the clock restarts when zapping to another channel', () {
+      // Left running, the first channel's stall is reported against every
+      // channel zapped to after it.
+      final start = source.indexOf('VoidCallback? _zap(');
+      expect(start, isNot(-1));
+      expect(
+        source.substring(start, start + 600),
+        contains('_startedAt = DateTime.now()'),
+      );
+    });
   });
 }

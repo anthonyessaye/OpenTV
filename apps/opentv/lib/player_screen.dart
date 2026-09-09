@@ -123,6 +123,21 @@ class _PlayerScreenState extends State<PlayerScreen>
   Timer? _poll;
   PlaybackStatus _status = const PlaybackStatus(phase: PlaybackPhase.opening);
 
+  /// When this stream was asked to start, so a picture that never arrives can
+  /// be told from one that is merely slow.
+  ///
+  /// A minute of a live channel buffering on a poor connection is ordinary; a
+  /// stream that has been open this long and produced no frame at all is not
+  /// going to. VLC reports neither case as an error.
+  DateTime? _startedAt;
+  static const _noPictureAfter = Duration(seconds: 12);
+  bool _sawPicture = false;
+
+  bool get _stalled =>
+      !_sawPicture &&
+      _startedAt != null &&
+      DateTime.now().difference(_startedAt!) > _noPictureAfter;
+
   /// Which chooser is open, if any. Only one at a time: they occupy the same
   /// place and a remote has no way to address two.
   _Sheet? _sheet;
@@ -367,9 +382,11 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _onViewCreated(int id) {
     _channel = MethodChannel('opentv/player/$id');
+    _startedAt = DateTime.now();
     _poll = Timer.periodic(const Duration(milliseconds: 500), (_) async {
       final raw = await _channel?.invokeMapMethod<String, Object?>('state');
       if (raw == null || !mounted) return;
+      if (raw['framesSeen'] == true) _sawPicture = true;
       final status = _toStatus(raw);
       setState(() {
         _status = status;
@@ -707,6 +724,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (move == null) return null;
     return () async {
       await _channel?.invokeMethod<void>('stop');
+      // A new stream, so the clock that decides "this one never produced a
+      // picture" starts again. Left running, the first channel's stall would
+      // be reported against every one zapped to afterwards.
+      _sawPicture = false;
+      _startedAt = DateTime.now();
       move();
     };
   }
@@ -748,8 +770,38 @@ class _PlayerScreenState extends State<PlayerScreen>
         0,
         99,
       ),
-      error: raw['state'] == 'error' ? 'The stream could not be opened.' : null,
+      error: _failure(raw),
     );
+  }
+
+  /// Why nothing is playing, in the words the device used where it gave any.
+  ///
+  /// This used to invent its own sentence from the state string and ignore
+  /// the `error` key entirely — which the phone has always read. The native
+  /// knew more than the television was willing to hear, which is the same
+  /// fault as a key nobody reads at all.
+  ///
+  /// A stream that opens and never produces a picture is the other half. VLC
+  /// does not call that an error: it sits in playing or buffering with no
+  /// frames, for ever, and the chrome spins. An Apple TV HD meets it on every
+  /// H.265 channel, because its A8 has no decoder for one and software
+  /// decoding cannot allocate what it needs.
+  String? _failure(Map<String, Object?> raw) {
+    final reported = raw['error'];
+    if (reported is String && reported.isNotEmpty) return reported;
+    if (raw['state'] == 'error') return 'The stream could not be opened.';
+
+    if (!_stalled) return null;
+
+    final codec = (raw['videoCodec'] as String?)?.toLowerCase();
+    final hevc = codec != null && (codec.contains('hev') || codec == 'h265');
+    if (hevc && raw['hevcHardware'] == false) {
+      return 'No picture. This channel is H.265, and this device has no '
+          'hardware decoder for it — an Apple TV 4K does. Films and series '
+          'in other formats are unaffected.';
+    }
+    return 'No picture from this channel. The stream opened but sent nothing '
+        'this device could decode.';
   }
 
   @override
