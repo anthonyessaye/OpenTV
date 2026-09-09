@@ -119,6 +119,26 @@ not list tvOS hardware at all, and `xctrace` reported it Offline while
 devicectl had it paired and available. `--console` gives the device's stdout,
 which is the only log there is.
 
+**iOS hardware needs the same treatment**, and for the same reason:
+`flutter build ios --profile` fails at signing with advice about Xcode
+accounts, when the problem is that it built for "Any iOS Device". The same
+`xcodebuild -destination 'id=…' -allowProvisioningUpdates` succeeds, and
+`devicectl device install app` puts it on the phone.
+
+**Reading a device's own database is the fastest way to answer "is this
+actually working".** No screen to relay, no log to hope for:
+
+```bash
+xcrun devicectl device info files --device <id> \
+  --domain-type appDataContainer --domain-identifier com.anthonyessaye.opentv
+xcrun devicectl device copy from --device <id> \
+  --domain-type appDataContainer --domain-identifier com.anthonyessaye.opentv \
+  --source "Library/Caches/opentv/catalogue.sqlite" --destination ./pulled.sqlite
+```
+
+That is how the shared device id was found, and how the fix was confirmed —
+a watermark appearing for a peer the device had been unable to see.
+
 Note that Xcode signed with whichever team could actually issue for the
 device rather than the `DEVELOPMENT_TEAM` in the project, and that the
 hardware to hand is an Apple TV HD (`AppleTV5,3`, A8, 2015) — the slowest
