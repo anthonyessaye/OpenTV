@@ -571,6 +571,14 @@ that were never wrong — one unread directory in the folder and one re-read of
 history the merge is idempotent about, against a device that silently never
 syncs with the one it was set up from.
 
+**Every device handed a setup before that fix is still holding the wrong
+name, and cannot tell from the id alone.** So `backup.device-id-mine` records
+who minted it: an id with no marker beside it predates this and is re-minted
+once, on the next launch, with no action from anybody. That re-mints some ids
+that were never wrong — one unread directory in the folder and one re-read of
+history the merge is idempotent about, against a device that silently never
+syncs with the one it was set up from.
+
 Found by pulling the catalogue off an Apple TV with
 `devicectl device copy from --domain-type appDataContainer`, which is the
 fastest way to answer "is this device actually syncing" and needs nothing from
