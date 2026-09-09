@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 719 core, 141 ui, 251 app.
+Tests: 721 core, 141 ui, 253 app.
 
 ## Two interfaces, one app
 
@@ -925,6 +925,22 @@ keystore full of passwords with nothing saying what they opened, and could not
 find the folder its history was in to restore either. It goes in the keystore
 beside the secrets, not because it is one but because that is the only durable
 store the platform offers.
+
+**It carries the watch history too, because without a folder there is nowhere
+else for it.** A folder is the real answer and the only one that crosses
+devices; a viewer who has not set one up should still not lose a year of
+positions to the system reclaiming disk space. Capped at the most recent 500 —
+74 bytes a row measured on the device, so under 40KB — and favourites are
+outside the cap, because watching regenerates a position and nothing
+regenerates a favourite.
+
+**Restoring goes through `applyBackupRecords`, which is the path built for
+this shape**: it resolves a provider key to whatever id the source has here,
+refuses to overwrite anything newer, and writes *without queueing*. Queued, a
+restore would reach the folder as a fresh evening's watching stamped now, and
+beat the true state on every other device — worse than losing it. The original
+timestamps are preserved for the same reason a shelf ordered by "most recent"
+is only as good as they are.
 
 **It replaces rather than merges, and that is how a provider gets removed.** A
 record that only ever grew would put back what somebody had just deleted, on

@@ -85,6 +85,77 @@ void main() {
     expect(await purged.preference('backup.bucket'), 'OpenTV');
   });
 
+  test('and with what was watched and kept', () async {
+    // The question this exists for: without a folder there is nowhere else
+    // for history to be, and a purge would take a year of positions with it.
+    await addProvider(db);
+    final id = (await db.allSources()).single.id;
+    await db.recordPlayback(
+      sourceId: id,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 8, 20),
+      positionMs: 2400000,
+      durationMs: 7200000,
+    );
+    await db.addFavourite(
+      sourceId: id,
+      kind: ItemKind.live,
+      remoteId: 'bbc1',
+      at: DateTime.utc(2026, 9, 7),
+    );
+    await serviceFor(db).remember();
+
+    final purged = OpenTvDatabase(NativeDatabase.memory());
+    addTearDown(purged.close);
+    expect(await serviceFor(purged).restore(), isTrue);
+
+    final restoredId = (await purged.allSources()).single.id;
+    final position = await purged.playbackStateFor(
+      sourceId: restoredId,
+      kind: ItemKind.movie,
+      remoteId: '9',
+    );
+    expect(position?.positionMs, 2400000);
+    // Preserved rather than reset to the moment of the restore, or a shelf
+    // ordered by "most recent" comes back in the order the rows were written.
+    expect(position?.lastWatchedUtc, DateTime.utc(2026, 9, 8, 20));
+    expect(
+      await purged.isFavourite(
+        sourceId: restoredId,
+        kind: ItemKind.live,
+        remoteId: 'bbc1',
+      ),
+      isTrue,
+    );
+  });
+
+  test('restoring does not look like a fresh evening of watching', () async {
+    // Queued, a restore would reach the folder stamped now and beat the true
+    // state on every other device — which is worse than losing it here.
+    await addProvider(db);
+    final id = (await db.allSources()).single.id;
+    await db.recordPlayback(
+      sourceId: id,
+      kind: ItemKind.movie,
+      remoteId: '9',
+      at: DateTime.utc(2026, 9, 8, 20),
+      positionMs: 10,
+    );
+    await serviceFor(db).remember();
+
+    final purged = OpenTvDatabase(NativeDatabase.memory());
+    addTearDown(purged.close);
+    await serviceFor(purged).restore();
+
+    final queued = await purged.drainSyncOutbox(deviceId: 'x');
+    expect(
+      queued.records,
+      isEmpty,
+      reason: 'a restore is being sent to the folder as new activity',
+    );
+  });
+
   test('a device with its catalogue intact is left alone', () async {
     // This runs on every launch, and the launch after a purge looks like any
     // other from the inside. Restoring over a working setup would duplicate

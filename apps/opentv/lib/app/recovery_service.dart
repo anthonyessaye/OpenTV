@@ -42,6 +42,7 @@ class RecoveryService {
     final bucket = await db.preference('backup.bucket');
 
     final snapshot = RecoverySnapshot(
+      watched: await _watched(sources),
       sources: [
         for (final source in sources)
           RecoveredSource(
@@ -62,6 +63,52 @@ class RecoveryService {
             ),
     );
     await host.writeSecret(recoveryReference, snapshot.encode());
+  }
+
+  /// What has been watched and kept, newest first and capped.
+  ///
+  /// Keyed on the provider rather than on `Sources.id`, which is an
+  /// autoincrement and is a different number the moment a source is added
+  /// back. That is the identity the backup folder already uses.
+  Future<List<RecoveredState>> _watched(List<Source> sources) async {
+    final byId = {
+      for (final source in sources)
+        source.id: providerKey(source.url, source.username),
+    };
+
+    final out = <RecoveredState>[];
+    for (final source in sources) {
+      final provider = byId[source.id]!;
+      for (final kind in ItemKind.values) {
+        for (final row in await db.favouritesOf(source.id, kind)) {
+          out.add(RecoveredState(
+            provider: provider,
+            kind: kind.name,
+            remoteId: row.itemRemoteId,
+            at: row.addedAt,
+            favourite: true,
+          ));
+        }
+      }
+    }
+
+    // Positions after favourites, so the cap falls on the thing that watching
+    // regenerates rather than on the thing nothing does.
+    for (final row in await db.history(limit: RecoverySnapshot.watchedCap)) {
+      final provider = byId[row.sourceId];
+      if (provider == null) continue;
+      out.add(RecoveredState(
+        provider: provider,
+        kind: row.itemKind.name,
+        remoteId: row.itemRemoteId,
+        at: row.lastWatchedUtc,
+        positionMs: row.positionMs,
+        durationMs: row.durationMs,
+        parentRemoteId: row.parentRemoteId,
+        completed: row.completed,
+      ));
+    }
+    return out;
   }
 
   /// Puts back what a purge took, and returns whether it put back a provider.
@@ -105,6 +152,38 @@ class RecoveryService {
       ));
       added = true;
     }
+
+    if (added) await _restoreWatched(snapshot.watched);
     return added;
+  }
+
+  /// Writes the positions and favourites back.
+  ///
+  /// Through `applyBackupRecords`, which is the path built for exactly this
+  /// shape: it resolves a provider key to whatever id the source has here,
+  /// refuses to overwrite anything newer, and — the part that matters —
+  /// writes without queueing. Queued, a restore would arrive at the folder as
+  /// a fresh evening's watching, stamped now, and would beat the true state
+  /// on every other device.
+  Future<void> _restoreWatched(List<RecoveredState> watched) async {
+    if (watched.isEmpty) return;
+    await db.applyBackupRecords([
+      for (final state in watched)
+        BackupRecord(
+          scope: state.favourite
+              ? BackupScope.favourite
+              : BackupScope.playback,
+          key: backupItemKey(state.provider, state.kind, state.remoteId),
+          value: state.favourite
+              ? const {}
+              : {
+                  'positionMs': state.positionMs,
+                  'durationMs': state.durationMs,
+                  'parentRemoteId': state.parentRemoteId,
+                  'completed': state.completed,
+                },
+          stamp: BackupStamp(wallClock: state.at, deviceId: 'restore'),
+        ),
+    ]);
   }
 }
