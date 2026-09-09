@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show min;
 
 import 'package:drift/drift.dart';
 
@@ -2137,7 +2138,10 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// decide between Resume and Play.
   Future<List<({String seriesRemoteId, Episode next, bool resuming})>>
       continueSeries(int sourceId, {int limit = 20}) async {
-    // Completed rows included, unlike the film shelf.
+    // Completed rows included, unlike the film shelf. One read, and these
+    // same rows answer both questions the walk below asks — what was watched
+    // last in each show, and which episodes have been finished — so nothing
+    // in the loop needs to go back to the database.
     final states = await (select(playbackStates)
           ..where((p) =>
               p.sourceId.equals(sourceId) &
@@ -2148,37 +2152,95 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           ]))
         .get();
 
-    final out = <({String seriesRemoteId, Episode next, bool resuming})>[];
-    final seen = <String>{};
+    final finished = {
+      for (final state in states)
+        if (state.completed) state.itemRemoteId,
+    };
 
+    // The latest state for each show, in the order the shelf wants them.
+    final heads = <PlaybackState>[];
+    final seen = <String>{};
     for (final state in states) {
       final parent = state.parentRemoteId;
       if (parent == null || !seen.add(parent)) continue;
+      heads.add(state);
+    }
 
-      // Still mid-episode: that is where to carry on, whatever else is
-      // unwatched further down.
-      if (!state.completed) {
-        final current = await _episodeByRemoteId(sourceId, state.itemRemoteId);
-        if (current != null) {
-          out.add((seriesRemoteId: parent, next: current, resuming: true));
-          if (out.length >= limit) break;
-        }
-        continue;
+    final out = <({String seriesRemoteId, Episode next, bool resuming})>[];
+
+    // In batches rather than a show at a time. This asked the database twice
+    // per show, which cost nothing while a device only knew about the shows
+    // watched on it — and became seconds the moment the sync started
+    // delivering somebody's whole series history, because the loop is as long
+    // as their watching and every step of it crosses the isolate SQLite runs
+    // on. Reported, as this always is, as a tab that used to open instantly
+    // now saying "Reading…".
+    //
+    // Batched rather than fetched in full because most shelves stop at the
+    // first handful: a show yields at most one entry, so twice the limit is
+    // room for the ones that yield none, and a second batch is only read if
+    // that guess was wrong.
+    for (var start = 0; start < heads.length && out.length < limit;) {
+      final batch = heads.sublist(start, min(start + limit * 2, heads.length));
+      start += batch.length;
+
+      final byShow = <String, List<Episode>>{};
+      for (final episode in await _episodesOfShows(
+        sourceId,
+        [for (final head in batch) head.parentRemoteId!],
+      )) {
+        (byShow[episode.seriesRemoteId] ??= []).add(episode);
       }
 
-      final next = await _nextUnfinishedAfter(
-        sourceId,
-        parent,
-        state.itemRemoteId,
-      );
-      if (next == null) continue;
+      for (final head in batch) {
+        final parent = head.parentRemoteId!;
+        final all = byShow[parent] ?? const <Episode>[];
 
-      out.add((seriesRemoteId: parent, next: next, resuming: false));
-      if (out.length >= limit) break;
+        // Still mid-episode: that is where to carry on, whatever else is
+        // unwatched further down.
+        if (!head.completed) {
+          Episode? current;
+          for (final episode in all) {
+            if (episode.remoteId == head.itemRemoteId) {
+              current = episode;
+              break;
+            }
+          }
+          if (current != null) {
+            out.add((seriesRemoteId: parent, next: current, resuming: true));
+            if (out.length >= limit) break;
+          }
+          continue;
+        }
+
+        final next = _nextUnfinished(all, head.itemRemoteId, finished);
+        if (next == null) continue;
+
+        out.add((seriesRemoteId: parent, next: next, resuming: false));
+        if (out.length >= limit) break;
+      }
     }
 
     return out;
   }
+
+  /// Every episode of several shows, in season and episode order within each.
+  ///
+  /// Served by `episode_series`, which is `(source_id, series_remote_id)`.
+  Future<List<Episode>> _episodesOfShows(
+    int sourceId,
+    List<String> seriesRemoteIds,
+  ) =>
+      (select(episodes)
+            ..where((e) =>
+                e.sourceId.equals(sourceId) &
+                e.seriesRemoteId.isIn(seriesRemoteIds))
+            ..orderBy([
+              (e) => OrderingTerm(expression: e.seriesRemoteId),
+              (e) => OrderingTerm(expression: e.season),
+              (e) => OrderingTerm(expression: e.episodeNumber),
+            ]))
+          .get();
 
   /// Series this device has watch progress in and no episodes to show for.
   ///
@@ -2240,46 +2302,19 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   ///
   /// Null when there is nothing after it, which retires the series from the
   /// shelf.
-  Future<Episode?> _nextUnfinishedAfter(
-    int sourceId,
-    String seriesRemoteId,
+  static Episode? _nextUnfinished(
+    List<Episode> ordered,
     String afterRemoteId,
-  ) async {
-    final all = await (select(episodes)
-          ..where((e) =>
-              e.sourceId.equals(sourceId) &
-              e.seriesRemoteId.equals(seriesRemoteId))
-          ..orderBy([
-            (e) => OrderingTerm(expression: e.season),
-            (e) => OrderingTerm(expression: e.episodeNumber),
-          ]))
-        .get();
+    Set<String> finished,
+  ) {
+    final from = ordered.indexWhere((e) => e.remoteId == afterRemoteId);
+    if (from < 0 || from + 1 >= ordered.length) return null;
 
-    final from = all.indexWhere((e) => e.remoteId == afterRemoteId);
-    if (from < 0 || from + 1 >= all.length) return null;
-    final rest = all.sublist(from + 1);
-
-    final progress = {
-      for (final state in await playbackStatesFor(
-        sourceId: sourceId,
-        kind: ItemKind.episode,
-        remoteIds: [for (final e in rest) e.remoteId],
-      ))
-        state.itemRemoteId: state,
-    };
-
-    for (final episode in rest) {
-      if (!(progress[episode.remoteId]?.completed ?? false)) return episode;
+    for (var i = from + 1; i < ordered.length; i++) {
+      if (!finished.contains(ordered[i].remoteId)) return ordered[i];
     }
     return null;
   }
-
-  Future<Episode?> _episodeByRemoteId(int sourceId, String remoteId) =>
-      (select(episodes)
-            ..where((e) =>
-                e.sourceId.equals(sourceId) & e.remoteId.equals(remoteId))
-            ..limit(1))
-          .getSingleOrNull();
 
 
 }

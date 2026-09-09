@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 701 core, 138 ui, 226 app.
+Tests: 704 core, 138 ui, 226 app.
 
 ## Two interfaces, one app
 
@@ -287,6 +287,17 @@ across an isolate boundary, and the whole loop is seconds on a television —
 reported as a category that used to appear instantly now showing "Reading…".
 `programmesForChannels` had existed all along and nothing called it. **After
 that change, a query inside a loop over rows is a bug.**
+
+The series Continue shelf was the same shape and hid for longer, because its
+loop was as long as somebody's watching: two reads per show, and a device only
+knew about shows watched on it. Making the sync deliver series history handed
+every device everybody's shows at once, and the Series tab went back to
+"Reading…". **A wall clock cannot find these.** Measured over 120 shows
+in-memory on a laptop: 16.8ms per call before, 14.3ms after — a rewrite worth
+seconds on a television reads as noise here, because that is exactly the cost
+the isolate boundary adds and an in-memory database does not have. So
+`continue_series_reads_test` counts reads and asserts they do not grow with
+the number of shows; a timing assertion would have passed on the slow one.
 
 **Stacked fields do not traverse on a television.** Onboarding never hit
 this because it shows one field at a time; the first settings panel with five
