@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 727 core, 141 ui, 257 app.
+Tests: 733 core, 141 ui, 257 app.
 
 ## Two interfaces, one app
 

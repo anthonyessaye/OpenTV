@@ -83,6 +83,18 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.0 (500)
+
+```
+Your devices now keep each other up to date. Point them at a storage bucket you own and what you watched, where you stopped, what you kept and which categories you hid follow you between them — encrypted before it leaves the device, on an account only you can read.
+
+Continue watching leads the Films and Series pages, and the live section on phones has it too.
+
+Search is indexed rather than scanned, and works in every alphabet.
+
+Also: OpenTV now runs on Apple TV hardware.
+```
+
 ## Release notes — 1.1.0 (500)
 
 ```
