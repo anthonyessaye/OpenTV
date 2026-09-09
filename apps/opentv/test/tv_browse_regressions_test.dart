@@ -74,4 +74,102 @@ void main() {
       reason: 'selecting a show on Continue does not carry on with it',
     );
   });
+
+  group('Continue, as a row rather than only a tab', () {
+    /// One method's body, and no further.
+    String body(String signature) {
+      final start = source.indexOf(signature);
+      expect(start, isNot(-1), reason: '$signature has been renamed');
+      final end = source.indexOf('\n  }\n', start);
+      expect(end, isNot(-1));
+      return source.substring(start, end);
+    }
+
+    test('the shelf reads the same list the tab does', () {
+      // It asked `continueWatching`, which excludes finished rows. That is
+      // right for a film — there is nothing after it — and wrong for a
+      // series, where finishing episode three is the strongest possible
+      // signal that four is wanted. A show dropped off this shelf the moment
+      // it was watched while staying in the tab beside it, and the fix that
+      // exists for exactly this had landed on one of the two callers.
+      final shelves = body('Future<List<_ShelfData>> _buildShelves(');
+      expect(
+        shelves,
+        contains('_continueIds(sourceId, _continueDepth)'),
+        reason: 'the shelf is computing its own Continue again',
+      );
+      // The call, not the word: the comment above it names the reading this
+      // used to do, and matching on that passed whatever the code did.
+      expect(
+        shelves,
+        isNot(contains('db.continueWatching(')),
+        reason: 'the shelf is back on the reading that drops a finished '
+            'episode',
+      );
+    });
+
+    test('and leads with it, on every section', () {
+      // Films and series led with their highlight, on the grounds that
+      // Continue is empty on a first run — which stops being a reason the
+      // moment there is something in it, and this is inside the check that
+      // there is.
+      expect(
+        body('Future<List<_ShelfData>> _buildShelves('),
+        contains("out.insert(0, (\n          label: 'Continue watching'"),
+        reason: 'Continue is being appended again, two shelves down from '
+            'where a returning viewer is looking',
+      );
+    });
+
+    test('carrying on is decided by the item, not the selected category', () {
+      // The same show is on this screen twice — in Continue and in Top rated
+      // — and only one of them means "carry on". A rule read off the category
+      // could only ever answer that for the tab, which is why choosing a show
+      // from the row opened its page instead of resuming.
+      expect(
+        body('Future<void> _openInner(_Item item)'),
+        contains('if (item.resuming && item.series != null)'),
+        reason: 'resuming is gated on the category again, so the row cannot '
+            'resume',
+      );
+      expect(
+        source,
+        contains('_Item.series(row, resuming: true)'),
+        reason: 'nothing marks the shelf items as something to carry on with',
+      );
+    });
+
+    test('the row is capped and the rest are a press away', () {
+      expect(source, contains('static const _continueShelf = 10'));
+      expect(
+        body('Future<List<_ShelfData>> _buildShelves('),
+        contains('items.take(_continueShelf)'),
+        reason: 'the row is uncapped, so a long history is the whole screen',
+      );
+      // Read deeper than shown, or the heading cannot say how many there are
+      // and there is nothing for "View all" to offer.
+      expect(source, contains('static const _continueDepth = 60'));
+      expect(
+        body('Future<List<_ShelfData>> _buildShelves('),
+        contains('total: items.length'),
+      );
+    });
+
+    test('and the shelf is in the order things were watched', () {
+      // `moviesByRemoteIds` and its siblings answer `IN (...)`, which comes
+      // back in table order. This shelf leads, so its first item becomes the
+      // hero — an arbitrary half-watched film in that spot is the opposite of
+      // what the shelf is for.
+      expect(
+        body('Future<List<_ShelfData>> _buildShelves('),
+        contains('_inOrderOf(resumable, visible(rows))'),
+        reason: 'the shelf is in whatever order the table holds',
+      );
+      expect(
+        shortcut(),
+        contains('_inOrderOf(ids, resolved)'),
+        reason: 'the tab is in whatever order the table holds',
+      );
+    });
+  });
 }

@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 704 core, 138 ui, 226 app.
+Tests: 704 core, 141 ui, 231 app.
 
 ## Two interfaces, one app
 
@@ -269,6 +269,28 @@ None of these fail. Nothing logs, nothing throws, and each one looks like
 working software in a screenshot. **If a feature is silent, grep both ends
 before redesigning either** — `grep -c` on the parameter name is usually
 enough to find it.
+
+**Two callers of one idea drift apart quietly.** The Continue shelf and the
+Continue tab both answer "what am I part-way through", and only the tab was
+ever fixed: it reads `continueSeries`, which keeps a show whose last episode
+was finished and works out the next one, while the shelf read
+`continueWatching`, which excludes finished rows. Right for a film — there is
+nothing after it — and wrong for a series, so a show fell off the shelf the
+moment it was watched while sitting in the tab beside it. Both read the same
+thing now.
+
+**Whether selecting something means "carry on" belongs to the item, not the
+screen.** The front page shows the same show twice — in Continue and in Top
+rated — and only one of them means carry on. The rule was `_category ==
+_continueId`, which can only ever be right for the tab, so choosing a show
+off the row opened its page instead of resuming. `_Item.resuming` carries it.
+
+**`IN (...)` comes back in table order.** `moviesByRemoteIds` and its
+siblings are handed ids in the order things were watched and answer in
+whichever order the rows sit, which is fine for a grid that sorts itself and
+wrong for a shelf whose entire claim is "most recent first" — and worse now
+that Continue leads, because the first item of the leading shelf becomes the
+hero. `_inOrderOf` puts them back.
 
 **Browsing a category is a filter and a sort at once, and schema 8 exists
 because no index served both.** `movie_counts` filters and cannot order;

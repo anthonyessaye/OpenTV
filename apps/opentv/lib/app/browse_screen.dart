@@ -139,7 +139,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// category picked there is no reason to lead with the alphabetical start
   /// of 180,000 films, so the screen offers reasons to watch something
   /// instead: what is worth watching, what you were watching, what you kept.
-  List<({String label, List<_Item> items})> _shelves = const [];
+  List<_ShelfData> _shelves = const [];
   bool _loading = true;
 
   /// How many rows have been asked for, and whether there are more.
@@ -302,27 +302,30 @@ class _BrowseScreenState extends State<BrowseScreen> {
                 row.itemRemoteId,
             ];
 
+      final continuing = _category == _continueId;
       final resolved = switch (_section) {
         TvSection.films => [
           for (final row in await widget.db.moviesByRemoteIds(sourceId, ids))
             if (!_regions.isHidden(ItemKind.movie, row.region))
-            _Item.film(row),
+            _Item.film(row, resuming: continuing),
         ],
         TvSection.series => [
           for (final row in await widget.db.seriesByRemoteIds(sourceId, ids))
             if (!_regions.isHidden(ItemKind.series, row.region))
-            _Item.series(row),
+            _Item.series(row, resuming: continuing),
         ],
         _ => [
           for (final row in await widget.db.channelsByRemoteIds(sourceId, ids))
             if (!_regions.isHidden(ItemKind.live, row.region))
-            _Item.channel(row),
+            _Item.channel(row, resuming: continuing),
         ],
       };
 
       if (!mounted || generation != _generation) return;
       setState(() {
-        _items = resolved;
+        // Newest first, which is the order the ids were asked for and not
+        // the order `IN (...)` answers in.
+        _items = _inOrderOf(ids, resolved);
         // Cleared, or the grid keeps drawing the shelves All left behind and
         // the list never appears. Coming from any other category worked,
         // because that path clears them on the way through — which is why
@@ -356,7 +359,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
     // Shelves replace the grid when nothing is filtered. Live gets them too:
     // a wall of provider logos says nothing about what to watch, where the
     // last thing you had on and the handful you kept say quite a lot.
-    final shelves = <({String label, List<_Item> items})>[];
+    final shelves = <_ShelfData>[];
     if (_category == null) {
       shelves.addAll(await _buildShelves(sourceId, hidden));
     }
@@ -382,10 +385,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// network calls — a keystore read and a URL build for live, a metadata
   /// lookup for films — and a section that waits on either before drawing
   /// anything is the five-second load this replaced.
-  Future<void> _prepareLead(
-    int generation,
-    List<({String label, List<_Item> items})> shelves,
-  ) async {
+  Future<void> _prepareLead(int generation, List<_ShelfData> shelves) async {
     if (shelves.isEmpty || shelves.first.items.isEmpty) return;
     final lead = shelves.first.items.first;
 
@@ -555,6 +555,31 @@ class _BrowseScreenState extends State<BrowseScreen> {
     );
   }
 
+  /// How deep the Continue reading goes, and how much of it a shelf shows.
+  ///
+  /// The shelf is capped and the tab is not: ten is a glance, and anything
+  /// past it is somebody looking for one particular thing. Read deeper than
+  /// the shelf shows so the heading can say how many there really are, and so
+  /// "View all" is offered only when there is something more to see.
+  static const _continueShelf = 10;
+  static const _continueDepth = 60;
+
+  /// The resolved rows, back in the order the ids were given in.
+  ///
+  /// `moviesByRemoteIds` and its siblings answer `IN (...)`, which comes back
+  /// in table order — fine for a grid that sorts itself, wrong for a shelf
+  /// whose whole claim is "most recent first".
+  static List<_Item> _inOrderOf(List<String> ids, List<_Item> rows) {
+    final byId = <String, _Item>{
+      for (final row in rows)
+        if (row.remoteId case final String id) id: row,
+    };
+    return [
+      for (final id in ids)
+        if (byId[id] case final _Item row) row,
+    ];
+  }
+
   static List<String> _resumableIds(
     Iterable<PlaybackState> states,
     ItemKind kind,
@@ -579,7 +604,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   /// the rest. That order is deliberate: a shelf of your own half-watched
   /// films is more useful than any editorial one, but it is empty on a first
   /// run, so it cannot be the thing that greets a new viewer.
-  Future<List<({String label, List<_Item> items})>> _buildShelves(
+  Future<List<_ShelfData>> _buildShelves(
     int sourceId,
     Set<String> hidden,
   ) async {
@@ -596,12 +621,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
         if (!hidden.contains(row.categoryId)) row,
     ];
 
-    final out = <({String label, List<_Item> items})>[];
+    final out = <_ShelfData>[];
 
     // Issued together rather than one after another. Six round trips in
     // series is what made this screen take a visible couple of seconds; they
     // do not depend on each other, so they need not wait for each other.
-    final (topFilms, recentFilms, topSeries, recentSeries, watching, kept) =
+    final (topFilms, recentFilms, topSeries, recentSeries, resumable, kept) =
         await (
           films
               ? widget.db.topRatedMovies(
@@ -630,7 +655,13 @@ class _BrowseScreenState extends State<BrowseScreen> {
                   hiddenRegions: _regions.forKind(ItemKind.series),
                 )
               : Future.value(const <SeriesEntry>[]),
-          widget.db.continueWatching(sourceId: sourceId, limit: 20),
+          // The same reading the Continue tab does, rather than a second one
+          // that disagreed with it: this asked `continueWatching`, which
+          // excludes finished rows — right for a film, and wrong for a series,
+          // where finishing episode three is the strongest possible signal
+          // that four is wanted. A show fell off this shelf the moment it was
+          // watched, while staying in the tab beside it.
+          _continueIds(sourceId, _continueDepth),
           widget.db.favouritesOf(sourceId, kind),
         ).wait;
 
@@ -644,53 +675,58 @@ class _BrowseScreenState extends State<BrowseScreen> {
             )
           : topFilms;
       final items = visible(leading.map(_Item.film));
-      if (items.isNotEmpty) out.add((label: 'Top rated', items: items));
+      if (items.isNotEmpty) out.add((label: 'Top rated', items: items, total: items.length));
 
       final recently = visible(recentFilms.map(_Item.film));
       if (recently.isNotEmpty) {
-        out.add((label: 'Recently added', items: recently));
+        out.add((label: 'Recently added', items: recently, total: recently.length));
       }
     }
 
     if (series) {
       final items = visible(topSeries.map(_Item.series));
-      if (items.isNotEmpty) out.add((label: 'Top rated', items: items));
+      if (items.isNotEmpty) out.add((label: 'Top rated', items: items, total: items.length));
 
       // "Updated" rather than "added": lastModified moves when a new episode
       // lands, which is the thing worth surfacing about a series.
       final updated = visible(recentSeries.map(_Item.series));
-      if (updated.isNotEmpty) out.add((label: 'Recently updated', items: updated));
+      if (updated.isNotEmpty) out.add((label: 'Recently updated', items: updated, total: updated.length));
     }
 
-    final resumable = _resumableIds(watching, kind);
     if (resumable.isNotEmpty) {
       final rows = switch (kind) {
         ItemKind.movie => (await widget.db.moviesByRemoteIds(
           sourceId,
           resumable,
-        )).map(_Item.film),
+        )).map((row) => _Item.film(row, resuming: true)),
         ItemKind.series => (await widget.db.seriesByRemoteIds(
           sourceId,
           resumable,
-        )).map(_Item.series),
+        )).map((row) => _Item.series(row, resuming: true)),
         _ => (await widget.db.channelsByRemoteIds(
           sourceId,
           resumable,
-        )).map(_Item.channel),
+        )).map((row) => _Item.channel(row, resuming: true)),
       };
-      final items = visible(rows);
+      // Back into the order they were watched in. The lookups answer `IN
+      // (...)` and come back in whatever order the table holds, which is not
+      // an order that means anything here — and this shelf leads, so its
+      // first item becomes the hero. An arbitrary half-watched film in that
+      // spot is the opposite of what the shelf is for.
+      final items = _inOrderOf(resumable, visible(rows));
       if (items.isNotEmpty) {
-        if (kind == ItemKind.live) {
-          // Live leads with what was last on: there is no editorial shelf for
-          // channels, and the last thing you watched is the likeliest thing
-          // you want when you sit down.
-          out.insert(0, (label: 'Continue watching', items: items));
-        } else {
-          // Films and series lead with their highlight instead. Putting
-          // Continue first there demoted the shelf the screen exists to
-          // show, and the hero is drawn from whatever leads.
-          out.add((label: 'Continue watching', items: items));
-        }
+        // Every section leads with it, films and series included. They used
+        // to lead with their highlight on the grounds that Continue is empty
+        // on a first run — which stops being a reason the moment there is
+        // something in it, and the shelf is checked before it is added.
+        out.insert(0, (
+          label: 'Continue watching',
+          // Ten, and the rest are a press away. A shelf is something to
+          // glance along; the tab is where a viewer goes to look for one
+          // particular thing they left half-finished.
+          items: items.take(_continueShelf).toList(),
+          total: items.length,
+        ));
       }
     }
 
@@ -711,7 +747,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
         )).map(_Item.channel),
       };
       final items = visible(rows);
-      if (items.isNotEmpty) out.add((label: 'Your favourites', items: items));
+      if (items.isNotEmpty) out.add((label: 'Your favourites', items: items, total: items.length));
     }
 
     return out;
@@ -753,10 +789,14 @@ class _BrowseScreenState extends State<BrowseScreen> {
   Future<void> _openInner(_Item item) async {
     // A series is not a stream; it is a list of them. It gets its own screen,
     // which fetches the episodes the bulk sync deliberately skipped.
-    // On Continue, a show carries on rather than opening its page. Everywhere
-    // else a series is a list to choose from, which is what the page is for —
-    // the difference is what the viewer asked for by being on this shelf.
-    if (_category == _continueId && item.series != null) {
+    // Offered as something to carry on with, a show carries on rather than
+    // opening its page. Everywhere else a series is a list to choose from,
+    // which is what the page is for — the difference is what the viewer asked
+    // for by choosing it off Continue. Read off the item rather than the
+    // selected category, because the front page shows both at once: the same
+    // show sits in Continue and in Top rated, and only one of them means
+    // "carry on".
+    if (item.resuming && item.series != null) {
       final next = _continueNext[item.series!.remoteId];
       if (next != null) {
         final episodes = await widget.db.episodesOf(
@@ -1185,6 +1225,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
             (
               label: _shelves.first.label,
               items: _shelves.first.items.skip(1).toList(),
+              total: _shelves.first.total,
             ),
             ..._shelves.skip(1),
           ];
@@ -1216,6 +1257,13 @@ class _BrowseScreenState extends State<BrowseScreen> {
         return _Shelf(
           label: rest[at].label,
           items: rest[at].items,
+          total: rest[at].total,
+          onViewAll: rest[at].label == 'Continue watching'
+              ? () {
+                  setState(() => _category = _continueId);
+                  _loadItems();
+                }
+              : null,
           onSelect: _open,
         );
       },
@@ -1364,8 +1412,15 @@ class _BrowseScreenState extends State<BrowseScreen> {
 }
 
 /// One thing in the grid, whichever kind it came from.
+/// A row of the front page: a heading, what it shows, and how many it has.
+///
+/// The count is separate because the Continue shelf shows ten of however many
+/// there are, and a heading that says ten when a viewer has forty is a small
+/// lie with a "View all" sitting right beside it.
+typedef _ShelfData = ({String label, List<_Item> items, int total});
+
 class _Item {
-  _Item.channel(Channel row, {this.nowTitle})
+  _Item.channel(Channel row, {this.nowTitle, this.resuming = false})
     : name = row.name,
       imageUrl = row.iconUrl,
       number = row.number,
@@ -1375,7 +1430,7 @@ class _Item {
       movie = null,
       series = null;
 
-  _Item.film(Movie row)
+  _Item.film(Movie row, {this.resuming = false})
     : nowTitle = null,
       name = row.name,
       imageUrl = row.iconUrl,
@@ -1387,7 +1442,7 @@ class _Item {
       series = null;
 
   /// A series has no stream of its own — opening it opens its episode list.
-  _Item.series(SeriesEntry row)
+  _Item.series(SeriesEntry row, {this.resuming = false})
     : nowTitle = null,
       name = row.name,
       imageUrl = row.coverUrl,
@@ -1401,6 +1456,18 @@ class _Item {
   final String name;
   final String? imageUrl;
   final int? number;
+
+  /// The provider's own id for whichever of the three this is.
+  String? get remoteId =>
+      channel?.remoteId ?? movie?.remoteId ?? series?.remoteId;
+
+  /// Offered as something to carry on with, rather than something to browse.
+  ///
+  /// Carried on the item rather than read off the selected category, because
+  /// the same show appears in both places on one screen: choosing it from
+  /// Continue should carry on, and choosing it from Top rated should open its
+  /// page. The category could only ever answer that for the tab.
+  final bool resuming;
 
   /// Kept so a shelf can drop what the parental lock hides — a shelf built
   /// from favourites or history would otherwise walk straight past it.
@@ -1584,32 +1651,54 @@ class _Shelf extends StatelessWidget {
     required this.label,
     required this.items,
     required this.onSelect,
+    this.total,
+    this.onViewAll,
     this.autofocus = false,
   });
 
   final String label;
   final List<_Item> items;
   final ValueChanged<_Item> onSelect;
+
+  /// How many there are, where that is more than are shown.
+  final int? total;
+
+  /// Where the rest of them live. A tile at the end of the row rather than a
+  /// control beside the heading: on a d-pad the viewer is already travelling
+  /// rightwards along the shelf, and the way out is the next thing they
+  /// reach. A button by the heading would have to be aimed at.
+  final VoidCallback? onViewAll;
+
   final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
 
+    // Offered only when there is genuinely more behind it.
+    final more = onViewAll != null && (total ?? items.length) > items.length;
+    final count = more ? items.length + 1 : items.length;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: OpenTvSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeader(title: label, count: items.length),
+          SectionHeader(title: label, count: total ?? items.length),
           SizedBox(
             height: PosterTile.preferredHeight + 44,
             child: FocusRow(
               height: PosterTile.preferredHeight,
               itemExtent: PosterTile.preferredWidth,
               padding: const EdgeInsets.only(left: OpenTvSpace.md),
-              itemCount: items.length,
+              itemCount: count,
               itemBuilder: (context, index) {
+                if (more && index == items.length) {
+                  return ViewAllTile(
+                    remaining: (total ?? items.length) - items.length,
+                    onSelect: onViewAll!,
+                  );
+                }
                 final item = items[index];
                 final cleaned = TitleCleaner.clean(item.name);
                 return PosterTile(
