@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
@@ -119,5 +120,80 @@ void main() {
       reason: 'a hidden region is still on the grid',
     );
     expect(find.text('Low Tide'), findsOneWidget);
+  });
+
+  test('the phone re-reads its filters when a pass changes them', () {
+    final source = File('lib/mobile/mobile_home.dart').readAsStringSync();
+    final start = source.indexOf('void _reloadAfterSync() {');
+    expect(start, isNot(-1));
+    final body = source.substring(start, start + 300);
+    expect(body, contains('_loadRegions()'));
+    expect(body, contains('_refreshShelves()'));
+    expect(
+      source,
+      contains('revision.addListener(_reloadAfterSync)'),
+      reason: 'a pass rebuilds the strips and leaves the filters stale',
+    );
+  });
+
+  group('the phone\'s live section', () {
+    final source = File('lib/mobile/mobile_home.dart').readAsStringSync();
+
+    test('has the two shelves films and series have', () {
+      // Every screen that exists on the television has to exist on the phone,
+      // and live was the one kind left out: the tab was the channel list and
+      // nothing else, so everything watched before the most recent channel
+      // was gone and a favourited channel had nowhere at all to appear.
+      final start = source.indexOf('0 => _LiveTab(');
+      expect(start, isNot(-1), reason: 'the live tab has been renamed');
+      final block = source.substring(start, start + 500);
+      expect(block, contains('shelves: _Shelves('));
+      expect(block, contains('load: _liveContinueItems'));
+      expect(block, contains('favourites: () => _favouriteItems(ItemKind.live)'));
+    });
+
+    test('scrolls as one thing, not a list inside a list', () {
+      // The shelves went in above a `ListView` wrapped in a
+      // `SliverFillRemaining(hasScrollBody: true)` — a second scrollable
+      // filling the viewport. On a device, scrolling down past the shelves
+      // worked and scrolling back up to reach them did not: the inner list
+      // took the gesture and stopped at its own top.
+      //
+      // Read from the source rather than laid out, and deliberately so: the
+      // arrangement misbehaves under a finger and not under `tester.drag`, so
+      // a widget test of it passes either way. What can be checked is that
+      // there is one scrollable, which is the whole of the fix.
+      final start = source.indexOf('Widget _list(List<Channel> channels) {');
+      expect(start, isNot(-1), reason: 'the live list has been renamed');
+      final body = source.substring(start, source.indexOf('\n  }\n', start));
+
+      expect(
+        body,
+        isNot(contains('SliverFillRemaining')),
+        reason: 'the channel list is a scrollable inside a scrollable again',
+      );
+      expect(body, contains('SliverList.builder'));
+      expect(
+        RegExp(r'CustomScrollView').allMatches(body).length,
+        1,
+        reason: 'the shelves and the channels are in separate scroll views',
+      );
+    });
+
+    test('and a favourited channel can be read back', () {
+      // `_favouriteItems` branched on movie, then fell through to series — so
+      // a live favourite was looked for among the shows and never found. The
+      // heart wrote a row nothing could read, which is the exact fault that
+      // method exists to have fixed.
+      final start = source.indexOf('Future<List<_ContinueItem>> _favouriteItems');
+      expect(start, isNot(-1));
+      final body = source.substring(start, source.indexOf('\n  }\n', start));
+      expect(
+        body,
+        contains('if (kind == ItemKind.live)'),
+        reason: 'live falls through to the series lookup again',
+      );
+      expect(body, contains('channelsByRemoteIds'));
+    });
   });
 }

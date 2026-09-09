@@ -13,6 +13,16 @@ most of what it knows from things that failed silently.
 
 ### Added
 
+- **Carry on watching on another device.** Point each device at a folder in
+  storage you own — Backblaze B2, Cloudflare R2, Wasabi, Storj or your own
+  MinIO — and a film paused on the television carries on where you left it on
+  the phone. There is no server and no account with us; what crosses is
+  encrypted before it leaves the device, so the company holding the folder
+  cannot read what you watch. Your catalogue is not copied, because each
+  device already reads that from your provider.
+- Devices with the same provider open the folder with no setup between them.
+  A recovery phrase is the way back in when a portal reissues its password,
+  and the only way in for a device that has no provider yet.
 - The browser setup can set the OpenSubtitles key and the parental PIN. It
   exists to spare you typing on a remote, and those two — a long API key and
   a PIN — were the worst things left to type on one.
@@ -22,6 +32,21 @@ most of what it knows from things that failed silently.
 
 ### Changed
 
+- Search gets its own two- and three-letter prefix tables, which is schema 6.
+  A search begins at two letters, and that is the most expensive prefix a
+  full-text index has: without them it answers `am` by walking every word
+  that starts with `am`. On a fast machine that is twice the cost of a longer
+  term; on a television reading a cold index, it is the difference between a
+  search and a search box that never answers.
+- A search that gives up on the index now stays given up for the rest of the
+  session. A deadline stops the app waiting but not the query, so retrying it
+  on every keystroke stacked slow queries behind each other.
+- Search is indexed rather than scanned, which needs database schema 5. A
+  search that matched little used to read the whole catalogue to say so — 18ms
+  against 0.8ms for one that matched plenty, on 180,000 films — because a
+  `LIKE '%term%'` cannot use an index and `LIMIT` only ends a scan early when
+  there is something to find. It was slowest exactly as you finished typing
+  something specific.
 - SQLite runs on its own isolate. Searching a catalogue of a hundred and
   eighty thousand films is tens of milliseconds per keystroke, and tens of
   milliseconds on the isolate drawing the screen is dropped frames.
@@ -30,12 +55,44 @@ most of what it knows from things that failed silently.
 
 ### Fixed
 
+- Episode names are the episode, not the file. Splitting a provider's path at
+  its `S01E04` only removed what came before the name — so both episode lists
+  have been showing "The Winter Soldier 1080p WEB DL" since they were written.
+  The rule for reading provider names now lives in one place instead of two.
+
 - A phone can send its setup to a television again. The pull direction was
   rewritten to stream sealed frames when holding a whole catalogue in memory
   killed a television box; the push was left as it was and failed the same
   way, in the direction people most want to send it.
 - A truncated push is refused rather than half applied. Every frame that
   arrives is genuine; there can simply be too few of them.
+- **The account panel counts your catalogue.** It summed the per-category
+  counts, which leave out every title a provider filed under no category — so
+  a perfectly good catalogue could report nothing at all, and the only way to
+  discover the number was wrong was to re-read the whole thing and watch it
+  change.
+- A search asks the index for a bounded number of matches. A common two-letter
+  term matches a large part of a catalogue, and reading all of it to keep
+  sixty rows is quick on a laptop and a great many random reads on a
+  television.
+- A search that fell back to the slow path stops saying so once the catalogue
+  is re-read, rather than keeping the warning for the rest of the session.
+- **Search works in Arabic, Cyrillic, Greek and Chinese.** Titles were folded
+  to ASCII before being stored, and every rune with no ASCII equivalent was
+  dropped — so those titles were stored as an empty string, the terms typed to
+  find them became empty too, and the search returned nothing at all. It never
+  failed; it simply never found anything, on catalogues largely made of those
+  channels.
+- A refused handover says why. The device turning it away wrote a sentence
+  explaining itself, sent it, and the other end threw it away unread and
+  showed "the other device answered 400". Both devices now say the same thing,
+  and it names the two app versions rather than two database schema numbers.
+- The handover's progress bar is visible. It had been drawing at zero height
+  since it was written — a childless `ColoredBox` takes the smallest size its
+  constraints allow, and a plain `Stack` constrains loosely — so a transfer
+  showed a rising percentage above six pixels of empty ground. It is the
+  shared bar now, which fills from the leading edge and animates between the
+  steps the transport reports rather than jumping.
 - The television's onboarding no longer clips its own buttons. That step
   overflowed by 219 pixels whenever the phone options were shown, and shipped
   that way because an overflow paints its stripes only in a debug build.

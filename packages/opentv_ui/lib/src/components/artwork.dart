@@ -288,3 +288,56 @@ class PosterTile extends StatelessWidget {
     );
   }
 }
+
+/// The way off the end of a shelf that shows only part of what it has.
+///
+/// Sized to the poster beside it rather than to its own contents: `FocusRow`
+/// lays out on a fixed extent, so a tile that measured itself would sit in a
+/// slot the wrong width and leave a gap the focus ring lands in.
+///
+/// A tile at the end of the row rather than a control beside the heading. On
+/// a d-pad the viewer is already travelling rightwards along the shelf, so the
+/// way out is the next thing they reach; a button by the heading has to be
+/// aimed at, up and back.
+class ViewAllTile extends StatelessWidget {
+  const ViewAllTile({
+    super.key,
+    required this.remaining,
+    required this.onSelect,
+  });
+
+  /// How many are not on the shelf. Shown rather than implied, because "View
+  /// all" alone does not say whether it is worth the press.
+  final int remaining;
+
+  final VoidCallback onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableTile(
+      onSelect: onSelect,
+      semanticLabel: 'View all, $remaining more',
+      child: Container(
+        width: PosterTile.preferredWidth,
+        height: PosterTile.preferredHeight,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: OpenTvColors.surface,
+          borderRadius: OpenTvRadius.tile,
+          border: Border.all(color: OpenTvColors.rule),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('View all', style: OpenTvType.section),
+            const SizedBox(height: OpenTvSpace.xs),
+            Text(
+              '$remaining more',
+              style: OpenTvType.bodyMuted.copyWith(color: OpenTvColors.inkFaint),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

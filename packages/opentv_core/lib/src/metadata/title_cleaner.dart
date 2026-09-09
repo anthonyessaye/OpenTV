@@ -110,6 +110,52 @@ class TitleCleaner {
     'X264',
   };
 
+  /// The rest of a release name, stripped from the tail and not recorded.
+  ///
+  /// Separate from [_qualities] because that answers "what quality is this
+  /// copy", and `MULTI` is not an answer to it. Folding them together made
+  /// the first token removed the reported quality, so a file ending
+  /// `1080p.MULTI` reported MULTI — which the existing tests caught.
+  ///
+  /// Without these the loop stopped at the first token it did not know, so
+  /// `Show.S01E04.The.Winter.Soldier.1080p.WEB-DL.x264` lost `x264` and kept
+  /// `1080p WEB DL`. That is what both episode lists have shown viewers since
+  /// they were written.
+  ///
+  /// Only ever removed from the end, so a film actually called `Remux` or
+  /// `Atmos` keeps its name.
+  static const _releaseTags = {
+    'WEB',
+    'WEBRIP',
+    'WEBDL',
+    'DL',
+    'HDTV',
+    'PDTV',
+    'BLURAY',
+    'BDRIP',
+    'BRRIP',
+    'DVDRIP',
+    'DVDSCR',
+    'HDRIP',
+    'REMUX',
+    'XVID',
+    'DIVX',
+    'AAC',
+    'AC3',
+    'DTS',
+    'DDP',
+    'EAC3',
+    'ATMOS',
+    '10BIT',
+    '8BIT',
+    'PROPER',
+    'REPACK',
+    'RETAIL',
+    // MULTI is already a language, and reported as one.
+    'SUBBED',
+    'DUBBED',
+  };
+
   static const _languages = {
     'MULTI',
     'VOSTFR',
@@ -269,6 +315,11 @@ class TitleCleaner {
       if (_qualities.contains(last)) {
         quality ??= tokens.last.toUpperCase();
         tokens.removeLast();
+      } else if (_releaseTags.contains(last)) {
+        // Removed without being reported. These are how a copy was made, not
+        // what it looks like, and a viewer asking about quality means the
+        // second.
+        tokens.removeLast();
       } else if (_languages.contains(last)) {
         language ??= tokens.last.toUpperCase();
         tokens.removeLast();
@@ -302,4 +353,42 @@ class TitleCleaner {
       episode: episode,
     );
   }
+}
+
+/// What to call one episode, in one place.
+///
+/// This existed twice — once on the television's series screen and once on the
+/// phone's — with a comment on each pointing at the other, and the player was
+/// about to make it three. Providers name episodes in every imaginable way,
+/// and the rule for reading them is not something to keep in step by hand.
+///
+/// A provider that named the episode has already given the answer. Only a
+/// title carrying a marker — `S01E04`, `1x04`, a bare `Episode 4` — is a path
+/// worth splitting, and one that yields nothing worth showing falls back to
+/// the number, which every provider does fill in.
+String episodeLabel({
+  required String title,
+  int? number,
+  int? index,
+  bool withNumber = false,
+}) {
+  final raw = title.trim();
+  final fallback = 'Episode ${number ?? (index == null ? '' : index + 1)}'.trim();
+
+  var name = TitleCleaner.hasEpisodeMarker(raw)
+      ? (TitleCleaner.episodeName(raw) ?? fallback)
+      : (raw.isEmpty ? fallback : raw);
+
+  // And then through the same tail-stripping a film title gets. Splitting at
+  // the marker only removes what came *before* the name; providers put the
+  // release after it, so both screens showing this have been reading
+  // "The Winter Soldier 1080p WEB DL" to viewers since they were written.
+  final tidied = TitleCleaner.clean(name).title.trim();
+  if (tidied.isNotEmpty) name = tidied;
+
+  // The number in front, for a list that runs across seasons and has nothing
+  // else to say which order it is in. The series screen has its own column of
+  // numbers and does not want them repeated in the title.
+  if (!withNumber || number == null) return name;
+  return name == fallback ? name : '$number. $name';
 }

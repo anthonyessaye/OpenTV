@@ -287,6 +287,8 @@ class SetupServer {
         username: _orNull(form['username']),
         password: _orNull(form['password']),
         tmdbKey: _orNull(form['tmdb']),
+        subtitleKey: _orNull(form['subtitles']),
+        parentalPin: _orNull(form['pin']),
         wireGuardConfig: _orNull(form['tunnel']),
       ),
     );

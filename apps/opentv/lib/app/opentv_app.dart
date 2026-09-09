@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:sqlite3/sqlite3.dart' show Database, OpenMode, sqlite3;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'backup_service.dart';
+import 'recovery_service.dart';
+import 'backup_sync.dart';
 import '../l10n/strings.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
@@ -131,6 +135,38 @@ class OpenTvApp extends StatelessWidget {
   }
 }
 
+/// Run inside the database isolate, on every connection.
+///
+/// A top-level function rather than the closure this used to be: the callback
+/// is sent to another isolate, and a closure cannot cross that boundary.
+/// The schema version recorded in a catalogue file, or null if there is none.
+///
+/// Opened read-only and closed again immediately. This runs before the real
+/// connection exists, so it cannot ask drift — and it must not create the
+/// file, or a first run would look like an upgrade from nothing.
+Future<int?> _schemaOnDisk(File file) async {
+  if (!file.existsSync()) return null;
+  try {
+    final raw = sqlite3.open(file.path, mode: OpenMode.readOnly);
+    try {
+      return raw.select('PRAGMA user_version').first.columnAt(0) as int?;
+    } finally {
+      raw.dispose();
+    }
+  } on Object {
+    // A file that cannot be read is the real open's problem to report, with
+    // a better message than this one could give.
+    return null;
+  }
+}
+
+void _prepareSqlite(Database raw) {
+  // Drift does not enable this and SQLite defaults it off, so without it
+  // every ON DELETE CASCADE in the schema is inert and removing a source
+  // silently orphans its whole catalogue.
+  raw.execute('PRAGMA foreign_keys = ON');
+}
+
 /// Decides what the viewer sees first: onboarding, or their catalogue.
 class _Root extends StatefulWidget {
   const _Root({required this.device});
@@ -147,6 +183,19 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   /// The tunnel, held here because it is app-wide and follows the app's own
   /// lifecycle rather than any one screen's.
   final _vpn = VpnService(host: _host);
+
+  /// Whether the catalogue on disk was written by an older build.
+  ///
+  /// Only true while the migration is actually running. A screen that says a
+  /// database is being upgraded on every cold start would be a lie four
+  /// launches out of five, and the fifth is the one that matters.
+  bool _upgrading = false;
+
+  /// Carries what has been watched to the viewer's other devices.
+  ///
+  /// Null until a catalogue is open, because everything it does is expressed
+  /// in terms of a provider and a database.
+  BackupSync? _sync;
 
   OpenTvDatabase? _db;
   SourceService? _service;
@@ -281,11 +330,33 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
         _vpn.disconnect();
+        // The last thing watched has just been written, and this is the
+        // moment a viewer picks up their phone. Whether it finishes before
+        // the process is frozen is not guaranteed, which is why the queue
+        // survives being drained — the next launch sends whatever did not go.
+        unawaited(_sync?.run());
+        // And what this device is set up as, which may have changed during
+        // the session. Recorded here rather than at each place a provider or
+        // a folder is changed: a list of call sites is a list somebody adds
+        // to and forgets, and the cost of being one session behind is a
+        // viewer typing a portal address they had typed once already.
+        unawaited(_rememberSetup());
       case AppLifecycleState.resumed:
         _vpn.connectIfConfigured();
+        unawaited(_sync?.run());
       case AppLifecycleState.inactive:
         break;
     }
+  }
+
+  /// Writes down what this device is set up as.
+  ///
+  /// See [RecoveryService]: on tvOS the catalogue lives somewhere the system
+  /// may delete, and this is the part of a setup that cannot be fetched again.
+  Future<void> _rememberSetup() async {
+    final db = _db;
+    if (db == null) return;
+    await RecoveryService(db: db, host: _host).remember();
   }
 
   Future<void> _open() async {
@@ -298,19 +369,40 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       // the previous one would offer a catalogue that no longer exists.
       _handover = null;
 
-      final db = OpenTvDatabase(
-        NativeDatabase(
-          file,
-          setup: (raw) {
-            // Drift does not enable this and SQLite defaults it off, so
-            // without it every ON DELETE CASCADE in the schema is inert and
-            // removing a source silently orphans its whole catalogue.
-            raw.execute('PRAGMA foreign_keys = ON');
-          },
-        ),
-      );
+      // SQLite on its own isolate, not on the one drawing the screen.
+      //
+      // Every query used to run on the UI isolate, which is fine until the
+      // catalogue is real: a search across a hundred and eighty thousand
+      // films is tens of milliseconds of work per keystroke, and tens of
+      // milliseconds on the UI isolate is dropped frames. On a television
+      // that reads as the whole interface hesitating, because it is.
+      //
+      // Nothing above this changes — drift's API is asynchronous either way,
+      // so the isolate boundary is invisible to every caller.
+      // Asked before the database is opened, because opening it is what
+      // performs the migration and by then the answer is gone.
+      if (await _schemaOnDisk(file) case final int on
+          when on > 0 && on < OpenTvDatabase.latestSchema) {
+        if (mounted) setState(() => _upgrading = true);
+      }
+
+      final db = OpenTvDatabase(NativeDatabase.createInBackground(
+        file,
+        setup: _prepareSqlite,
+      ));
+
+      // Before the sources are read, because on a device whose catalogue the
+      // system deleted there are none — and this is what puts them back. Only
+      // ever fills what is missing, so a launch with everything intact is
+      // untouched by it.
+      final recovery = RecoveryService(db: db, host: _host);
+      await recovery.restore();
 
       final sources = await db.allSources();
+      // And record where things stand now, so the next purge is recoverable
+      // too. After the read, so a restore that failed is not written down as
+      // an empty setup.
+      unawaited(recovery.remember());
 
       if (!mounted) {
         await db.close();
@@ -323,6 +415,30 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         _sources = sources;
         _source = sources.isEmpty ? null : sources.first;
       });
+
+      // Built here rather than at startup: everything it does is expressed in
+      // terms of a database, and the handover replaces that file underneath.
+      final service = _service!;
+      _sync = BackupSync(
+        db: db,
+        backup: BackupService(db: db, host: _host),
+        host: _host,
+        // A show watched on another device arrives as a position against an
+        // episode this one has never fetched, and the Continue shelf needs
+        // that episode to know where to carry on. Films and channels never
+        // needed this: the bulk sync writes both tables in full.
+        loadEpisodes: (source, series) => service.episodesFor(source, series),
+        // What arrives from elsewhere lands in the database, and the shelves
+        // showing it were drawn from what was there at launch. Without this
+        // the sync works and looks exactly as though it had not.
+        onApplied: () {
+          if (mounted) setState(() {});
+        },
+      );
+      // Unawaited on purpose. A television with no internet, a bucket
+      // somebody deleted and a rotated key all end up here, and none of them
+      // is a reason to hold up a catalogue that is already open.
+      unawaited(_sync?.run());
 
       unawaited(_fillMissingRegions(db));
       // Anything a crash left behind. The player deletes its own subtitle on
@@ -533,7 +649,28 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       return Container(
         color: OpenTvColors.ground,
         alignment: Alignment.center,
-        child: const Text('Starting…', style: OpenTvType.body),
+        child: _upgrading
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Upgrading your catalogue',
+                      style: OpenTvType.section),
+                  const SizedBox(height: OpenTvSpace.sm),
+                  const Text(
+                    'Making search quicker. This happens once, and your '
+                    'providers and history are untouched.',
+                    style: OpenTvType.bodyMuted,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: OpenTvSpace.lg),
+                  // Indeterminate, and honestly so: rebuilding an index
+                  // reports nothing as it goes, and a bar that filled at a
+                  // rate this screen invented would be worse than one that
+                  // only says work is happening.
+                  const SizedBox(width: 420, child: TouchProgressBar()),
+                ],
+              )
+            : const Text('Starting…', style: OpenTvType.body),
       );
     }
 
@@ -655,6 +792,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         service: service,
         sources: _sources,
         vpn: _vpn,
+        sync: _sync,
         onSwitchSource: (next) => setState(() => _source = next),
         onAddSource: () => setState(() => _addingSource = true),
         onRemoveSource: _removeSource,
@@ -667,6 +805,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       onStartHandover: () => setState(() => _offering = true),
       db: db,
       vpn: _vpn,
+      sync: _sync,
       source: source,
       resolver: _resolver!,
       service: service,

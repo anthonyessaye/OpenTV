@@ -114,17 +114,17 @@ class _SeriesScreenState extends State<SeriesScreen> {
     });
   }
 
-  /// What to call one episode. See the phone's copy of this: a provider that
-  /// named the episode has already given us the answer, and only a title
-  /// carrying a marker is a path worth splitting.
-  static String _labelFor(Episode episode, int index) {
-    final raw = episode.title.trim();
-    if (!TitleCleaner.hasEpisodeMarker(raw)) {
-      return raw.isEmpty ? 'Episode ${episode.episodeNumber ?? index + 1}' : raw;
-    }
-    return TitleCleaner.episodeName(raw) ??
-        'Episode ${episode.episodeNumber ?? index + 1}';
-  }
+  /// What to call one episode.
+  ///
+  /// The rule lives in core now. It was here and on the phone, each commented
+  /// to point at the other, and the player's episode list was about to make
+  /// it three.
+  static String _labelFor(Episode episode, int index) => episodeLabel(
+        title: episode.title,
+        number: episode.episodeNumber,
+        index: index,
+      );
+
 
   /// How far through an episode the viewer is, or null when it is untouched.
   ///

@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
+import 'backup_service.dart';
+import 'backup_sync.dart';
 import 'host.dart';
 import 'source_service.dart';
 import 'subtitle_service.dart';
@@ -24,6 +26,7 @@ class SettingsScreen extends StatefulWidget {
     this.onStartHandover,
     required this.service,
     required this.vpn,
+    this.sync,
     this.host = const Host(),
   });
 
@@ -45,6 +48,10 @@ class SettingsScreen extends StatefulWidget {
   /// The app's one tunnel. Not built here: a panel with its own instance
   /// would report a state nothing else agreed with.
   final VpnService vpn;
+
+  /// The app's own sync, so a viewer can run one and see what happened rather
+  /// than being told it happens sometimes.
+  final BackupSync? sync;
 
   final Host host;
 
@@ -74,6 +81,7 @@ enum _Panel {
   vpn,
   parental,
   handover,
+  backup,
   about,
 }
 
@@ -121,6 +129,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _note;
   String _tmdbKey = '';
   String _subtitleKey = '';
+
+  /// The backup folder, which is somebody's own bucket and is off until they
+  /// set one up.
+  late final BackupService _backup = BackupService(
+    db: widget.db,
+    host: const Host(),
+  );
+  String _endpoint = '';
+  String _region = '';
+  String _bucket = '';
+  String _accessKey = '';
+  String _secretKey = '';
+  String _phrase = '';
+  bool _hasPhrase = false;
+  bool _backupLoaded = false;
+
+  /// Whether the saved endpoint leaves the region to be typed.
+  ///
+  /// Settled when the panel loads and when something is saved, never derived
+  /// from the field as it is typed. Deriving it added and removed a row
+  /// mid-list on almost every keystroke, and every row after it changed
+  /// index — so the column lost track of what was focused and threw focus
+  /// back to the top.
+  bool _regionNeeded = false;
+  bool _checkingBackup = false;
+  String? _backupNote;
+
+  /// Providers another device syncs that this one could not place.
+  List<UnlinkedProvider> _unlinked = const [];
+  bool _linking = false;
   bool _checking = false;
 
   XtreamAccount? _account;
@@ -168,11 +206,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _CategoryEntry(category: category, kind: kind),
     ];
 
-    final counts = <ItemKind, int>{
-      for (final kind in [ItemKind.live, ItemKind.movie, ItemKind.series])
-        kind: (await widget.db.countsByCategory(widget.active.id, kind)).values
-            .fold(0, (sum, value) => sum + value),
-    };
+    // Counted outright rather than summed out of the per-category counts,
+    // which drop every row a provider filed under no category.
+    final counts = await widget.db.countsOf(widget.active.id);
 
     final tunnel = await widget.vpn.stored();
     await widget.vpn.resync();
@@ -276,6 +312,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Panel.vpn => 'Private tunnel',
                       _Panel.parental => 'Parental lock',
                       _Panel.handover => 'Another device',
+                      // Two words, because the panel buttons are one line
+                      // tall and a longer label wraps and loses its second
+                      // half. "Sync between devices" clipped to "Sync
+                      // between devi" on a real television.
+                      _Panel.backup => 'Device sync',
                       _Panel.about => 'About',
                     },
                     selected: panel == _panel,
@@ -298,6 +339,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       // BY over the whole source, so they are read when the
                       // panel is opened rather than on every settings build.
                       if (panel == _Panel.regions) _loadRegions();
+                      // Reading the bucket settings means a keystore round
+                      // trip for two secrets, so it happens when the panel is
+                      // opened rather than on every settings build.
+                      if (panel == _Panel.backup && !_backupLoaded) {
+                        _loadBackup();
+                      }
                     },
                   ),
                 ),
@@ -320,6 +367,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _Panel.vpn => _vpn(),
               _Panel.parental => _parental(),
               _Panel.handover => _handover(),
+              _Panel.backup => _backupPanel(),
               _Panel.about => _about(),
             },
           ),
@@ -898,6 +946,161 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _loadBackup() async {
+    final settings = await _backup.config();
+    final hasPhrase = await _backup.hasPhrase();
+    if (!mounted) return;
+    setState(() {
+      _backupLoaded = true;
+      _hasPhrase = hasPhrase;
+      _endpoint = settings?.endpoint.toString() ?? '';
+      _region = settings?.region ?? '';
+      _bucket = settings?.bucket ?? '';
+      // The keys are not read back into the fields. A settings screen that
+      // renders a stored secret is one screenshot away from spending it, and
+      // no other panel here does it either.
+      _accessKey = '';
+      _secretKey = '';
+      _regionNeeded = _endpointNeedsRegion(settings?.endpoint.toString() ?? '');
+      // Whatever the last pass said, shown without anybody pressing
+      // anything. A sync that has been failing quietly since it was set up is
+      // exactly the thing this screen exists to make visible.
+      _backupNote = widget.sync?.failure;
+    });
+    final waiting = await widget.db.unlinkedProvidersSeen();
+    if (mounted) setState(() => _unlinked = waiting);
+    final identities = await _backup.providerIdentities();
+    if (mounted) setState(() => _identities = identities);
+  }
+
+  static bool _endpointNeedsRegion(String endpoint) {
+    final parsed = Uri.tryParse(endpoint.trim());
+    if (parsed == null || parsed.host.isEmpty) return false;
+    return s3RegionFor(parsed) == null;
+  }
+
+  Future<void> _saveBackup() async {
+    await _backup.save(
+      endpoint: _endpoint,
+      region: _region,
+      bucket: _bucket,
+      accessKey: _accessKey,
+      secretKey: _secretKey,
+    );
+    if (!mounted) return;
+    setState(() {
+      _accessKey = '';
+      _secretKey = '';
+      _regionNeeded = _endpointNeedsRegion(_endpoint);
+      _backupNote = _regionNeeded && _region.trim().isEmpty
+          ? 'Saved. This endpoint does not say which region it is in, so that '
+              'field has to be filled in too.'
+          : 'Saved. Syncing…';
+    });
+
+    // Straight away, rather than waiting for the next launch.
+    //
+    // A pass runs when the app opens and when it leaves the foreground, and
+    // saving a bucket happens between the two — so a viewer who set one up,
+    // pressed TEST, saw it connect and then looked in the bucket found it
+    // empty, with nothing anywhere saying why. Nothing had gone wrong; it had
+    // simply not been asked yet.
+    if (_regionNeeded && _region.trim().isEmpty) return;
+    await _runSync();
+  }
+
+  Future<void> _testBackup() async {
+    setState(() {
+      _checkingBackup = true;
+      _backupNote = null;
+    });
+    final result = await _backup.check();
+    if (!mounted) return;
+    setState(() {
+      _checkingBackup = false;
+      _backupNote = result;
+    });
+  }
+
+  bool _syncing = false;
+
+  /// What this device will sync, and the name it does it under.
+  List<({String name, String address, String key})> _identities = const [];
+
+  Future<void> _runSync() async {
+    final sync = widget.sync;
+    if (sync == null) return;
+    setState(() => _syncing = true);
+    await sync.run();
+    if (!mounted) return;
+    setState(() {
+      _syncing = false;
+      // What it moved, not that it ran. A pass that sent nothing and one that
+      // received plenty and applied none are entirely different faults, and
+      // "Synced" describes both.
+      _backupNote = sync.summary;
+      // A pass is where a provider nobody could place turns up, so this is
+      // the moment the offer to link one can appear.
+      _unlinked = sync.unlinked;
+    });
+  }
+
+  Future<void> _savePhrase() async {
+    final problem = backupPhraseProblem(
+      _phrase,
+      username: widget.active.username,
+    );
+    if (problem != null) {
+      setState(() => _backupNote = problem);
+      return;
+    }
+    await _backup.savePhrase(_phrase);
+    if (!mounted) return;
+    setState(() {
+      _hasPhrase = true;
+      _phrase = '';
+      _backupNote = 'Recovery phrase saved. Write it down somewhere that is '
+          'not this device.';
+    });
+
+    // And try again with it. A device turned away because its provider does
+    // not open the folder is told to enter a phrase — and entering one did
+    // nothing visible, because the next attempt was at the following launch.
+    // Saving the phrase *is* the retry.
+    await _runSync();
+  }
+
+  void _generatePhrase() {
+    setState(() {
+      _phrase = newBackupPhrase();
+      _backupNote = 'Write this down before saving it. It is the only way '
+          'back into the folder, and nobody can reissue it.';
+    });
+  }
+
+  /// Accepts that a provider another device syncs is one of this device's.
+  ///
+  /// Deliberately a viewer's decision rather than a guess. Two households
+  /// merged into one history is not undone by somebody noticing, where a
+  /// split one is — so the addresses go on screen and the answer is asked
+  /// for.
+  Future<void> _linkProvider(String key) async {
+    final sync = widget.sync;
+    if (sync == null) return;
+    setState(() {
+      _linking = true;
+      _backupNote = null;
+    });
+    await sync.link(key: key, sourceId: widget.active.id);
+    final waiting = await widget.db.unlinkedProvidersSeen();
+    if (!mounted) return;
+    setState(() {
+      _linking = false;
+      _unlinked = waiting;
+      _backupNote = sync.summary;
+    });
+  }
+
   Future<void> _loadRegions() async {
     final stored = await widget.db.preference(RegionFilter.preferenceKey);
     final rows = await widget.db.regionsIn(widget.active.id, _regionKind);
@@ -1040,6 +1243,302 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ],
     );
+  }
+
+  /// The folder the viewer's devices leave their watch state in.
+  ///
+  /// Bring your own bucket, for the reason the TMDB and OpenSubtitles keys
+  /// are the viewer's own: a service key compiled into an open-source client
+  /// lasts exactly as long as it takes somebody to read the source. Here it
+  /// is also the point — the folder is *theirs*, holding a record of what
+  /// they watch, on an account nobody else pays for.
+  ///
+  /// Deliberately says what it cannot do as well as what it can, which is the
+  /// same voice the tunnel screen uses about what a tunnel is not.
+  Widget _backupPanel() {
+    // The prose sits above rather than inside, because a section a viewer
+    // cannot focus is a section the column has to skip over — and the whole
+    // reason for the column is that stacked fields do not traverse on their
+    // own. Onboarding never hit this: it shows one field at a time.
+    final rows = <Widget>[
+      // First, and not optional. The phrase is what opens the folder; the
+      // provider password is only a shortcut past typing it, and a device set
+      // up without one is a device that cannot get back in when a provider
+      // reissues a password — or when the next device is added before its
+      // provider is. Asked for before the bucket, because a folder claimed
+      // under nothing but a provider is the situation there is no way out of.
+      Padding(
+        padding: const EdgeInsets.only(bottom: OpenTvSpace.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Recovery phrase', style: OpenTvType.section),
+            const SizedBox(height: OpenTvSpace.xs),
+            Text(
+              _hasPhrase
+                  ? 'A phrase is set on this device. Use the same one on your '
+                      'other devices — it is what lets them read the same '
+                      'folder.'
+                  : 'This is what unlocks the folder, and the same one has to '
+                      'be set on every device. Write it down: nobody can '
+                      'reissue it, because nobody else has it — not us, and '
+                      'not the company holding the bucket.',
+              style: OpenTvType.bodyMuted,
+            ),
+            const SizedBox(height: OpenTvSpace.sm),
+            _field(
+              'Recovery phrase',
+              _phrase,
+              'A few unrelated words, or generate one',
+              (text) => setState(() => _phrase = text),
+            ),
+          ],
+        ),
+      ),
+      Row(
+        children: [
+          PlayerButton(
+            label: 'SAVE PHRASE',
+            emphasis: !_hasPhrase,
+            onSelect: _phrase.isEmpty ? null : _savePhrase,
+          ),
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(label: 'GENERATE', onSelect: _generatePhrase),
+        ],
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: OpenTvSpace.md),
+        child: Text('Where it goes', style: OpenTvType.section),
+      ),
+      _field(
+        'Endpoint',
+        _endpoint,
+        'https://s3.us-west-004.backblazeb2.com',
+        (text) => setState(() => _endpoint = text),
+      ),
+      _field(
+        'Bucket',
+        _bucket,
+        'The private bucket you made',
+        (text) => setState(() => _bucket = text),
+      ),
+      _field(
+        'Access key ID',
+        _accessKey,
+        _storedHint,
+        (text) => setState(() => _accessKey = text),
+        obscure: true,
+      ),
+      _field(
+        'Secret access key',
+        _secretKey,
+        _storedHint,
+        (text) => setState(() => _secretKey = text),
+        obscure: true,
+      ),
+      // Only when the endpoint does not say it. Most do, and asking anyway is
+      // asking a viewer to copy half of what they have just typed.
+      if (_regionNeeded)
+        _field(
+          'Region',
+          _region,
+          'This endpoint does not say, so it has to be given',
+          (text) => setState(() => _region = text),
+        ),
+      Row(
+        children: [
+          PlayerButton(
+            label: 'SAVE',
+            emphasis: _hasPhrase,
+            onSelect: _endpoint.isEmpty || _bucket.isEmpty || !_hasPhrase
+                ? null
+                : _saveBackup,
+          ),
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(
+            label: _checkingBackup ? 'TESTING…' : 'TEST',
+            onSelect: _checkingBackup ? null : _testBackup,
+          ),
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(label: 'REMOVE', onSelect: _removeBackup),
+        ],
+      ),
+      // Directly under the buttons, which is where somebody who has just
+      // pressed TEST is looking. It used to sit below the recovery phrase,
+      // off the bottom of the screen, so pressing TEST appeared to do nothing
+      // at all.
+      if (_backupNote != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: OpenTvSpace.sm),
+          child: Text(
+            _backupNote!,
+            style: OpenTvType.body.copyWith(color: OpenTvColors.tally),
+          ),
+        ),
+      // What this device calls its providers, so two that ought to match can
+      // be compared. The commonest way for this to do nothing is two devices
+      // holding the same portal typed differently — a trailing slash, http
+      // against https — which makes two identities out of one account, and
+      // each device then syncs contentedly with itself.
+      if (_identities.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: OpenTvSpace.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('What this device syncs', style: OpenTvType.section),
+              const SizedBox(height: OpenTvSpace.xs),
+              Text(
+                'History only crosses between devices holding the same '
+                'provider. If another device shows a different code here, the '
+                'two are not the same account as far as this is concerned — '
+                'usually because the address was typed differently.',
+                style: OpenTvType.bodyMuted,
+              ),
+              const SizedBox(height: OpenTvSpace.sm),
+              for (final identity in _identities)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: OpenTvSpace.xs),
+                  child: Text(
+                    '${identity.key}   ${identity.name} — ${identity.address}',
+                    style: OpenTvType.data,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      // What another device is syncing that this one could not place. The
+      // derived variants cover an address typed with the other scheme, and
+      // the portal's own name covers two vanity addresses; neither covers a
+      // provider that genuinely moved. That last one is not something to
+      // guess at, so it is asked.
+      if (_unlinked.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: OpenTvSpace.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Waiting to be linked', style: OpenTvType.section),
+              const SizedBox(height: OpenTvSpace.xs),
+              Text(
+                'Another device is syncing a provider this one does not '
+                'recognise. If it is the same account under a different '
+                'address, linking it applies everything already in the folder '
+                'as well as what comes next.',
+                style: OpenTvType.bodyMuted,
+              ),
+            ],
+          ),
+        ),
+      for (final waiting in _unlinked)
+        Padding(
+          padding: const EdgeInsets.only(top: OpenTvSpace.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${waiting.name ?? waiting.providerKey} — '
+                '${waiting.address ?? 'address not given'}   '
+                '(${waiting.records} records)',
+                style: OpenTvType.data,
+              ),
+              const SizedBox(height: OpenTvSpace.xs),
+              Row(
+                children: [
+                  PlayerButton(
+                    label: 'LINK TO ${widget.active.name.toUpperCase()}',
+                    onSelect: _linking
+                        ? null
+                        : () => _linkProvider(waiting.providerKey),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      Padding(
+        padding: const EdgeInsets.only(top: OpenTvSpace.md),
+        child: Row(
+          children: [
+            // Nothing else on this screen says the sync has ever run. It runs
+            // when the app opens and when it leaves the foreground, which is
+            // exactly when nobody is looking at it.
+            PlayerButton(
+              label: _syncing ? 'SYNCING…' : 'SYNC NOW',
+              onSelect: widget.sync == null || _syncing ? null : _runSync,
+            ),
+          ],
+        ),
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: OpenTvSpace.sm),
+          child: Text(
+          'Your devices leave what you have watched in a folder you own, so a '
+          'film paused on one carries on where you left it on another. '
+          'Nothing goes to us — this app has no server. Everything written '
+          'there is encrypted before it leaves the device, so the company '
+          'holding the bucket cannot read it. Any S3-compatible storage '
+          'works: Backblaze B2, Cloudflare R2, Wasabi, Storj, or your own '
+          'MinIO.',
+          style: OpenTvType.bodyMuted,
+        ),
+        ),
+        const SizedBox(height: OpenTvSpace.md),
+        Expanded(
+          // Room on both sides for the one per cent a field grows by when it
+          // takes focus. Without it the focused box is a few pixels wider
+          // than the list that clips it, and the edges disappear — which
+          // reads as boxes cut off at the sides, and only the focused one.
+          child: FocusColumn(
+            padding: const EdgeInsets.symmetric(horizontal: OpenTvSpace.sm),
+            itemCount: rows.length,
+            itemBuilder: (context, index) => Padding(
+              padding: const EdgeInsets.only(bottom: OpenTvSpace.sm),
+              child: rows[index],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String get _storedHint => _bucket.isEmpty ? 'From your storage account' : 'Stored';
+
+  /// One row of the form.
+  ///
+  /// No fixed width. The panel is what is left of a 960-pixel screen after a
+  /// 380-pixel rail, and the 900 these were written with — copied from the
+  /// onboarding step, which has the whole screen — ran off both edges.
+  Widget _field(
+    String label,
+    String value,
+    String hint,
+    ValueChanged<String> onChanged, {
+    bool obscure = false,
+  }) =>
+      TextEntryField(
+        label: label,
+        value: value,
+        hint: hint,
+        active: true,
+        obscure: obscure,
+        onChanged: onChanged,
+      );
+
+  Future<void> _removeBackup() async {
+    await _backup.forget();
+    if (!mounted) return;
+    setState(() {
+      _endpoint = '';
+      _region = '';
+      _bucket = '';
+      _backupNote = 'Removed. Nothing was deleted from the bucket.';
+    });
   }
 
   /// Where downloaded subtitles come from, and what it costs.

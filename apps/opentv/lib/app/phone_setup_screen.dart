@@ -6,6 +6,7 @@ import 'package:opentv_ui/opentv_ui.dart';
 
 import 'host.dart';
 import 'settings_screen.dart';
+import 'subtitle_service.dart';
 import 'source_service.dart';
 import 'vpn_service.dart';
 
@@ -102,6 +103,17 @@ class _PhoneSetupScreenState extends State<PhoneSetupScreen> {
     final tmdb = submission.tmdbKey;
     if (tmdb != null) {
       await widget.host.writeSecret(SettingsScreen.tmdbReference, tmdb);
+    }
+    final subtitles = submission.subtitleKey;
+    if (subtitles != null) {
+      await widget.host.writeSecret(SubtitleService.keyReference, subtitles);
+    }
+    // Only the PIN itself. Which categories it hides is chosen on the
+    // television afterwards, because that is a list of the provider's own
+    // sections and the browser has not seen the catalogue yet.
+    final pin = submission.parentalPin;
+    if (pin != null && pin.length >= 4) {
+      await widget.host.writeSecret(SettingsScreen.pinReference, pin);
     }
     final tunnel = submission.wireGuardConfig;
     if (tunnel != null) {

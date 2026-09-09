@@ -116,6 +116,7 @@ class PlayerChrome extends StatefulWidget {
     this.onActivity,
     this.nextLabel,
     this.onNext,
+    this.onEpisodes,
     this.dynamicRange,
     this.videoCodec,
   });
@@ -159,6 +160,14 @@ class PlayerChrome extends StatefulWidget {
   /// wants when an episode finishes.
   final String? nextLabel;
   final VoidCallback? onNext;
+
+  /// Opens a list of the episodes in this series, over the video.
+  ///
+  /// When there is one, it replaces the next-episode button rather than
+  /// joining it: a viewer who wants the one after this is one tap into the
+  /// list, and a viewer who wants any other episode had nowhere to go at all
+  /// without leaving the player and losing their place.
+  final VoidCallback? onEpisodes;
 
   /// `HDR10`, `HLG`, or null for ordinary SDR.
   ///
@@ -376,6 +385,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                         status: status,
                         nextLabel: widget.nextLabel,
                         onNext: widget.onNext,
+                        onEpisodes: widget.onEpisodes,
                         onPlayPause: onPlayPause,
                         onPreviousChannel: onPreviousChannel,
                         onNextChannel: onNextChannel,
@@ -749,6 +759,7 @@ class _Controls extends StatelessWidget {
     required this.status,
     this.nextLabel,
     this.onNext,
+    this.onEpisodes,
     this.onPlayPause,
     this.onPreviousChannel,
     this.onNextChannel,
@@ -760,6 +771,9 @@ class _Controls extends StatelessWidget {
   });
 
   final PlaybackStatus status;
+
+  /// Opens the list of episodes over the video.
+  final VoidCallback? onEpisodes;
 
   /// The following episode, named on the button so a viewer knows what they
   /// are agreeing to before they press it.
@@ -835,7 +849,9 @@ class _Controls extends StatelessWidget {
             PlayerButton(label: 'AUDIO', onSelect: onAudioTracks),
           if (status.subtitleTrackCount > 0)
             PlayerButton(label: 'SUBTITLES', onSelect: onSubtitles),
-          if (onNext != null)
+          if (onEpisodes != null)
+            PlayerButton(label: 'EPISODES', onSelect: onEpisodes)
+          else if (onNext != null)
             PlayerButton(label: 'NEXT EPISODE', onSelect: onNext),
           if (onAspect != null)
             PlayerButton(label: 'PICTURE', onSelect: onAspect),
@@ -862,6 +878,7 @@ class PlayerButton extends StatelessWidget {
     this.onSelect,
     this.emphasis = false,
     this.autofocus = false,
+    this.focusNode,
     this.glyph,
     this.glyphFilled = false,
   });
@@ -875,6 +892,14 @@ class PlayerButton extends StatelessWidget {
   final bool emphasis;
   final bool autofocus;
 
+  /// Named, for the times autofocus cannot work.
+  ///
+  /// A widget's autofocus is only honoured while its scope has no focused
+  /// child, so anything appearing over a screen that already has focus — the
+  /// card at the end of an episode, over the player's own controls — has to
+  /// claim the highlight rather than ask for it.
+  final FocusNode? focusNode;
+
   /// Draws a symbol instead of the words. Only for shapes a viewer already
   /// knows: see [Glyph].
   final Glyph? glyph;
@@ -886,6 +911,7 @@ class PlayerButton extends StatelessWidget {
     return FocusableTile(
       onSelect: onSelect,
       autofocus: autofocus,
+      focusNode: focusNode,
       semanticLabel: label,
       borderRadius: OpenTvRadius.panel,
       // Buttons sit in a tight row; a grid's worth of lift would shove

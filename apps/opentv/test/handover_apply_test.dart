@@ -112,9 +112,21 @@ void main() {
 
   /// A real SQLite file, so the thing being replaced is a database and not
   /// bytes that merely look like one.
-  Future<Uint8List> realDatabase(String sourceName) async {
+  Future<Uint8List> realDatabase(
+    String sourceName, {
+    bool withSyncIdentity = false,
+  }) async {
     final file = File('${temp.path}/incoming-source.sqlite');
     final db = OpenTvDatabase(NativeDatabase(file));
+    if (withSyncIdentity) {
+      // What the sending device knows about the backup folder. All of it is
+      // about *that* device, and all of it travels in the database.
+      await db.setPreference('backup.device-id', 'the-senders-id');
+      await db.setPreference('backup.watermarks', '{"someone-else":42}');
+      await db.setPreference('backup.announced', '{"key":["Portal","addr"]}');
+      await db.setPreference('backup.endpoint', 'https://s3.example');
+      await db.setPreference('backup.bucket', 'shared');
+    }
     await db.addSource(
       SourcesCompanion.insert(
         name: sourceName,
@@ -169,6 +181,49 @@ void main() {
     db = OpenTvDatabase(NativeDatabase(databaseFile));
     final sources = await db.allSources();
     expect(sources.single.name, 'The one arriving');
+    await db.close();
+  });
+
+
+  test('the arriving catalogue does not arrive as the device that sent it',
+      () async {
+    // Every device writes its chunks beneath its own id, and a pull skips its
+    // own id. Two devices sharing one can therefore never read each other —
+    // each takes the other's chunks for its own — while both write to the
+    // same paths with sequence numbers worked out independently. It looks
+    // exactly like a device that will not sync, and only ever with the device
+    // it was set up from. Found on an Apple TV handed a television's setup.
+    var db = OpenTvDatabase(NativeDatabase(databaseFile));
+    final incoming = await realDatabase('Portal', withSyncIdentity: true);
+    final (pairing, server) = await serve(
+      schemaVersion: db.schemaVersion,
+      database: incoming,
+    );
+    await HandoverService(
+      db: db,
+      databaseFile: databaseFile,
+      appVersion: '1.0.1',
+    ).receive(pairing);
+    await server.stop();
+
+    db = OpenTvDatabase(NativeDatabase(databaseFile));
+
+    expect(
+      await db.preference('backup.device-id'),
+      isNull,
+      reason: 'this device would write chunks as the one that sent to it',
+    );
+    // How far the sender had read is not how far this device has read.
+    // Inherited, everything written before the handover is skipped.
+    expect(await db.preference('backup.watermarks'), isNull);
+    // And it announces itself, rather than repeating what the sender said.
+    expect(await db.preference('backup.announced'), isNull);
+
+    // The folder itself is kept: it is the same folder, and asking a viewer
+    // to type a bucket back in is the whole thing the handover exists to
+    // avoid.
+    expect(await db.preference('backup.endpoint'), 'https://s3.example');
+    expect(await db.preference('backup.bucket'), 'shared');
     await db.close();
   });
 

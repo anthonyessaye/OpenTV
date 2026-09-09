@@ -40,6 +40,16 @@ class Sources extends Table {
 
   TextColumn get username => text().nullable()();
 
+  /// What the portal calls itself, as it reported on the last authentication.
+  ///
+  /// Xtream's `server_info` block carries the panel's own address, which is
+  /// the one thing about a provider that two devices cannot type differently.
+  /// Kept beside the typed address rather than replacing it: not every panel
+  /// fills it in, some report an address only reachable from inside their own
+  /// network, and it changes when a provider migrates. It widens what the
+  /// sync will match, and is trusted for nothing else.
+  TextColumn get reportedUrl => text().nullable()();
+
   /// Keystore handle for the secret. Never the secret itself.
   TextColumn get credentialRef => text().nullable()();
 
@@ -85,6 +95,9 @@ class Categories extends Table {
   columns: {#sourceId, #categoryRemoteId},
 )
 @TableIndex(name: 'channel_search', columns: {#sourceId, #searchName})
+@TableIndex(
+    name: 'channel_category_order',
+    columns: {#sourceId, #categoryRemoteId, #number, #name})
 @TableIndex(name: 'channel_epg', columns: {#sourceId, #epgChannelId})
 // Browsing order. Without it, listing a source means sorting every channel
 // it has before the first screenful can be drawn.
@@ -152,6 +165,11 @@ class Channels extends Table {
   columns: {#sourceId, #categoryRemoteId},
 )
 @TableIndex(name: 'movie_search', columns: {#sourceId, #searchName})
+// Browsing a category is a filter and a sort together, and an index that
+// serves one of those leaves SQLite walking the catalogue for the other.
+@TableIndex(
+    name: 'movie_category_name',
+    columns: {#sourceId, #categoryRemoteId, #name})
 // The three orders the shelves and the grid ask for.
 //
 // These are the difference between a screen that opens and one that takes
@@ -215,6 +233,9 @@ class Movies extends Table {
   columns: {#sourceId, #categoryRemoteId},
 )
 @TableIndex(name: 'series_search', columns: {#sourceId, #searchName})
+@TableIndex(
+    name: 'series_category_name',
+    columns: {#sourceId, #categoryRemoteId, #name})
 @TableIndex(name: 'series_counts', columns: {#sourceId, #hidden, #categoryRemoteId})
 @TableIndex(name: 'series_rating', columns: {#sourceId, #rating})
 @TableIndex(name: 'series_modified', columns: {#sourceId, #lastModified})
@@ -451,6 +472,129 @@ class Preferences extends Table {
   TextColumn get key => text()();
   TextColumn get value => text()();
 
+  /// When this was last set, for the few that cross between devices.
+  ///
+  /// Without it there is no way to tell a choice made here an hour ago from
+  /// one made on another device last week and only now arriving, so the one
+  /// that syncs last wins rather than the one made last. Null for every
+  /// preference written before this column existed, and for the many that
+  /// describe the device rather than the viewer and never travel.
+  DateTimeColumn get changedAt => dateTime().nullable()();
+
   @override
   Set<Column<Object>> get primaryKey => {key};
+}
+
+
+/// What this device has changed and not yet handed to the other devices.
+///
+/// A queue rather than a scan of the tables themselves, because the change
+/// that matters most cannot be scanned for: a favourite that was *removed*
+/// leaves no row behind, and a sync built on "rows newer than last time"
+/// would resurrect it on the next device that still remembered it — for ever,
+/// since each device would keep re-teaching the others.
+///
+/// Keyed on the thing rather than the change, so a position updated five
+/// times while an episode plays queues one entry, not five. Only the latest
+/// state of anything is worth sending.
+class SyncOutbox extends Table {
+  /// `playback`, `favourite` — the same names that travel in a record.
+  TextColumn get scope => text()();
+
+  /// Which provider this belongs to, or 0 for something that belongs to none.
+  IntColumn get sourceId => integer().withDefault(const Constant(0))();
+
+  /// `<kind>/<remoteId>`, still in this device's own terms.
+  ///
+  /// The provider is resolved to a shared key when the queue is drained
+  /// rather than when it is written: a source that is renamed or re-pointed
+  /// between the two would otherwise leave entries addressed to a provider
+  /// that no longer exists here.
+  TextColumn get localKey => text()();
+
+  /// The new state as JSON, or null where the change is that it is gone.
+  TextColumn get payload => text().nullable()();
+
+  DateTimeColumn get at => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {scope, sourceId, localKey};
+}
+
+
+/// A provider key this device has been told belongs to one of its sources.
+///
+/// The derived keys cover the addresses that differ by a scheme or a `www.`;
+/// they cannot cover a provider that genuinely moved, or one written two ways
+/// that share nothing. That last case is not something to guess at — merging
+/// two households is not undone by noticing — so it is a claim a viewer
+/// makes, with both providers named on screen, and this is where it is kept.
+class ProviderAliases extends Table {
+  /// The key as the other device wrote it.
+  TextColumn get providerKey => text()();
+
+  IntColumn get sourceId =>
+      integer().references(Sources, #id, onDelete: KeyAction.cascade)();
+
+  /// What the other device called it, kept so the link can be shown back in
+  /// the words it was offered in.
+  TextColumn get label => text().nullable()();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  /// One key resolves to one source. A key pointed at two sources would make
+  /// the same record land twice under different providers.
+  @override
+  Set<Column<Object>> get primaryKey => {providerKey};
+}
+
+/// A provider some other device is syncing that this one could not place.
+///
+/// Records addressed to an unknown provider used to be dropped where they
+/// were found, which is why the commonest failure here was invisible: the
+/// pass worked, the count said records had arrived, and nothing appeared.
+/// Kept instead, so the sync screen can name what turned up and offer to
+/// link it — and because the chunks it came from are still in the bucket,
+/// accepting one recovers the history rather than only fixing the future.
+class UnlinkedProviders extends Table {
+  TextColumn get providerKey => text()();
+
+  /// What the device that wrote it calls the provider, when it said.
+  TextColumn get name => text().nullable()();
+  TextColumn get address => text().nullable()();
+
+  /// How many records have arrived for it. A count is the difference between
+  /// "something is misconfigured" and "your whole history is over there".
+  IntColumn get records => integer().withDefault(const Constant(0))();
+
+  DateTimeColumn get seenAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {providerKey};
+}
+
+
+/// How many items each category holds, as last counted.
+///
+/// `COUNT(*) ... GROUP BY category_remote_id` reads every row of the table it
+/// counts, and the browse rail asks for it on every section change. Measured
+/// on an Android TV emulator against 120,000 films: **725ms**, which is most
+/// of what a viewer sees as "Reading…" — and the answer only changes when the
+/// catalogue does.
+///
+/// A row is written for every category, including the empty ones, so an empty
+/// cache means "not counted yet" rather than "counted, and there was nothing".
+/// Without that a source whose categories are all empty would be recounted on
+/// every switch, which is the case this exists to avoid.
+class CategoryCounts extends Table {
+  IntColumn get sourceId =>
+      integer().references(Sources, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get kind => textEnum<ItemKind>()();
+  TextColumn get categoryRemoteId => text()();
+
+  IntColumn get items => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {sourceId, kind, categoryRemoteId};
 }

@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 463 core, 124 ui, 129 app.
+Tests: 733 core, 141 ui, 257 app.
 
 ## Two interfaces, one app
 
@@ -93,10 +93,57 @@ them.
 
 This is the part that will waste your day if nobody tells you.
 
-**There are four targets and three of them can be run here.** Apple TV has
-still never been run on hardware. The iOS simulator is by far the most
-reliable of the three — the Android phone emulator ANRs its own system UI
-under software rendering, and the television emulator is worse.
+**There are four targets and all four have now been run.** The iOS simulator
+is by far the most reliable — the Android phone emulator ANRs its own system
+UI under software rendering, and the television emulator is worse, dying
+outright under a 100MB catalogue.
+
+**Apple TV, on hardware, needs the device as the build destination.**
+`flutter-tvos build tvos` builds for "Any tvOS Device", and a generic
+destination cannot register anything, so automatic signing fails with
+*"Your team has no devices from which to generate a provisioning profile"* —
+which reads as an account problem and is a destination problem. Pair the
+device first (Settings → Remotes and Devices on the Apple TV, then Xcode's
+Devices window), then build against it by id:
+
+```bash
+xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release \
+  -destination 'id=<device udid>' \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
+xcrun devicectl device install app --device <device id> <path to Runner.app>
+xcrun devicectl device process launch --device <device id> --console com.anthonyessaye.opentv
+```
+
+`xcrun devicectl list devices` is what finds it — `flutter-tvos devices` does
+not list tvOS hardware at all, and `xctrace` reported it Offline while
+devicectl had it paired and available. `--console` gives the device's stdout,
+which is the only log there is.
+
+**iOS hardware needs the same treatment**, and for the same reason:
+`flutter build ios --profile` fails at signing with advice about Xcode
+accounts, when the problem is that it built for "Any iOS Device". The same
+`xcodebuild -destination 'id=…' -allowProvisioningUpdates` succeeds, and
+`devicectl device install app` puts it on the phone.
+
+**Reading a device's own database is the fastest way to answer "is this
+actually working".** No screen to relay, no log to hope for:
+
+```bash
+xcrun devicectl device info files --device <id> \
+  --domain-type appDataContainer --domain-identifier com.anthonyessaye.opentv
+xcrun devicectl device copy from --device <id> \
+  --domain-type appDataContainer --domain-identifier com.anthonyessaye.opentv \
+  --source "Library/Caches/opentv/catalogue.sqlite" --destination ./pulled.sqlite
+```
+
+That is how the shared device id was found, and how the fix was confirmed —
+a watermark appearing for a peer the device had been unable to see.
+
+Note that Xcode signed with whichever team could actually issue for the
+device rather than the `DEVELOPMENT_TEAM` in the project, and that the
+hardware to hand is an Apple TV HD (`AppleTV5,3`, A8, 2015) — the slowest
+thing tvOS still supports, which makes it the right machine to judge
+performance on and the wrong one to judge it as typical.
 
 For iOS, `xcrun simctl` does everything except tap: install, launch,
 `screenshot`, and `get_app_container data` to reach the catalogue. There is no
@@ -157,6 +204,39 @@ per key press is slower than that.
 adb shell 'input keyevent 22; sleep 1; input keyevent 23; sleep 6; screencap -p /sdcard/a.png'
 adb pull /sdcard/a.png
 ```
+
+### Measuring on the emulator
+
+The laptop is the wrong machine for any of this, and `flutter test` is the
+wrong harness. What worked:
+
+```bash
+dart run tool/seed_big.dart big.sqlite     # in opentv_core
+sqlite3 big.sqlite "PRAGMA user_version = 10;"
+```
+
+**`seed_big.dart` writes no categories at all** — it was built for search, and
+120,000 films all with a null `category_remote_id` make every browse
+measurement meaningless. Give them one before measuring anything about
+browsing, and insert the `categories` rows to match. One category holding a
+third and several hundred small ones is the shape to aim for.
+
+The seeder also writes today's table definitions and stamps schema 4, so
+replaying the migrations over it fails on columns that are already there.
+Stamp `user_version` to the current schema unless the migration itself is
+what is being measured.
+
+Then push it in, and read timings out of `logcat` rather than guessing:
+
+```bash
+adb shell "run-as com.anthonyessaye.opentv sh -c 'base64 -d > files/catalogue.sqlite'" < seed.b64
+adb logcat -c && adb shell 'input keyevent 19; sleep 1; input keyevent 22; sleep 1; input keyevent 23; sleep 8'
+adb logcat -d | grep PROBE
+```
+
+`print` reaches logcat from a profile build, which is enough to time a screen
+without any tooling. Take several measurements: the emulator's variance is
+wide enough that one reading says nothing.
 
 ### Seeding a catalogue
 
@@ -239,7 +319,7 @@ a background. The reported bug was "the cards are too tall"; the cards were
 correct. Wrap in `Align` when a row should keep its own height.
 
 **Reader without writer, and writer without reader.** This has now happened
-nine times, in both directions, and it is the single most common failure in
+eleven times, in both directions, and it is the single most common failure in
 this codebase. The resume bar read a position column nothing ever wrote. The
 series Continue shelf filtered episode progress for the series kind, which
 matches nothing. The phone's browse screens were handed a `StreamResolver` and
@@ -254,12 +334,126 @@ interface ever read it, so a failed stream was a black screen with nothing to
 say. `episodesSyncedAt` was written to stop a show with no episodes going back
 to the portal, and nothing consulted it. And the parental PIN was written to
 the keystore and never compared against anything, which made the lock
-decorative.
+decorative. The handover manifest has carried the other device's `appVersion`
+since the format was written and nothing ever read it, so a version mismatch
+could only be reported as two schema numbers. And the receiver wrote the
+reason it refused a push into the response body while the sender called
+`drain` on it and reported the status code, so a refusal that had been
+explained in a sentence arrived as "the other device answered 400". And
+`XtreamServerInfo` — the panel's own address, the one part of a provider two
+devices cannot type differently — was parsed on every authentication since
+the models were written and read by nothing, while the sync that needed it
+was splitting one account into two for want of exactly that.
 
 None of these fail. Nothing logs, nothing throws, and each one looks like
 working software in a screenshot. **If a feature is silent, grep both ends
 before redesigning either** — `grep -c` on the parameter name is usually
 enough to find it.
+
+**Two callers of one idea drift apart quietly.** The Continue shelf and the
+Continue tab both answer "what am I part-way through", and only the tab was
+ever fixed: it reads `continueSeries`, which keeps a show whose last episode
+was finished and works out the next one, while the shelf read
+`continueWatching`, which excludes finished rows. Right for a film — there is
+nothing after it — and wrong for a series, so a show fell off the shelf the
+moment it was watched while sitting in the tab beside it. Both read the same
+thing now.
+
+**Whether selecting something means "carry on" belongs to the item, not the
+screen.** The front page shows the same show twice — in Continue and in Top
+rated — and only one of them means carry on. The rule was `_category ==
+_continueId`, which can only ever be right for the tab, so choosing a show
+off the row opened its page instead of resuming. `_Item.resuming` carries it.
+
+**`IN (...)` comes back in table order.** `moviesByRemoteIds` and its
+siblings are handed ids in the order things were watched and answer in
+whichever order the rows sit, which is fine for a grid that sorts itself and
+wrong for a shelf whose entire claim is "most recent first" — and worse now
+that Continue leads, because the first item of the leading shelf becomes the
+hero. `_inOrderOf` puts them back.
+
+**Browsing a category is a filter and a sort at once, and schema 8 exists
+because no index served both.** `movie_counts` filters and cannot order;
+`movie_name` orders and cannot filter. SQLite took the ordering one and walked
+the catalogue in name order discarding other categories until it had a
+screenful — **fast for the category holding a third of the films and ruinous
+for a small one, which is most of them.** Measured at 180,000 films: 2ms for
+the huge category, 354ms for a small one, in memory on a fast machine. The
+composite `(source_id, category_remote_id, name)` makes it 1ms. Note the
+shape: the cost is inverted from what anyone would test by hand.
+
+**Moving SQLite to its own isolate made every per-row query expensive.** A
+loop of sixty single-channel guide lookups was nearly free while the database
+ran on the isolate drawing the screen; afterwards each one is a round trip
+across an isolate boundary, and the whole loop is seconds on a television —
+reported as a category that used to appear instantly now showing "Reading…".
+`programmesForChannels` had existed all along and nothing called it. **After
+that change, a query inside a loop over rows is a bug.**
+
+A third case, and the one that outlasted two attempts at it: **the reads a
+tab switch makes were issued one after the next when not one of them depends
+on another.** No single query was slow. Measured against a provider-sized
+catalogue across the isolate: 86ms sequential, **22ms issued together** — and
+that gap is the whole of what a viewer sees, because the isolate crossing is
+the cost, not the query. `lockedCategories` was also fetched twice per
+switch, in each half of the same load.
+
+**And the batching was not the whole of it — measure on the device.** With
+the reads issued together a tab switch on an Android TV emulator, against
+120,000 films, still took **1318ms**, and probes through `adb logcat` said
+where it went: `countsByCategory` **725ms**, the page 395ms, the shelves
+521ms. Counting per category means reading every row of the table, and the
+rail asks on every section change. **Schema 10 remembers the answer**, and
+every writer that can move it clears it. Same emulator afterwards: 33, 60,
+86, 114, 153, 206, 226, 309ms across eight switches — a median around 130ms,
+which is under the threshold at which anything is said at all.
+
+**And a cache invalidated per write is no cache at all.** The first version
+cleared the counts inside `upsertMovies` and its siblings, which is where the
+rows change — correct, and useless: a sync writes in bounded batches,
+hundreds of them over a real catalogue, so the cache was empty for the whole
+of every sync. That is exactly when somebody is browsing, and it is why this
+measured beautifully on an emulator holding a database that had been *pushed*
+rather than synced, and did nothing at all on a device that syncs. The engine
+clears them once, when the run is over, and recomputes them there — the work
+is the same either way, and a sync is a moment the viewer is already waiting
+on rather than one where they have just pressed something.
+
+**None of that is visible in a laptop benchmark, and the seed hid it twice.**
+`seed_big.dart` writes 120,000 films with no categories at all — built for
+search — so the first run of this benchmark measured `countsByCategory` over
+nothing and reported 0ms. Categories have to be added to it before any
+browsing measurement means anything. And a benchmark on `NativeDatabase`
+rather than `NativeDatabase.createInBackground` measures none of the boundary
+this whole class of bug lives on.
+
+**"Reading…" is only worth saying when a wait is long enough to explain.** A
+label that appears and vanishes inside a fifth of a second is not
+information — it made a screen answering in tens of milliseconds look like
+one that struggles. It waits 200ms now; before that the grid area is simply
+empty, rather than showing the section the viewer has just left.
+
+The series Continue shelf was the same shape and hid for longer, because its
+loop was as long as somebody's watching: two reads per show, and a device only
+knew about shows watched on it. Making the sync deliver series history handed
+every device everybody's shows at once, and the Series tab went back to
+"Reading…". **A wall clock cannot find these.** Measured over 120 shows
+in-memory on a laptop: 16.8ms per call before, 14.3ms after — a rewrite worth
+seconds on a television reads as noise here, because that is exactly the cost
+the isolate boundary adds and an in-memory database does not have. So
+`continue_series_reads_test` counts reads and asserts they do not grow with
+the number of shows; a timing assertion would have passed on the slow one.
+
+**Stacked fields do not traverse on a television.** Onboarding never hit
+this because it shows one field at a time; the first settings panel with five
+of them had focus bounce back to the rail after the first. A column of
+focusable rows needs `FocusColumn`, which names its destination rather than
+measuring towards one — and the sections it holds must all be focusable, or
+it has to skip over the ones that are not. Prose goes above it, not in it.
+
+**The panel is not the screen.** It is what is left of 960 logical pixels
+after a 380-pixel rail, so the `width: 900` that onboarding uses — which has
+the whole screen — runs off both edges. Do not copy a width between them.
 
 **A screen with no route to it is the same bug.** The television had the
 handover offer screen and nothing that navigated to it.
@@ -290,6 +484,41 @@ a codec problem and has nothing to do with codecs. This shipped once. A plain
 black `View` above the surface, hidden on `onRenderedFirstFrame`, is what
 `PlayerView` itself does, and `player_contract_test` now fails if `lockCanvas`
 comes back.
+
+**A stream can open, report no error, and never show anything.** VLC does not
+call that a failure: it sits in playing or buffering with no frames, for ever,
+and the chrome spins. The player screen notices no picture after twelve
+seconds and says so, with the codec and resolution the stream reports.
+
+**It reports those rather than naming a cause, and that is a correction.** The
+first version of this said "this channel is H.265 and this device has no
+decoder for it", on the strength of `hevc … get_buffer() failed` in the device
+log of an Apple TV HD. The channels that actually fail report **H.264** — and
+`get_buffer` is a *frame allocation* failure, which a 4K picture provokes on a
+two-gigabyte box whatever the codec is. A second capture showed the same
+decoder emitting `Could not find ref with POC`, which is missing reference
+frames and a different fault again. One log line, three plausible causes, and
+a message that picked one of them: state the facts on screen and let somebody
+who can see the channel draw the conclusion. `hevcHardware` is still reported
+by both engines — `VTIsHardwareDecodeSupported` on Apple, `MediaCodecList` on
+Android — and adds a sentence only when it is genuinely the answer.
+
+**A provider's own codec metadata is not evidence.** Xtream panels carry
+whatever was typed into them. `videoCodec` in the snapshot comes from the
+opened stream, which is the only version worth believing.
+
+**The television invented its own failure message and ignored the one the
+device sent.** `error` has been in the snapshot since the contract was
+written, the phone has always read it, and `player_screen` built a sentence
+out of the state string instead — so everything the native knew was thrown
+away on the one platform where a viewer is furthest from a log. That is the
+same fault as a key nobody reads, and it hid behind a key that *was* read.
+
+**`videoCodec` was in the contract, filled by Media3, and empty on Apple** —
+not because libVLC cannot answer it but because it had been written down
+beside `dynamicRange`, which genuinely cannot be answered. `tracksInformation`
+carries a fourcc per track. A reason that applies to one key had quietly been
+extended to its neighbour.
 
 ## The handover
 
@@ -338,6 +567,43 @@ handover that carried a whole setup in which subtitle search silently did
 nothing. `handover_secrets_test` reads every `...Reference` constant in
 `lib/` and fails if one is not named there.
 
+**A handover must not carry the sender's sync identity.** Three preferences
+in the copied database describe the *sender's* relationship with the backup
+folder rather than anything about the catalogue, and `backup.device-id` is the
+dangerous one: every device writes its chunks beneath its own id and a pull
+skips its own id, so two devices sharing one can never read each other — each
+takes the other's chunks for its own — while both write the same paths with
+sequence numbers worked out independently. It presents as a device that will
+not sync, and *only* with the device it was set up from, which is the last
+place anybody looks. `backup.watermarks` compounds it by claiming the sender's
+reading as this device's own, so everything written before the handover is
+skipped; `backup.announced` makes it introduce itself in the sender's name.
+`backup.key-for` and the cached data key are deliberately kept — same folder,
+right key, and re-deriving is 120,000 rounds of PBKDF2 on a television.
+Cleared on the staged file before it is put into place, so the wrong identity
+is never the live one.
+
+**Every device handed a setup before that fix is still holding the wrong
+name, and cannot tell from the id alone.** So  records
+who minted it: an id with no marker beside it predates this and is re-minted
+once, on the next launch, with no action from anybody. That re-mints some ids
+that were never wrong — one unread directory in the folder and one re-read of
+history the merge is idempotent about, against a device that silently never
+syncs with the one it was set up from.
+
+**Every device handed a setup before that fix is still holding the wrong
+name, and cannot tell from the id alone.** So `backup.device-id-mine` records
+who minted it: an id with no marker beside it predates this and is re-minted
+once, on the next launch, with no action from anybody. That re-mints some ids
+that were never wrong — one unread directory in the folder and one re-read of
+history the merge is idempotent about, against a device that silently never
+syncs with the one it was set up from.
+
+Found by pulling the catalogue off an Apple TV with
+`devicectl device copy from --domain-type appDataContainer`, which is the
+fastest way to answer "is this device actually syncing" and needs nothing from
+whoever is holding the remote.
+
 **Secrets are written before the database is replaced.** The other order
 leaves a device holding a new catalogue it has no passwords for. The `-wal` is
 deleted with the database it belongs to, or SQLite applies the old journal to
@@ -354,6 +620,12 @@ front of the title — `AR |`, `TR:`, `[EX-YU]`. Hiding categories cannot
 express "not the Turkish ones" at all, which is why regions are a separate
 control rather than part of that panel.
 
+Schema 9 is the sync learning all of this: `Sources.reportedUrl`, plus the
+two tables holding what a viewer has said belongs together and what turned up
+addressed to nobody. Nothing is backfilled — the reported address arrives on
+the next authentication, and the derived variants cover the ordinary cases
+until it does.
+
 Schema 4 adds a `region` column to channels, movies and series, populated at
 sync and **backfilled during the migration**. Stored rather than derived at
 read time because it has to appear in a `WHERE` clause: filtering after the
@@ -365,8 +637,403 @@ the feature looks broken on every existing install.
 catalogue has none, and the alternative loses every unlabelled title the
 moment somebody hides anything.
 
+**Index creation in a migration uses `CREATE INDEX IF NOT EXISTS`.** Every
+one of them is also declared on its table, so a fresh install gets it from
+`createAll` and only an upgrade runs the migration — but a migration that
+cannot be run twice cannot be recovered from having been interrupted, and the
+second attempt fails on the index the first one had already made.
+
 Note that bumping the schema means a 1.1 device cannot hand over to a 1.0 one.
 That is the compatibility check working, not a bug.
+
+## Search, and schemas 5 and 6
+
+Schema 5 adds an FTS5 index over `channels`, `movies` and `series_entries`.
+`LIKE '%needle%'` cannot use an index — a B-tree has no way into the middle of
+a string — so every search scanned the table. That stayed invisible for a long
+time because `LIMIT` stops a scan as soon as it has enough rows, so **a term
+matching plenty was fast and a term matching little cost the whole
+catalogue**: measured at 180,000 films, a hit took 0.8ms and a miss 18.5ms,
+and the miss is what a viewer gets as they finish typing something specific.
+A test asserts the ratio rather than either number.
+
+The index is over `name`, not `searchName`, and that is the important part.
+`normaliseForSearch` folds to ASCII and drops every rune it has no mapping
+for, so an Arabic, Cyrillic, Greek or CJK title normalises to the empty
+string — the stored name *and* the term typed to find it. Search in those
+scripts returned nothing, always, silently, on catalogues largely made of
+them. FTS5's `unicode61` tokenizer segments all of them and folds diacritics
+itself, so `telefe` still finds `Telefé`.
+
+External content: the index holds no copy of the titles, which matters because
+the handover sends this file over a home network. That arrangement has one
+trap — an external-content index is **not** updated by writing to the table it
+reads from, so it needs triggers, and without them it is correct in any test
+that seeds and searches once and wrong from the next sync onwards.
+
+Schema 6 adds `prefix='2 3'`. **A search starts at two letters, which is the
+most expensive prefix there is**: a bare FTS5 index answers `am*` by walking
+every term beginning `am`, and on a real catalogue that is thousands of
+separate reads. Measured warm it is only twice the cost; the reason it
+matters is that those reads are random ones off a television's eMMC, where
+the multiplier is not two. The prefix tables are part of the virtual table's
+definition and cannot be added to one already built, so 6 drops the index and
+rebuilds it.
+
+**A deadline stops this app waiting; it does not stop the query.** A search
+that times out is still running on the database's isolate, so everything
+after it queues behind it — including the scan that replaced it. That is why
+a single slow query could leave the search box reading "Searching…" for ever,
+and why the index is asked *once*: after one failure the scan is used
+directly for the rest of the session.
+
+**The index is asked for a bounded number of hits**, and the source and
+hidden filters are applied to those. A common two-letter term matches a large
+share of a catalogue, and reading every match to keep sixty rows measures
+19ms here — because those rowid lookups are in page cache. They are random
+reads, and a hundred and fifty thousand of them on eMMC is not 19ms. The
+ceiling costs something real: matches belonging to another provider are read
+first, so a second provider's results can fall past it. That is written down
+in the test rather than left to be discovered.
+
+**Nothing here reproduced on a laptop.** The catalogue is seeded by
+`packages/opentv_core/tool/seed_big.dart` at a real provider's size and left
+at schema 4 so opening it performs the migration; an Android TV emulator ran
+that at 4GB and at 1.5GB and answered from the index both times. The
+difference that remains is the hardware.
+
+## Syncing to the viewer's other devices
+
+`opentv_core/lib/src/backup/` holds the whole of it, and none of it knows what
+service the bytes end up on. `BackupStore` is four verbs; `MemoryBackupStore`
+is what every test runs against, which is why the ordering, merging and
+watermarking can be exercised without an account.
+
+**`Sources.id` is an autoincrement, so nothing keyed on it can travel.** The
+provider that is 1 on the television is 3 on the phone. Identity is derived
+from the portal address and the account instead — and the normalisation is
+deliberately asymmetric. A default port, a trailing slash and the case of the
+host are not differences; the path keeps its case and http is not assumed to
+be https. Merging two households cannot be undone by a viewer who notices,
+and splitting one person's history can.
+
+**No device ever writes another device's file.** Chunks live under the id of
+the device that wrote them and are immutable, so a shared folder needs no
+locking — which is as well, since a file store has none to offer.
+Incrementality is the same layout read differently: one watermark per peer.
+
+**Ordering is wall clock, not a counter.** Rewinding a film has to beat the
+further-along position on another device, and a counter that only rises
+cannot say that. A device stamps one millisecond past the newest thing it has
+seen, so a television with a slow clock cannot write into the past.
+
+**The key is not transported.** A data key is wrapped under both the provider
+credentials and a recovery phrase, so an ordinary unlock needs no typing and a
+reissued portal password is survivable rather than fatal. Not derived from the
+storage credentials: Backblaze issued those and therefore knows them, and the
+company holding the files is the one party the encryption excludes.
+
+**A slot is named by the route, not the secret behind it**, so a rotated
+password leaves a slot that opens nothing. Whichever device did get in
+rewrites it, or the phrase gets typed on every renewal for ever.
+
+**A phrase may be chosen rather than generated**, with a floor: twelve
+characters, six distinct ones, not the provider password, not the account
+name. The trade is stated once and then trusted — a folder is only as strong
+as the weakest way into it, and the wrapped key sits in a bucket where it can
+be attacked offline. Chosen *instead of* generated rather than alongside, so
+the weak option cannot quietly sit beside the strong one.
+
+**A wrong secret must never be answered by claiming the folder.** `_open`
+returns null to mean "nobody has claimed this", and the caller answers that by
+minting a new data key. Returning it for a folder that plainly exists and
+merely did not open would orphan every chunk ever written — silently, and to
+a viewer it looks like their history has gone. Found by the test for changing
+a phrase, which is also how the next one was found.
+
+**The opening bid is an un-rotatable way in.** It is sealed under whatever
+secret first claimed the folder, so leaving it behind means an old phrase
+still opens the folder through the back door and changing a phrase was
+decoration. `rewrap` clears the bids — deliberately, on a viewer's action,
+rather than at launch, because a device still claiming the folder is reading
+them and deleting those underneath it is how two devices end up with
+different keys.
+
+**SigV4 is written out rather than taken from a package**, because it has to
+run on four platforms including tvOS and it is a few hundred lines of hashing
+that will not change again. One implementation covers B2, R2, Wasabi, Storj
+and MinIO. `canonicalRequestFor` exists so a test can read the canonical
+request: a signature is a number that is either right or wrong and says
+nothing about which part was wrong, and the canonical request is the part
+that is usually wrong.
+
+**Build the canonical path from `pathSegments`, never from `path`.** Dart
+keeps percent-escapes in `path`, so encoding it turns `a%20b` into `a%2520b`
+— signed one way, sent another, and the object is unreadable for ever with a
+signature error naming none of it. Every key this app writes happens to be
+safe characters, which is exactly why the first version of that test asserted
+the double-encoded string and passed.
+
+**No test here can show the signature is one Backblaze will accept.** They pin
+the canonical request, the encoding, the paths, the paging and the errors;
+only a real bucket settles the rest, and a wrong region fails identically to
+a wrong key.
+
+**Schema 7 adds `SyncOutbox`.** A queue rather than a scan of the tables,
+because the change that matters most cannot be scanned for: a removed
+favourite leaves no row, and "rows newer than last time" would resurrect it
+on every device that still remembered it. Draining does not clear it — the
+caller clears only once the records are written, or a failed upload takes the
+viewer's changes with it.
+
+**A screen that never shows a stored secret must not save a blank over it.**
+The rule is right — no panel here renders a credential back — and it means
+the field is empty every time somebody returns. Writing that through wiped the
+bucket keys, and the next test reported that the service did not recognise
+them. An empty secret field means "keep what is stored".
+
+**History only crosses between devices holding the same provider**, because
+records are keyed on a hash of the portal address and the account. Two
+devices with the same portal typed differently — a trailing slash, `http`
+against `https`, an address the provider moved — are two accounts as far as
+this is concerned, and each syncs contentedly with itself while nothing
+appears. Both sync screens print the identity for exactly this reason: it is
+invisible otherwise.
+
+**One provider does not produce one key, and that is the whole of this.**
+The address is typed by hand on every device, and what survives normalisation
+is what nobody notices: `http` against `https`, a `www.`, a portal that
+moved. Each makes two identities out of one account, and both devices then
+sync contentedly with themselves. So writing and reading are deliberately
+asymmetric — **one key is written and a set is accepted**. A record's key
+travels inside the sealed chunk and is only ever compared against keys
+derived locally, so accepting more of them costs nothing in the bucket and
+tells the storage company nothing. Writing under several would be writing
+several records, and the merge would have no way to choose between them.
+
+**Reading generously cannot fix it on its own.** A device has no way to guess
+the vanity address another was set up with, so the *writers* have to converge
+— which is why `providerWriteKey` prefers the portal's own reported address
+over the typed one. Reading widely is what keeps records written before that
+happened from being stranded.
+
+**A variant must never shadow a source that genuinely writes under that key.**
+`providerKeyMap` lays down every canonical key first and alone, then fills in
+variants with `putIfAbsent`. The same panel bought twice — one account on
+http, a second on https — is a real arrangement, and without the two passes
+one of them absorbs the other's history.
+
+**A record for an unknown provider is kept, not dropped where it is found.**
+That single `continue` was the quietest failure in the feature: the pass
+worked, the count said records had arrived, and nothing appeared. They are
+collected in `UnlinkedProviders`, named by the identity record each device
+announces once, and offered to the viewer to link. Linking clears the
+watermarks with it — every chunk is still in the bucket and none is ever
+rewritten, so forgetting how far this device had read is what makes a link
+recover the history that already crossed rather than only fixing the future.
+
+**Linking is asked for rather than inferred.** Derived variants stop at forms
+of the same hostname on purpose. Two households merged into one history
+cannot be undone by a viewer who notices; a split one can.
+
+**A guessed keyslot is tried and never written.** A slot that is not there
+costs no derivation — `_open` skips it before deriving anything — so guessing
+widely is free. Filling one for each guess would leave a bucket of routes
+named after providers nobody has, every one of them another way in to be
+rotated later. Hence `BackupSecret.fillable`. The same change exposed a bug
+sitting in `_claim`: it sealed the opening bid with one secret and tried to
+open it with `secrets.first`, so a device could claim a folder and then fail
+to open the bid it had just written. It tries them all now, which also fixes
+a race it could previously lose while holding the key.
+
+**A recovery phrase is asked for first and is not optional.** The provider
+password is only a shortcut past typing it. A folder claimed under nothing
+but a provider is the case with no way out: the password is reissued on
+renewal, and a device whose own provider has not been added yet has nothing
+to offer at all. Both screens ask before the bucket, and neither will save
+one without a phrase.
+
+**A synced position is not enough to draw a shelf.** Episodes are fetched
+per show on demand, so a device only holds them for shows somebody opened *on
+it*. A position arriving from elsewhere is therefore about an episode this
+device has never heard of — `continueSeries` looks that row up to know where
+to carry on, finds nothing, and leaves the show out. The record was in the
+table the whole time. Reported as "films and live channels sync and series do
+not", and both of those work for the same reason: the bulk sync writes their
+tables in full. `seriesAwaitingEpisodes` finds the gaps and `BackupSync`
+fills them through the same on-demand loader a viewer opening the show would
+use — bounded per pass, since each show is a request to the portal, and
+honouring `episodesSyncedAt` so a show with genuinely no episodes is not
+asked for again on every pass.
+
+**Announcements are not news.** They are excluded from the counts a pass
+reports, or a pass that moved nothing a viewer cares about would say it had —
+which is the exact thing those counts exist to prevent.
+
+**A sliver that fills the viewport with a scrollable is a second scroll
+view.** The phone's live shelves went in above the channel list inside a
+`SliverFillRemaining(hasScrollBody: true)`, which looks like composition and
+is nesting: scrolling down past the shelves worked, and scrolling back up to
+reach them did not, because the inner list took the gesture and stopped at its
+own top. `_GridTab` had it right all along — one `CustomScrollView`, the
+shelves a `SliverToBoxAdapter` and the content a sliver.
+
+**It does not misbehave under `tester.drag`.** A widget test of the broken
+arrangement scrolls back perfectly, so it passes either way; the fault is in
+what a real finger does with two overlapping scrollables. That is why this one
+is guarded by reading the source for a single `CustomScrollView` rather than
+by laying it out — a test that cannot fail for the reason it names is worse
+than none, and the first two written here were exactly that.
+
+**Live was the kind the phone's shelves left out.** Films and series each got
+a Continue and a Favourites strip; live got the channel list and a preview of
+the single most recent channel, so everything watched before that was gone and
+a favourited channel had nowhere to appear at all. `_favouriteItems` made it
+worse quietly — it branched on movie and then *fell through to series*, so a
+live favourite was looked for among the shows and never found. That is the
+exact fault the method was written to fix, left standing in the one kind it
+did not cover.
+
+**Every screen that exists on the television has to exist on the phone.**
+Device sync was built on one side only, and the phone ran a pass at launch
+and on leaving all along with no way to be pointed at a folder — a feature
+that was exactly half there, on the device most likely to be picked up after
+the television is put down. The same applies to the moments a sync is asked
+for: both players have to trigger one.
+
+**A sync runs at four moments, and three of them were missing.** It ran at
+launch and on leaving the foreground — and everything a viewer does happens
+between those two. A bucket set up mid-session stayed empty, TEST connected
+perfectly, and nothing anywhere said why: nothing had gone wrong, it had
+simply not been asked. Saving a folder now runs one, and so does closing the
+player, which is the moment there is news worth sending.
+
+**A sync pass may never throw.** No internet, a deleted bucket and rotated
+keys all arrive in `BackupSync.run`, and none of them is a reason for an app
+to stop working. The failure is kept and shown on the settings screen, which
+is the only place anybody can act on it.
+
+**The key is derived once per device, not once per pass.** A hundred and
+twenty thousand rounds of PBKDF2 runs on the isolate drawing the screen, and
+it is felt on a television. The result is cached in the keystore against a
+fingerprint of the bucket, so pointing the app at a different folder does not
+quietly reuse the old key against it.
+
+**A `setState` on the widget that owns the sync does not reload a shelf.**
+The home screens hold their lists in their own state, read once, so records
+arriving from another device landed in the database and stayed invisible
+until the next launch — the sync working and not working look identical.
+`BackupSync.revision` is a notifier both homes listen to.
+
+**"Synced" is not a fact anybody can act on.** A pass that sent nothing and a
+pass that received plenty and applied none are entirely different faults — the
+first means this device queued nothing, the second that the records belong to
+a provider it does not have — and one word describes both. The pass counts
+what it moved and says so.
+
+**Something has to tell the screen.** Records land in the database and the
+shelves were drawn from what was there at launch, so without `onApplied` the
+sync works and looks exactly as though it had not.
+
+**`hidden` and `preference` are written and read now, and they were the last
+two scopes declared and unused.** A viewer who spent ten minutes hiding four
+hundred categories on the television did it again on the phone and again on
+the Apple TV, while the names for carrying that decision sat in the enum. One
+record per category rather than one saying "all of them": hiding everything
+and showing four back is five decisions, and the four have to outlive the one.
+
+**The preference safelist is one key, on purpose.** Most of that table
+describes *this* device — which folder, how far it has read, what name it
+syncs under — and sending any of it is at best noise and at worst the bug that
+had two televisions writing chunks under one id. What is left is the region
+filter, which is a choice about what somebody wants to see. Queued from inside
+`setPreference` rather than at the screens that change one, so the safelist is
+the decision and not where the write happens to be made.
+
+**Schema 11 dates a preference** so the choice made last wins rather than the
+one that synced last — a device opened after a week away would otherwise
+overwrite a change made here an hour ago.
+
+**A synced filter has to reach the screen, and that is a second bug wearing
+the first one's clothes.** Hidden categories and the region filter are read
+once into each home screen's state, so a pass that applied them rebuilt the
+shelves against filters read at launch. Both `_reloadAfterSync` methods
+re-read the filters before reloading. The same shape as the shelves that did
+not reload, one layer up — which is worth remembering as the pattern rather
+than the incident.
+
+**A device compacts its own chunks and nobody else's.** The log is compactable
+by construction — records are state, so a snapshot is the merge of everything
+so far — and without it a folder grows for ever, since a position rewritten a
+thousand times is a thousand records answering one question. The snapshot goes
+*above* the chunks it replaces and is written before they are deleted: a peer
+that had read five of forty finds it at forty-one and takes the lot, and a
+peer that had read everything sees one more chunk it already agrees with. A
+chunk that cannot be read stops the compaction rather than being summarised
+away, because compacting around it would delete the original and keep a
+summary missing whatever it said.
+
+**What arrives from elsewhere is written without being queued.** Two devices
+that echoed each other would hand the same position back and forth for as
+long as both were running. `_writePlayback` and `_writeFavourite` are the
+unqueued halves, and `applyBackupRecords` is the only caller.
+
+## Surviving a purge on tvOS
+
+tvOS reclaims `Library/Caches` whenever it wants the space, and that is where
+the catalogue has to live: Apple guarantees an app about half a megabyte it
+will not touch, and a real provider's catalogue is **240MB** — measured on the
+Apple TV, not estimated. There is no arrangement of files that changes that,
+so the app is built to lose it.
+
+Three kinds of thing, three answers. **The catalogue is a cache and always
+was** — a copy of the provider's listing, rebuilt by one sync, correctly in
+Caches. **Secrets are in the keystore**, which tvOS does not purge. **Watch
+history is in the viewer's own folder**, which is not on the device at all.
+
+What was left over is the gap `RecoveryService` fills: *which* portal, *which*
+account, *which* bucket. A few hundred bytes, not secret, not derivable, and
+sitting in the one file the system may delete — so a purged device held a
+keystore full of passwords with nothing saying what they opened, and could not
+find the folder its history was in to restore either. It goes in the keystore
+beside the secrets, not because it is one but because that is the only durable
+store the platform offers.
+
+**It carries the watch history too, because without a folder there is nowhere
+else for it.** A folder is the real answer and the only one that crosses
+devices; a viewer who has not set one up should still not lose a year of
+positions to the system reclaiming disk space. Capped at the most recent 500 —
+74 bytes a row measured on the device, so under 40KB — and favourites are
+outside the cap, because watching regenerates a position and nothing
+regenerates a favourite.
+
+**Restoring goes through `applyBackupRecords`, which is the path built for
+this shape**: it resolves a provider key to whatever id the source has here,
+refuses to overwrite anything newer, and writes *without queueing*. Queued, a
+restore would reach the folder as a fresh evening's watching stamped now, and
+beat the true state on every other device — worse than losing it. The original
+timestamps are preserved for the same reason a shelf ordered by "most recent"
+is only as good as they are.
+
+**Neither half may throw.** A recovery record saves somebody retyping a portal
+address; it is a convenience, and a convenience that can stop the app opening
+is worse than not having it. `restore` is awaited on the launch path, inside
+the try that turns anything thrown into a failure screen instead of a
+television, and `remember` is not awaited at all, where anything thrown is an
+unhandled async error nobody sees. Both are guarded, the same rule a sync pass
+follows.
+
+**It replaces rather than merges, and that is how a provider gets removed.** A
+record that only ever grew would put back what somebody had just deleted, on
+every launch, for ever.
+
+**Written on leaving the foreground rather than at each place a setup
+changes.** A list of call sites is a list somebody adds to and forgets; the
+cost of being one session behind is a viewer retyping an address they had
+typed once already.
+
+**Restoring runs on every launch and fills only what is missing**, because the
+launch after a purge looks like any other from the inside.
 
 ## Security decisions already made
 
@@ -436,7 +1103,7 @@ which stays correct on a d-pad in any language, but the layout order reverses
 under RTL so the two stop meaning the same thing.
 `docs/adding-a-language.md` carries the detail.
 
-Not done: Apple TV has never been run on hardware; no external player,
+Not done: no external player,
 recording or multi-screen; the tunnel is Android-only — `VpnService.isSupported`
 is `Platform.isAndroid`, never anything TV-specific, so an Android phone runs
 it too; iOS would need a Network Extension and a paid developer account.

@@ -91,7 +91,20 @@ class PlayerContract {
     // Media3 reports the colour transfer; libVLC does not expose one, and a
     // guessed HDR badge is worse than none.
     'dynamicRange',
+    // Both engines can name the codec, and for a long time only Media3 did —
+    // it sat unanswered on Apple because it was written down beside
+    // `dynamicRange`, which genuinely cannot be answered. Optional because a
+    // stream that has not opened has no track to name yet.
     'videoCodec',
+    // Whether this device decodes H.265 in hardware at all.
+    //
+    // Not a fact about the stream: a fact about the box, carried here because
+    // this is where it is needed. An Apple TV HD has no H.265 decoder, so
+    // those channels fall to software, fail to allocate buffers, and produce
+    // no picture — while VLC reports no error and the chrome spins for ever.
+    // Naming the codec is only half an explanation without knowing whether
+    // this machine could ever have played it.
+    'hevcHardware',
     // Reported by both, but only meaningful once a stream is open.
     'hasVideoOut',
     'framesSeen',

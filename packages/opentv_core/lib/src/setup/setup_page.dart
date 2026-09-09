@@ -160,6 +160,20 @@ String setupFormPage({
          themoviedb.org — either the thirty-two character API key or the
          longer read access token.</p>
 
+      <label for="subtitles">OpenSubtitles API key</label>
+      <input id="subtitles" name="subtitles" autocomplete="off">
+      <p class="quiet">Lets the player look up subtitles when a stream ships
+         none, or when the ones it ships are wrong. Free from
+         opensubtitles.com — make an account, open API consumers, and copy
+         the key.</p>
+
+      <label for="pin">Parental PIN</label>
+      <input id="pin" name="pin" type="password" inputmode="numeric"
+             autocomplete="off">
+      <p class="quiet">Four digits or more. Locks whole categories out of
+         browsing, search and the guide; you choose which ones on the
+         television afterwards. Kept in the keystore with the rest.</p>
+
       <label for="tunnel">WireGuard configuration</label>
       <textarea id="tunnel" name="tunnel"
                 placeholder="[Interface]&#10;PrivateKey = …"></textarea>

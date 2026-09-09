@@ -29,6 +29,9 @@ class PlayerScreen extends StatefulWidget {
     this.onEnded,
     this.nextLabel,
     this.onNext,
+    this.episodes = const [],
+    this.episodeIndex,
+    this.onChooseEpisode,
     this.channelName,
     this.channelNumber,
     this.nowTitle,
@@ -62,6 +65,18 @@ class PlayerScreen extends StatefulWidget {
   /// What comes after this, when there is something. Shown on the end card
   /// and on a transport button.
   final String? nextLabel;
+
+  /// Every episode of this series, in order, as a viewer would read them.
+  ///
+  /// Labels rather than rows: the player has never known what an episode is,
+  /// and giving it one now would put the catalogue inside the one screen that
+  /// has managed without it.
+  final List<String> episodes;
+
+  /// Which of them is playing, so the list can say so.
+  final int? episodeIndex;
+
+  final void Function(int index)? onChooseEpisode;
   final VoidCallback? onNext;
 
   final String? channelName;
@@ -107,6 +122,21 @@ class _PlayerScreenState extends State<PlayerScreen>
   MethodChannel? _channel;
   Timer? _poll;
   PlaybackStatus _status = const PlaybackStatus(phase: PlaybackPhase.opening);
+
+  /// When this stream was asked to start, so a picture that never arrives can
+  /// be told from one that is merely slow.
+  ///
+  /// A minute of a live channel buffering on a poor connection is ordinary; a
+  /// stream that has been open this long and produced no frame at all is not
+  /// going to. VLC reports neither case as an error.
+  DateTime? _startedAt;
+  static const _noPictureAfter = Duration(seconds: 12);
+  bool _sawPicture = false;
+
+  bool get _stalled =>
+      !_sawPicture &&
+      _startedAt != null &&
+      DateTime.now().difference(_startedAt!) > _noPictureAfter;
 
   /// Which chooser is open, if any. Only one at a time: they occupy the same
   /// place and a remote has no way to address two.
@@ -352,9 +382,11 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _onViewCreated(int id) {
     _channel = MethodChannel('opentv/player/$id');
+    _startedAt = DateTime.now();
     _poll = Timer.periodic(const Duration(milliseconds: 500), (_) async {
       final raw = await _channel?.invokeMapMethod<String, Object?>('state');
       if (raw == null || !mounted) return;
+      if (raw['framesSeen'] == true) _sawPicture = true;
       final status = _toStatus(raw);
       setState(() {
         _status = status;
@@ -525,6 +557,26 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Widget _chooser() {
     switch (_sheet!) {
+      case _Sheet.episodes:
+        return TrackSheet(
+          title: 'Episodes',
+          note: 'Everything in this series. The one playing is marked.',
+          options: [
+            for (var i = 0; i < widget.episodes.length; i++)
+              SheetOption(
+                id: '$i',
+                label: widget.episodes[i],
+                selected: i == widget.episodeIndex,
+              ),
+          ],
+          onSelect: (id) {
+            final index = id == null ? null : int.tryParse(id);
+            setState(() => _sheet = null);
+            if (index != null) widget.onChooseEpisode?.call(index);
+          },
+          onDismiss: () => setState(() => _sheet = null),
+        );
+
       case _Sheet.aspect:
         return TrackSheet(
           title: 'Picture',
@@ -672,6 +724,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (move == null) return null;
     return () async {
       await _channel?.invokeMethod<void>('stop');
+      // A new stream, so the clock that decides "this one never produced a
+      // picture" starts again. Left running, the first channel's stall would
+      // be reported against every one zapped to afterwards.
+      _sawPicture = false;
+      _startedAt = DateTime.now();
       move();
     };
   }
@@ -713,9 +770,64 @@ class _PlayerScreenState extends State<PlayerScreen>
         0,
         99,
       ),
-      error: raw['state'] == 'error' ? 'The stream could not be opened.' : null,
+      error: _failure(raw),
     );
   }
+
+  /// Why nothing is playing, in the words the device used where it gave any.
+  ///
+  /// This used to invent its own sentence from the state string and ignore
+  /// the `error` key entirely — which the phone has always read. The native
+  /// knew more than the television was willing to hear, which is the same
+  /// fault as a key nobody reads at all.
+  ///
+  /// A stream that opens and never produces a picture is the other half. VLC
+  /// does not call that an error: it sits in playing or buffering with no
+  /// frames, for ever, and the chrome spins. An Apple TV HD meets it on every
+  /// H.265 channel, because its A8 has no decoder for one and software
+  /// decoding cannot allocate what it needs.
+  String? _failure(Map<String, Object?> raw) {
+    final reported = raw['error'];
+    if (reported is String && reported.isNotEmpty) return reported;
+    if (raw['state'] == 'error') return 'The stream could not be opened.';
+
+    if (!_stalled) return null;
+
+    // What the stream says it is, rather than a guess at why it failed.
+    //
+    // An earlier version named H.265 and blamed the missing decoder, on the
+    // strength of `hevc … get_buffer() failed` in a device log. The channels
+    // that actually fail report H.264 — and `get_buffer` is a *frame
+    // allocation* failure, which a 4K picture provokes on a two-gigabyte box
+    // whatever the codec is. So this says what is known and leaves the
+    // conclusion to somebody who can see the whole picture, which is the same
+    // reason no HDR badge is guessed at.
+    final facts = <String>[
+      if ((raw['videoCodec'] as String?)?.trim() case final String c
+          when c.isNotEmpty)
+        _codecName(c),
+      if (raw['width'] case final int w when w > 0)
+        if (raw['height'] case final int h when h > 0) '${w}x$h',
+    ];
+
+    final detail = facts.isEmpty ? '' : ' It reports ${facts.join(', ')}.';
+    final hevc = raw['hevcHardware'] == false &&
+        (raw['videoCodec'] as String?)?.toLowerCase().contains('hev') == true;
+
+    return 'No picture from this channel. The stream opened and no frame '
+        'arrived.$detail${hevc ? ' This device has no hardware decoder for '
+            'H.265.' : ''}';
+  }
+
+  /// A fourcc as a viewer would recognise it.
+  static String _codecName(String raw) => switch (raw.toLowerCase()) {
+        'h264' || 'avc1' || 'x264' => 'H.264',
+        'hevc' || 'hev1' || 'hvc1' || 'h265' => 'H.265',
+        'mp2v' || 'mpgv' => 'MPEG-2',
+        'vp09' || 'vp9' => 'VP9',
+        'av01' => 'AV1',
+        _ => raw,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -775,6 +887,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                 onAspect: () => setState(() => _sheet = _Sheet.aspect),
                 nextLabel: widget.nextLabel,
                 onNext: widget.onNext,
+                onEpisodes: widget.episodes.length < 2
+                    ? null
+                    : () => setState(() => _sheet = _Sheet.episodes),
                 onSeek: (position) => _channel?.invokeMethod<void>('seek', {
                   'positionMs': position.inMilliseconds,
                 }),
@@ -804,7 +919,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 }
 
 /// Which chooser is open over the video.
-enum _Sheet { audio, subtitles, aspect, find }
+enum _Sheet { audio, subtitles, aspect, find, episodes }
 
 /// What is offered when an episode finishes.
 ///
@@ -813,7 +928,7 @@ enum _Sheet { audio, subtitles, aspect, find }
 /// countdown: a television that starts the next episode on its own has
 /// decided something the viewer did not, and the one time that is wrong it is
 /// wrong for the rest of the evening.
-class _EndCard extends StatelessWidget {
+class _EndCard extends StatefulWidget {
   const _EndCard({
     required this.nextLabel,
     required this.onNext,
@@ -823,6 +938,43 @@ class _EndCard extends StatelessWidget {
   final String nextLabel;
   final VoidCallback onNext;
   final VoidCallback onBack;
+
+  @override
+  State<_EndCard> createState() => _EndCardState();
+}
+
+class _EndCardState extends State<_EndCard> {
+  final _next = FocusNode(debugLabel: 'play next');
+  Timer? _retry;
+
+  /// Claims the highlight rather than asking for it.
+  ///
+  /// `autofocus` is only honoured while the scope has no focused child, and
+  /// when this card appears the controls are already holding one — so the
+  /// card was drawn with the player's buttons still selected, and pressing
+  /// select did whatever they did. The chrome learned this the same way and
+  /// names its destination for the same reason.
+  ///
+  /// Twice, and the second is not superstition: the first lands in the same
+  /// turn as the route's own scope restoring whichever child it remembers,
+  /// and which settles last is not something to depend on.
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _claim());
+    _retry = Timer(OpenTvMotion.focus, _claim);
+  }
+
+  void _claim() {
+    if (mounted && _next.canRequestFocus) _next.requestFocus();
+  }
+
+  @override
+  void dispose() {
+    _retry?.cancel();
+    _next.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -842,7 +994,7 @@ class _EndCard extends StatelessWidget {
             SizedBox(
               width: 1200,
               child: Text(
-                nextLabel,
+                widget.nextLabel,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: OpenTvType.hero,
@@ -854,11 +1006,14 @@ class _EndCard extends StatelessWidget {
                 PlayerButton(
                   label: 'PLAY NEXT',
                   emphasis: true,
-                  autofocus: true,
-                  onSelect: onNext,
+                  focusNode: _next,
+                  onSelect: widget.onNext,
                 ),
                 const SizedBox(width: OpenTvSpace.sm),
-                PlayerButton(label: 'BACK TO THE SERIES', onSelect: onBack),
+                PlayerButton(
+                  label: 'BACK TO THE SERIES',
+                  onSelect: widget.onBack,
+                ),
               ],
             ),
           ],

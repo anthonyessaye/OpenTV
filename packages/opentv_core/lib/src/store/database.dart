@@ -1,8 +1,13 @@
 import 'dart:convert';
+import 'dart:math' show min;
 
 import 'package:drift/drift.dart';
 
+import '../backup/backup_engine.dart';
+import '../backup/backup_identity.dart';
+import '../backup/backup_record.dart';
 import '../metadata/title_cleaner.dart';
+import 'region_filter.dart';
 import 'search_text.dart';
 import 'tables.dart';
 
@@ -28,13 +33,26 @@ part 'database.g.dart';
     PlaybackStates,
     SyncStages,
     Preferences,
+    SyncOutbox,
+    ProviderAliases,
+    UnlinkedProviders,
+    CategoryCounts,
   ],
 )
 class OpenTvDatabase extends _$OpenTvDatabase {
   OpenTvDatabase(super.e);
 
+  /// The schema this build writes.
+  ///
+  /// Exposed as a constant as well as the override, because the app has to
+  /// know whether the file on disk predates it *before* opening it — an
+  /// upgrade that rebuilds a search index over a real catalogue is long
+  /// enough that the viewer deserves to be told which of the two is
+  /// happening.
+  static const latestSchema = 11;
+
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => latestSchema;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -48,29 +66,24 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // rebuilt: on a real catalogue this is a few seconds once, against
       // five seconds on every screen open without them.
       if (from < 3) {
-        for (final index in [
-          Index('channel_order',
-              'CREATE INDEX channel_order ON channels (source_id, number, name)'),
-          Index('movie_rating',
-              'CREATE INDEX movie_rating ON movies (source_id, rating)'),
-          Index('movie_added',
-              'CREATE INDEX movie_added ON movies (source_id, added_at)'),
-          Index('movie_name',
-              'CREATE INDEX movie_name ON movies (source_id, name)'),
-          Index('series_rating',
-              'CREATE INDEX series_rating ON series_entries (source_id, rating)'),
-          Index('series_modified',
-              'CREATE INDEX series_modified ON series_entries (source_id, last_modified)'),
-          Index('series_name',
-              'CREATE INDEX series_name ON series_entries (source_id, name)'),
-          Index('channel_counts',
-              'CREATE INDEX channel_counts ON channels (source_id, hidden, category_remote_id)'),
-          Index('movie_counts',
-              'CREATE INDEX movie_counts ON movies (source_id, hidden, category_remote_id)'),
-          Index('series_counts',
-              'CREATE INDEX series_counts ON series_entries (source_id, hidden, category_remote_id)'),
+        // `IF NOT EXISTS` rather than `createIndex`, because every one of
+        // these is also declared on its table — a fresh install gets them
+        // from `createAll`. A migration that cannot be run twice is one that
+        // cannot be recovered from having been interrupted, and the second
+        // run fails on the index the first one had already made.
+        for (final statement in [
+          'CREATE INDEX IF NOT EXISTS channel_order ON channels (source_id, number, name)',
+          'CREATE INDEX IF NOT EXISTS movie_rating ON movies (source_id, rating)',
+          'CREATE INDEX IF NOT EXISTS movie_added ON movies (source_id, added_at)',
+          'CREATE INDEX IF NOT EXISTS movie_name ON movies (source_id, name)',
+          'CREATE INDEX IF NOT EXISTS series_rating ON series_entries (source_id, rating)',
+          'CREATE INDEX IF NOT EXISTS series_modified ON series_entries (source_id, last_modified)',
+          'CREATE INDEX IF NOT EXISTS series_name ON series_entries (source_id, name)',
+          'CREATE INDEX IF NOT EXISTS channel_counts ON channels (source_id, hidden, category_remote_id)',
+          'CREATE INDEX IF NOT EXISTS movie_counts ON movies (source_id, hidden, category_remote_id)',
+          'CREATE INDEX IF NOT EXISTS series_counts ON series_entries (source_id, hidden, category_remote_id)',
         ]) {
-          await m.createIndex(index);
+          await customStatement(statement);
         }
       }
 
@@ -88,6 +101,102 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         await m.addColumn(seriesEntries, seriesEntries.region);
         await backfillRegions();
       }
+
+      // 5 adds a full-text index over each catalogue table.
+      //
+      // `LIKE '%needle%'` cannot use an index — a B-tree has no way into the
+      // middle of a string — so every search scanned the table. That was
+      // invisible while a term matched plenty, because LIMIT stopped the scan
+      // early, and it cost the whole catalogue whenever a term matched little
+      // or nothing. Which is to say it was slowest exactly as a viewer
+      // finished typing something specific.
+      if (from < 5) await createSearchIndex();
+
+      // 6 gives the index its own two- and three-character prefix tables.
+      //
+      // A search starts at two letters, and a bare FTS5 index answers `am*`
+      // by walking every term that begins `am` — on a real catalogue that is
+      // tens of thousands of them, each a separate read. Measured here it is
+      // twenty times the cost of a longer prefix and still only milliseconds;
+      // on a television reading a cold index off eMMC it is the difference
+      // between a search and a search box that never answers.
+      //
+      // Rebuilt rather than migrated, because the prefix tables are part of
+      // the virtual table's definition and cannot be added to one already
+      // made.
+      if (from < 6) {
+        for (final (_, index) in _searchIndexes) {
+          for (final suffix in const ['insert', 'delete', 'update']) {
+            await customStatement('DROP TRIGGER IF EXISTS ${index}_$suffix');
+          }
+          await customStatement('DROP TABLE IF EXISTS $index');
+        }
+        await createSearchIndex();
+      }
+
+      // 7 adds the queue of changes waiting to reach the viewer's other
+      // devices. Created rather than backfilled: what a device did before it
+      // could sync is not something the other devices are missing, it is
+      // something they were never promised.
+      if (from < 7) await m.createTable(syncOutbox);
+
+      // 8 puts the category beside the order it is read in.
+      //
+      // Browsing a category is `WHERE category = ? ORDER BY name LIMIT 180`,
+      // and the indexes it had served one half each: `movie_counts` filters
+      // and cannot order, `movie_name` orders and cannot filter. SQLite chose
+      // the ordering one and walked the catalogue in name order discarding
+      // everything in other categories until it had a screenful — which is
+      // fast for a category holding a third of the films and ruinous for a
+      // small one, and most are small. Measured on 180,000 films: 2ms for the
+      // huge category, 354ms for a small one, in memory on a fast machine.
+      // On a television reading eMMC it is the seconds a viewer sees.
+      //
+      // Channels carry number as well, because that is what they are ordered
+      // by and an index that stops short of the sort is only half an answer.
+      if (from < 8) {
+        for (final statement in [
+          'CREATE INDEX IF NOT EXISTS movie_category_name ON movies '
+              '(source_id, category_remote_id, name)',
+          'CREATE INDEX IF NOT EXISTS series_category_name ON series_entries '
+              '(source_id, category_remote_id, name)',
+          'CREATE INDEX IF NOT EXISTS channel_category_order ON channels '
+              '(source_id, category_remote_id, number, name)',
+        ]) {
+          await customStatement(statement);
+        }
+      }
+
+      // 9 is the sync learning that one provider does not always produce one
+      // key. `reportedUrl` is what the portal calls itself, which is the only
+      // part of an address two devices cannot type differently; the two
+      // tables hold what a viewer has said belongs together, and what turned
+      // up addressed to nobody.
+      //
+      // Nothing is backfilled. The reported address arrives on the next
+      // authentication, and until it does the derived variants cover the
+      // ordinary cases on their own.
+      if (from < 9) {
+        await m.addColumn(sources, sources.reportedUrl);
+        await m.createTable(providerAliases);
+        await m.createTable(unlinkedProviders);
+      }
+
+      // 10 remembers how many items each category holds. Counting them means
+      // reading every row of the table, the rail asks on every section
+      // change, and the answer only moves when the catalogue does. Created
+      // empty: the first read after this fills it.
+      if (from < 10) await m.createTable(categoryCounts);
+
+      // 11 dates the preferences that cross between devices, so the choice
+      // made last wins rather than the one that happened to sync last. Null
+      // for everything already written, which reads as "no opinion" and loses
+      // to anything that arrives with a date.
+      if (from < 11) await m.addColumn(preferences, preferences.changedAt);
+    },
+    onCreate: (m) async {
+      await m.createAll();
+      await createSearchIndex();
     },
     beforeOpen: (details) async {
       // Off by default in SQLite. Without it the cascade deletes that clean
@@ -118,10 +227,19 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   Future<int> removeSource(int id) =>
       (delete(sources)..where((s) => s.id.equals(id))).go();
 
-  Future<void> markSourceSynced(int sourceId, DateTime at) =>
-      (update(sources)..where((s) => s.id.equals(sourceId))).write(
-        SourcesCompanion(lastSyncedAt: Value(at)),
-      );
+  /// Called when a source has finished importing.
+  ///
+  /// Clears any recorded index failure with it. A viewer whose search fell
+  /// back to the scan and then re-read their catalogue has just rewritten
+  /// every row the index is built from, and telling them for the rest of the
+  /// session that the index is unavailable — when it is the thing that was
+  /// just repaired — is the report outliving the fault.
+  Future<void> markSourceSynced(int sourceId, DateTime at) async {
+    searchIndexFailure = null;
+    await (update(sources)..where((s) => s.id.equals(sourceId))).write(
+      SourcesCompanion(lastSyncedAt: Value(at)),
+    );
+  }
 
   // --- batch writes -----------------------------------------------------
 
@@ -131,6 +249,12 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// Sync calls this repeatedly with bounded batches rather than accumulating
   /// a whole catalogue and writing once, so peak memory does not scale with
   /// the size of the provider.
+  ///
+  /// These deliberately do **not** touch the category counts. A sync calls
+  /// them with bounded batches — hundreds of times over a real catalogue —
+  /// and clearing the counts on each one empties the cache the whole time a
+  /// sync is running, which is exactly when somebody is most likely to be
+  /// browsing. The engine clears them once, when the run is over.
   Future<void> upsertChannels(List<ChannelsCompanion> rows) =>
       batch((b) => b.insertAllOnConflictUpdate(channels, rows));
 
@@ -316,6 +440,72 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     int sourceId,
     ItemKind kind,
   ) async {
+    // Remembered rather than recounted. Counting reads every row of the table
+    // and the rail asks on every section change: measured on an Android TV
+    // emulator against 120,000 films, 725ms of a 1318ms switch. The answer
+    // only moves when the catalogue does, and the writers that move it clear
+    // this on their way past.
+    final held = await (select(categoryCounts)
+          ..where((c) =>
+              c.sourceId.equals(sourceId) & c.kind.equalsValue(kind)))
+        .get();
+    if (held.isNotEmpty) {
+      return {
+        for (final row in held)
+          if (row.items > 0) row.categoryRemoteId: row.items,
+      };
+    }
+    final counted = await _countByCategory(sourceId, kind);
+
+    // Every category, including the empty ones, so that an empty cache means
+    // "not counted" and not "counted, and there was nothing to find".
+    final all = await (select(categories)
+          ..where((c) =>
+              c.sourceId.equals(sourceId) & c.kind.equalsValue(kind)))
+        .get();
+    if (all.isNotEmpty) {
+      await batch((b) => b.insertAllOnConflictUpdate(categoryCounts, [
+            for (final category in all)
+              CategoryCountsCompanion.insert(
+                sourceId: sourceId,
+                kind: kind,
+                categoryRemoteId: category.remoteId,
+                items: Value(counted[category.remoteId] ?? 0),
+              ),
+          ]));
+    }
+    return counted;
+  }
+
+  /// Counts every kind for a source and remembers the answer.
+  ///
+  /// Called when a sync finishes. The count is a read of every row in the
+  /// table, and the choice is only ever *where* it happens: here, at the end
+  /// of a sync a viewer is already waiting on, or on their next tab switch.
+  Future<void> warmCategoryCounts(int sourceId) async {
+    await invalidateCategoryCounts(sourceId);
+    for (final kind in const [ItemKind.live, ItemKind.movie, ItemKind.series]) {
+      await countsByCategory(sourceId, kind);
+    }
+  }
+
+  /// Forgets the counts for a source, so the next read counts again.
+  ///
+  /// Called by everything that can change one. A count that outlives the rows
+  /// it describes is a rail advertising categories that are empty and hiding
+  /// ones that are not.
+  Future<void> invalidateCategoryCounts([int? sourceId]) {
+    final statement = delete(categoryCounts);
+    if (sourceId != null) {
+      statement.where((c) => c.sourceId.equals(sourceId));
+    }
+    return statement.go();
+  }
+
+  Future<Map<String, int>> _countByCategory(
+    int sourceId,
+    ItemKind kind,
+  ) async {
     // The three kinds live in three tables with the same shape, and drift's
     // typed builders cannot express "group this column of whichever table"
     // without a generic dance that reads far worse than the SQL. The table
@@ -346,6 +536,31 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     return {
       for (final row in rows) row.read<String>('id'): row.read<int>('n'),
     };
+  }
+
+  /// How many rows of each kind a source holds.
+  ///
+  /// A plain count, which is not what the settings panel used to show: it
+  /// summed [countsByCategory], and that excludes every row whose provider
+  /// gave it no category. On a catalogue where none of them have one it
+  /// reported nothing at all — three zeroes beside a working, populated
+  /// catalogue — and the only way to find out it was lying was to re-read the
+  /// whole thing from the portal and watch the numbers appear.
+  Future<Map<ItemKind, int>> countsOf(int sourceId) async {
+    final counts = <ItemKind, int>{};
+    for (final (kind, table) in const [
+      (ItemKind.live, 'channels'),
+      (ItemKind.movie, 'movies'),
+      (ItemKind.series, 'series_entries'),
+    ]) {
+      final row = await customSelect(
+        'SELECT COUNT(*) AS n FROM $table WHERE source_id = ? AND hidden = 0',
+        variables: [Variable.withInt(sourceId)],
+        readsFrom: {channels, movies, seriesEntries},
+      ).getSingle();
+      counts[kind] = row.read<int>('n');
+    }
+    return counts;
   }
 
   Future<List<Episode>> episodesOf(int sourceId, String seriesRemoteId) =>
@@ -437,21 +652,24 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String term, {
     int limit = 50,
   }) async {
+    final rows = [
+      for (final row in await _searchRows(
+        'channels',
+        'channels_fts',
+        sourceId,
+        term,
+        limit,
+      ))
+        channels.map(row.data),
+    ];
+
+    // Ranked on the folded column where the term has one. A term in a script
+    // normaliseForSearch cannot fold reduces to nothing there, so those rank
+    // on the name as typed rather than by comparing empty strings.
     final needle = normaliseForSearch(term);
-    if (needle.isEmpty) return const [];
-
-    final rows =
-        await (select(channels)
-              ..where(
-                (c) =>
-                    c.sourceId.equals(sourceId) &
-                    c.hidden.equals(false) &
-                    c.searchName.like('%$needle%'),
-              )
-              ..limit(limit))
-            .get();
-
-    return _rankByPrefix(rows, needle, (c) => c.searchName);
+    return needle.isEmpty
+        ? _rankByPrefix(rows, term.toLowerCase(), (r) => r.name.toLowerCase())
+        : _rankByPrefix(rows, needle, (r) => r.searchName);
   }
 
   Future<List<Movie>> searchMovies(
@@ -459,21 +677,24 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String term, {
     int limit = 50,
   }) async {
+    final rows = [
+      for (final row in await _searchRows(
+        'movies',
+        'movies_fts',
+        sourceId,
+        term,
+        limit,
+      ))
+        movies.map(row.data),
+    ];
+
+    // Ranked on the folded column where the term has one. A term in a script
+    // normaliseForSearch cannot fold reduces to nothing there, so those rank
+    // on the name as typed rather than by comparing empty strings.
     final needle = normaliseForSearch(term);
-    if (needle.isEmpty) return const [];
-
-    final rows =
-        await (select(movies)
-              ..where(
-                (m) =>
-                    m.sourceId.equals(sourceId) &
-                    m.hidden.equals(false) &
-                    m.searchName.like('%$needle%'),
-              )
-              ..limit(limit))
-            .get();
-
-    return _rankByPrefix(rows, needle, (m) => m.searchName);
+    return needle.isEmpty
+        ? _rankByPrefix(rows, term.toLowerCase(), (r) => r.name.toLowerCase())
+        : _rankByPrefix(rows, needle, (r) => r.searchName);
   }
 
   Future<List<SeriesEntry>> searchSeries(
@@ -481,22 +702,510 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String term, {
     int limit = 50,
   }) async {
+    final rows = [
+      for (final row in await _searchRows(
+        'series_entries',
+        'series_fts',
+        sourceId,
+        term,
+        limit,
+      ))
+        seriesEntries.map(row.data),
+    ];
+
+    // Ranked on the folded column where the term has one. A term in a script
+    // normaliseForSearch cannot fold reduces to nothing there, so those rank
+    // on the name as typed rather than by comparing empty strings.
     final needle = normaliseForSearch(term);
-    if (needle.isEmpty) return const [];
-
-    final rows =
-        await (select(seriesEntries)
-              ..where(
-                (s) =>
-                    s.sourceId.equals(sourceId) &
-                    s.hidden.equals(false) &
-                    s.searchName.like('%$needle%'),
-              )
-              ..limit(limit))
-            .get();
-
-    return _rankByPrefix(rows, needle, (s) => s.searchName);
+    return needle.isEmpty
+        ? _rankByPrefix(rows, term.toLowerCase(), (r) => r.name.toLowerCase())
+        : _rankByPrefix(rows, needle, (r) => r.searchName);
   }
+
+  /// The three full-text indexes, their triggers, and their contents.
+  ///
+  /// External content: FTS5 holds only the index and reads the columns back
+  /// out of the table itself, so a title is not stored twice. That matters
+  /// more here than in most apps — the handover copies this file over a home
+  /// network, and a second copy of 284,000 titles is a second copy somebody
+  /// waits for.
+  ///
+  /// Indexed over `name` rather than `searchName`. The folded column drops
+  /// every rune it has no ASCII mapping for, which is all of Arabic,
+  /// Cyrillic, Greek and CJK, so indexing it would have carried that
+  /// blindness into the new index. `unicode61` segments those scripts and
+  /// folds diacritics itself, so `telefe` still finds `Telefé`.
+  ///
+  /// Kept out of the drift table list on purpose: a virtual table has no row
+  /// class worth generating, and the triggers are the part that matters.
+  ///
+  /// Safe to run twice. A device that took a catalogue from another one by
+  /// handover already has the file the other device built.
+  Future<void> createSearchIndex() async {
+    for (final (table, index) in _searchIndexes) {
+      await customStatement(
+        'CREATE VIRTUAL TABLE IF NOT EXISTS $index USING fts5('
+        'name, content=$table, content_rowid=rowid, '
+        "tokenize='unicode61 remove_diacritics 2', prefix='2 3')",
+      );
+
+      // Without these the index is correct once and wrong from the first
+      // sync onwards. An external-content table is not updated by writing to
+      // the table it reads from, which is the trap in this arrangement: it
+      // would look right in every test that seeds and searches in one go.
+      await customStatement(
+        'CREATE TRIGGER IF NOT EXISTS ${index}_insert AFTER INSERT ON $table '
+        'BEGIN INSERT INTO $index(rowid, name) VALUES (new.rowid, new.name); END',
+      );
+      await customStatement(
+        'CREATE TRIGGER IF NOT EXISTS ${index}_delete AFTER DELETE ON $table '
+        "BEGIN INSERT INTO $index($index, rowid, name) "
+        "VALUES('delete', old.rowid, old.name); END",
+      );
+      await customStatement(
+        'CREATE TRIGGER IF NOT EXISTS ${index}_update AFTER UPDATE ON $table '
+        "BEGIN INSERT INTO $index($index, rowid, name) "
+        "VALUES('delete', old.rowid, old.name); "
+        'INSERT INTO $index(rowid, name) VALUES (new.rowid, new.name); END',
+      );
+
+      // One statement rather than the paged cursor the region backfill uses,
+      // because the reason for that cursor is gone: SQLite runs on its own
+      // isolate now, so a long statement here costs a slow first launch and
+      // not a frozen one.
+      await customStatement("INSERT INTO $index($index) VALUES('rebuild')");
+    }
+  }
+
+  static const _searchIndexes = [
+    ('channels', 'channels_fts'),
+    ('movies', 'movies_fts'),
+    ('series_entries', 'series_fts'),
+  ];
+
+  /// One table's search, addressed by name.
+  ///
+  /// The join is on rowid, which is what `content_rowid` names. Ordering is
+  /// left to [_rankByPrefix] rather than taken from FTS5's `rank`: bm25
+  /// scores by term rarity, which on a catalogue of titles ranks a rare word
+  /// buried mid-title above the title that starts with what was typed.
+  Future<List<QueryRow>> _searchRows(
+    String table,
+    String index,
+    int sourceId,
+    String term,
+    int limit,
+  ) async {
+    final match = ftsPrefixQuery(term);
+    if (match == null) return const [];
+
+    // Asked once. A query that timed out is still running on the database's
+    // isolate — a deadline stops this waiting, it does not stop the work — so
+    // every later search queues behind it, and behind the scan that replaced
+    // it. Retrying the index on each keystroke is how one slow query becomes
+    // a search box that never answers again.
+    if (searchIndexFailure == null) {
+      try {
+        return await customSelect(
+          // The index is asked for a bounded number of hits and the filters
+          // are applied to those, rather than the filters being applied to
+          // however many the index cares to return.
+          //
+          // The difference does not show on a laptop: a term matching the
+          // whole catalogue and rejected by every filter still answers in
+          // 19ms, because those rowid lookups are in page cache. They are
+          // random reads, and on a television's eMMC a hundred and fifty
+          // thousand of them is minutes. The scan that replaces it is fast
+          // for the opposite reason — it reads sequentially and stops early.
+          'SELECT $table.* FROM '
+          '(SELECT rowid AS r FROM $index WHERE $index MATCH ? LIMIT ?) '
+          'JOIN $table ON $table.rowid = r '
+          'WHERE $table.source_id = ? AND $table.hidden = 0 LIMIT ?',
+          variables: [
+            Variable<String>(match),
+            Variable<int>(limit * _indexHitsPerRow),
+            Variable<int>(sourceId),
+            Variable<int>(limit),
+          ],
+          readsFrom: {channels, movies, seriesEntries},
+        ).get().timeout(indexTimeout);
+      } on Object catch (error) {
+        // Recorded rather than swallowed. A fallback nobody can see is how a
+        // performance feature quietly stops existing, and the difference
+        // between this working and not working is invisible on a screen that
+        // shows the same results either way.
+        searchIndexFailure = '$error';
+      }
+    }
+
+    // The scan, which is what every release before the index used. Slow
+    // rather than wrong, and far better than a search box that does nothing.
+    return customSelect(
+      'SELECT $table.* FROM $table '
+      'WHERE $table.search_name LIKE ? AND $table.source_id = ? '
+      'AND $table.hidden = 0 LIMIT ?',
+      variables: [
+        Variable<String>('%${normaliseForSearch(term)}%'),
+        Variable<int>(sourceId),
+        Variable<int>(limit),
+      ],
+      readsFrom: {channels, movies, seriesEntries},
+    ).get();
+  }
+
+  /// Why the full-text index was not used, if it was not.
+  ///
+  /// Null while it is working, which is the normal case. Set once and kept,
+  /// so a screen can say that search is running the slow way and why —
+  /// including on a device this machine cannot reproduce.
+  String? searchIndexFailure;
+
+  /// How many index hits are read for each row a search asks for.
+  ///
+  /// Slack for rows the filters remove — another provider's, and hidden ones.
+  /// Generous enough that a normal catalogue never notices the ceiling, and
+  /// low enough that a term matching everything cannot turn one search into a
+  /// hundred thousand random reads.
+  static const _indexHitsPerRow = 40;
+
+  /// How long the index gets before the scan is used instead.
+  ///
+  /// Generous: a first search on a cold cache is not the same as a broken
+  /// one, and a device that is merely slow should still get its index.
+  static const indexTimeout = Duration(seconds: 6);
+
+  // --- syncing to the viewer's other devices ---------------------------
+
+  /// Queues one change for the other devices.
+  ///
+  /// Upserted on the thing rather than appended per change, so an episode
+  /// whose position is written every few seconds while it plays leaves one
+  /// entry behind rather than a hundred.
+  Future<void> _queue({
+    required String scope,
+    required int sourceId,
+    required String localKey,
+    required DateTime at,
+    required Map<String, Object?>? payload,
+  }) =>
+      into(syncOutbox).insertOnConflictUpdate(
+        SyncOutboxCompanion.insert(
+          scope: scope,
+          sourceId: Value(sourceId),
+          localKey: localKey,
+          payload: Value(payload == null ? null : jsonEncode(payload)),
+          at: at.toUtc(),
+        ),
+      );
+
+  /// What is waiting to go, addressed in terms every device shares.
+  ///
+  /// The provider is resolved here rather than when the change was queued,
+  /// because a source can be renamed or re-pointed in between — and a record
+  /// addressed to a provider key this device no longer has is one nothing
+  /// will ever match.
+  ///
+  /// Nothing is deleted by draining. The caller clears the queue only once
+  /// the records are safely written, or a failed upload would take a viewer's
+  /// changes with it.
+  Future<BackupOutbox> drainSyncOutbox({
+    required String deviceId,
+    int limit = 500,
+  }) async {
+    final rows = await (select(syncOutbox)
+          ..orderBy([(o) => OrderingTerm.asc(o.at)])
+          ..limit(limit))
+        .get();
+    if (rows.isEmpty) {
+      return BackupOutbox(records: const [], through: null);
+    }
+
+    final byId = {for (final source in await allSources()) source.id: source};
+    final records = <BackupRecord>[];
+    for (final row in rows) {
+      // A preference belongs to the viewer rather than to a provider, and is
+      // queued against source 0 — which the schema has always allowed and
+      // nothing had yet used. Its key travels as it stands.
+      if (row.sourceId == 0) {
+        records.add(BackupRecord(
+          scope: row.scope,
+          key: row.localKey,
+          value: row.payload == null
+              ? null
+              : (jsonDecode(row.payload!) as Map).cast<String, Object?>(),
+          stamp: BackupStamp(wallClock: row.at, deviceId: deviceId),
+        ));
+        continue;
+      }
+
+      final source = byId[row.sourceId];
+      if (source == null) continue;
+      records.add(BackupRecord(
+        scope: row.scope,
+        key: '${providerWriteKey(
+          url: source.url,
+          username: source.username,
+          reportedUrl: source.reportedUrl,
+        )}/${row.localKey}',
+        value: row.payload == null
+            ? null
+            : (jsonDecode(row.payload!) as Map).cast<String, Object?>(),
+        stamp: BackupStamp(wallClock: row.at, deviceId: deviceId),
+      ));
+    }
+    return BackupOutbox(records: records, through: rows.last.at);
+  }
+
+  /// Forgets everything queued up to and including [through].
+  ///
+  /// A change made while the upload was in flight carries a later stamp and
+  /// survives, which is why this is a time and not a count.
+  Future<int> clearSyncOutbox(DateTime through) =>
+      (delete(syncOutbox)..where((o) => o.at.isSmallerOrEqualValue(through)))
+          .go();
+
+  /// Applies what the other devices have said.
+  ///
+  /// Returns how many rows actually changed. Records for a provider this
+  /// device does not have are skipped rather than guessed at — a phone with
+  /// one portal should not grow a history for a portal it has never seen.
+  ///
+  /// Nothing applied here is queued back. Two devices that echoed each
+  /// other's writes would hand the same position back and forth for as long
+  /// as both were running.
+  Future<int> applyBackupRecords(
+    Iterable<BackupRecord> records, {
+    DateTime? at,
+  }) async {
+    final byKey = await providerKeyMap();
+
+    // What arrived for a provider this device could not place, and whatever
+    // the device that wrote it called that provider. Both are collected and
+    // dealt with after the loop, because an identity record may sit anywhere
+    // among the records it explains.
+    final unmatched = <String, int>{};
+    final announced = <String, ({String? name, String? address})>{};
+
+    var changed = 0;
+    for (final record in records) {
+      // Neither of these is about an item, so neither has an item key to
+      // split. A preference is the viewer's own choice and belongs to no
+      // provider at all.
+      if (record.scope == BackupScope.preference) {
+        final value = record.value?['value'];
+        if (value is! String) continue;
+        if (!syncedPreferences.contains(record.key)) continue;
+        // Older wins nothing here either: a device that changed its regions
+        // an hour ago should not be overwritten by one that changed them last
+        // week and has only just been opened.
+        final held = await preferenceChangedAt(record.key);
+        if (held != null && !record.stamp.wallClock.isAfter(held)) continue;
+        await _writePreference(record.key, value, at: record.stamp.wallClock);
+        changed++;
+        continue;
+      }
+
+      // Not about an item, so it has no item key to split.
+      if (record.scope == BackupScope.identity) {
+        final value = record.value;
+        if (value != null) {
+          announced[record.key] = (
+            name: value['name'] as String?,
+            address: value['address'] as String?,
+          );
+        }
+        continue;
+      }
+
+      final parts = record.key.split('/');
+      if (parts.length != 3) continue;
+      final sourceId = byKey[parts[0]];
+      if (sourceId == null) {
+        // Kept rather than dropped where it was found. A record for an
+        // unknown provider is the commonest way this feature does nothing,
+        // and dropping it silently is what made that invisible.
+        unmatched[parts[0]] = (unmatched[parts[0]] ?? 0) + 1;
+        continue;
+      }
+
+      final kind = ItemKind.values.asNameMap()[parts[1]];
+      if (kind == null) continue;
+      final remoteId = parts[2];
+
+      switch (record.scope) {
+        case BackupScope.playback:
+          if (record.value == null) continue;
+          // A record older than what is already here is dropped. The engine
+          // picks a winner among what the other devices said; it cannot know
+          // this device carried on watching in the meantime.
+          final held = await playbackStateFor(
+            sourceId: sourceId,
+            kind: kind,
+            remoteId: remoteId,
+          );
+          if (held != null &&
+              !record.stamp.wallClock.isAfter(held.lastWatchedUtc)) {
+            continue;
+          }
+          await _writePlayback(
+            sourceId: sourceId,
+            kind: kind,
+            remoteId: remoteId,
+            at: record.stamp.wallClock,
+            positionMs: record.value!['positionMs'] as int?,
+            durationMs: record.value!['durationMs'] as int?,
+            parentRemoteId: record.value!['parentRemoteId'] as String?,
+            completed: record.value!['completed'] as bool?,
+          );
+          changed++;
+
+        case BackupScope.favourite:
+          if (record.value == null) {
+            changed += await _deleteFavourite(
+              sourceId: sourceId,
+              kind: kind,
+              remoteId: remoteId,
+            );
+          } else {
+            await _writeFavourite(
+              sourceId: sourceId,
+              kind: kind,
+              remoteId: remoteId,
+              at: record.stamp.wallClock,
+            );
+            changed++;
+          }
+
+        case BackupScope.hidden:
+          if (record.value?['hidden'] case final bool wanted) {
+            await _writeCategoryHidden(
+              sourceId: sourceId,
+              kind: kind,
+              categoryRemoteId: remoteId,
+              hidden: wanted,
+            );
+            changed++;
+          }
+
+        default:
+          // A scope written by a newer build. Ignored rather than refused, so
+          // one unknown record does not stop the rest of a sync.
+          continue;
+      }
+    }
+
+    await _noteUnlinked(
+      counts: unmatched,
+      announced: announced,
+      known: byKey.keys,
+      at: at ?? DateTime.now().toUtc(),
+    );
+    return changed;
+  }
+
+  /// Every provider key this device will answer to, and the source behind it.
+  ///
+  /// Canonical keys are laid down first and alone. A variant must never
+  /// shadow a source that genuinely writes under that key: two providers on
+  /// one host — the same panel bought twice, which happens — would otherwise
+  /// have one of them absorb the other's history.
+  Future<Map<String, int>> providerKeyMap() async {
+    final sources = await allSources();
+    final byKey = <String, int>{};
+    for (final source in sources) {
+      byKey[providerKey(source.url, source.username)] = source.id;
+    }
+
+    final aliasesFor = <int, List<String>>{};
+    for (final alias in await select(providerAliases).get()) {
+      (aliasesFor[alias.sourceId] ??= []).add(alias.providerKey);
+    }
+
+    for (final source in sources) {
+      for (final key in providerKeyCandidates(
+        url: source.url,
+        username: source.username,
+        reportedUrl: source.reportedUrl,
+        aliases: aliasesFor[source.id] ?? const [],
+      )) {
+        byKey.putIfAbsent(key, () => source.id);
+      }
+    }
+    return byKey;
+  }
+
+  Future<void> _noteUnlinked({
+    required Map<String, int> counts,
+    required Map<String, ({String? name, String? address})> announced,
+    required Iterable<String> known,
+    required DateTime at,
+  }) async {
+    // A key this device now answers to is not waiting on anybody. This is how
+    // an entry clears itself once the portal reports its own address, or once
+    // the addresses are made to agree.
+    await (delete(unlinkedProviders)
+          ..where((u) => u.providerKey.isIn(known.toList())))
+        .go();
+
+    for (final entry in counts.entries) {
+      final held = await (select(unlinkedProviders)
+            ..where((u) => u.providerKey.equals(entry.key)))
+          .getSingleOrNull();
+      final said = announced[entry.key];
+      await into(unlinkedProviders).insertOnConflictUpdate(
+        UnlinkedProvidersCompanion.insert(
+          providerKey: entry.key,
+          name: Value(said?.name ?? held?.name),
+          address: Value(said?.address ?? held?.address),
+          records: Value((held?.records ?? 0) + entry.value),
+          seenAt: at,
+        ),
+      );
+    }
+  }
+
+  /// Providers another device is syncing that this one could not place.
+  Future<List<UnlinkedProvider>> unlinkedProvidersSeen() =>
+      (select(unlinkedProviders)
+            ..orderBy([(u) => OrderingTerm.desc(u.records)]))
+          .get();
+
+  /// Records that [key] is one of [sourceId]'s names.
+  ///
+  /// The caller resets that peer's watermark afterwards. The chunks are still
+  /// in the bucket and immutable, so re-reading them applies a history that
+  /// was written before anybody knew the two belonged together — which is the
+  /// difference between fixing this and fixing it from now on.
+  Future<void> linkProvider({
+    required String key,
+    required int sourceId,
+    String? label,
+    DateTime? at,
+  }) async {
+    await into(providerAliases).insertOnConflictUpdate(
+      ProviderAliasesCompanion.insert(
+        providerKey: key,
+        sourceId: sourceId,
+        label: Value(label),
+        createdAt: at ?? DateTime.now().toUtc(),
+      ),
+    );
+    await (delete(unlinkedProviders)..where((u) => u.providerKey.equals(key)))
+        .go();
+  }
+
+  /// Stops answering to [key], and forgets it was ever offered.
+  Future<void> unlinkProvider(String key) async {
+    await (delete(providerAliases)..where((a) => a.providerKey.equals(key)))
+        .go();
+    await (delete(unlinkedProviders)..where((u) => u.providerKey.equals(key)))
+        .go();
+  }
+
+  /// What the portal said its own address was.
+  Future<void> setSourceReportedUrl(int sourceId, String url) =>
+      (update(sources)..where((s) => s.id.equals(sourceId)))
+          .write(SourcesCompanion(reportedUrl: Value(url)));
 
   static List<T> _rankByPrefix<T>(
     List<T> rows,
@@ -759,10 +1468,82 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     return row?.value;
   }
 
-  Future<void> setPreference(String key, String value) =>
-      into(preferences).insertOnConflictUpdate(
-        PreferencesCompanion.insert(key: key, value: value),
+  /// Preferences that belong to the viewer rather than to the device.
+  ///
+  /// A safelist, and a short one on purpose. Most of what is in this table
+  /// describes *this* device's relationship with something — which folder,
+  /// how far it has read, what name it syncs under — and sending any of that
+  /// to another device is at best noise and at worst the bug that had two
+  /// televisions writing chunks under one id. What is left is the choice a
+  /// viewer made about what they want to see, which should follow them.
+  static const syncedPreferences = <String>{RegionFilter.preferenceKey};
+
+  Future<void> setPreference(String key, String value) async {
+    final at = DateTime.now().toUtc();
+    await _writePreference(key, value, at: at);
+    // Queued here rather than at each screen that changes one. A list of call
+    // sites is a list somebody adds to and forgets, and the safelist is the
+    // decision — not where the write happens to be made.
+    if (syncedPreferences.contains(key)) {
+      await _queue(
+        scope: BackupScope.preference,
+        sourceId: 0,
+        localKey: key,
+        at: at,
+        payload: {'value': value},
       );
+    }
+  }
+
+  /// Hides a category and its rows without queueing. See [_writePlayback].
+  Future<void> _writeCategoryHidden({
+    required int sourceId,
+    required ItemKind kind,
+    required String categoryRemoteId,
+    required bool hidden,
+  }) async {
+    await (update(categories)..where(
+      (c) =>
+          c.sourceId.equals(sourceId) &
+          c.kind.equalsValue(kind) &
+          c.remoteId.equals(categoryRemoteId),
+    )).write(CategoriesCompanion(hidden: Value(hidden)));
+
+    await switch (kind) {
+      ItemKind.live => (update(channels)..where(
+          (c) =>
+              c.sourceId.equals(sourceId) &
+              c.categoryRemoteId.equals(categoryRemoteId),
+        )).write(ChannelsCompanion(hidden: Value(hidden))),
+      ItemKind.movie => (update(movies)..where(
+          (m) =>
+              m.sourceId.equals(sourceId) &
+              m.categoryRemoteId.equals(categoryRemoteId),
+        )).write(MoviesCompanion(hidden: Value(hidden))),
+      ItemKind.series || ItemKind.episode => (update(seriesEntries)..where(
+          (e) =>
+              e.sourceId.equals(sourceId) &
+              e.categoryRemoteId.equals(categoryRemoteId),
+        )).write(SeriesEntriesCompanion(hidden: Value(hidden))),
+    };
+    await invalidateCategoryCounts(sourceId);
+  }
+
+  /// The write on its own, with nothing queued. See [_writePlayback].
+  Future<void> _writePreference(String key, String value, {DateTime? at}) =>
+      into(preferences).insertOnConflictUpdate(
+        PreferencesCompanion.insert(
+          key: key,
+          value: value,
+          changedAt: Value(at),
+        ),
+      );
+
+  /// When a preference was last set, here or anywhere.
+  Future<DateTime?> preferenceChangedAt(String key) async =>
+      (await (select(preferences)..where((p) => p.key.equals(key)))
+              .getSingleOrNull())
+          ?.changedAt;
 
   Future<int> clearPreference(String key) =>
       (delete(preferences)..where((p) => p.key.equals(key))).go();
@@ -808,19 +1589,26 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     int sourceId,
     String remoteId,
     bool hidden,
-  ) => (update(channels)..where(
-    (c) => c.sourceId.equals(sourceId) & c.remoteId.equals(remoteId),
-  )).write(ChannelsCompanion(hidden: Value(hidden)));
+  ) async {
+    await (update(channels)..where(
+      (c) => c.sourceId.equals(sourceId) & c.remoteId.equals(remoteId),
+    )).write(ChannelsCompanion(hidden: Value(hidden)));
+    await invalidateCategoryCounts(sourceId);
+  }
 
-  Future<void> setMovieHidden(int sourceId, String remoteId, bool hidden) =>
-      (update(movies)..where(
-        (m) => m.sourceId.equals(sourceId) & m.remoteId.equals(remoteId),
-      )).write(MoviesCompanion(hidden: Value(hidden)));
+  Future<void> setMovieHidden(int sourceId, String remoteId, bool hidden) async {
+    await (update(movies)..where(
+      (m) => m.sourceId.equals(sourceId) & m.remoteId.equals(remoteId),
+    )).write(MoviesCompanion(hidden: Value(hidden)));
+    await invalidateCategoryCounts(sourceId);
+  }
 
-  Future<void> setSeriesHidden(int sourceId, String remoteId, bool hidden) =>
-      (update(seriesEntries)..where(
-        (e) => e.sourceId.equals(sourceId) & e.remoteId.equals(remoteId),
-      )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
+  Future<void> setSeriesHidden(int sourceId, String remoteId, bool hidden) async {
+    await (update(seriesEntries)..where(
+      (e) => e.sourceId.equals(sourceId) & e.remoteId.equals(remoteId),
+    )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
+    await invalidateCategoryCounts(sourceId);
+  }
 
   /// Hides or restores a whole category's worth of rows.
   Future<int> setCategoryHidden(
@@ -837,8 +1625,16 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           c.remoteId.equals(categoryRemoteId),
     )).write(CategoriesCompanion(hidden: Value(hidden)));
 
+    await _queue(
+      scope: BackupScope.hidden,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$categoryRemoteId',
+      at: DateTime.now().toUtc(),
+      payload: {'hidden': hidden},
+    );
+
     // And its contents, so "All" does not quietly list them anyway.
-    return switch (kind) {
+    final changed = await switch (kind) {
       ItemKind.live => (update(channels)..where(
         (c) =>
             c.sourceId.equals(sourceId) &
@@ -855,6 +1651,8 @@ class OpenTvDatabase extends _$OpenTvDatabase {
             e.categoryRemoteId.equals(categoryRemoteId),
       )).write(SeriesEntriesCompanion(hidden: Value(hidden))),
     };
+    await invalidateCategoryCounts(sourceId);
+    return changed;
   }
 
   /// Hides or shows every category of one kind at once.
@@ -893,6 +1691,21 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           (e) =>
               e.sourceId.equals(sourceId) & e.categoryRemoteId.isNotNull(),
         )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
+    }
+    await invalidateCategoryCounts(sourceId);
+
+    // One record per category rather than a single "all of them": a device
+    // that hides everything and then shows four back has made five decisions,
+    // and the four have to be able to outlive the one.
+    final at = DateTime.now().toUtc();
+    for (final category in await allCategoriesFor(sourceId, kind)) {
+      await _queue(
+        scope: BackupScope.hidden,
+        sourceId: sourceId,
+        localKey: '${kind.name}/${category.remoteId}',
+        at: at,
+        payload: {'hidden': hidden},
+      );
     }
   }
 
@@ -970,17 +1783,63 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     required ItemKind kind,
     required String remoteId,
     required DateTime at,
-  }) => into(favourites).insert(
-    FavouritesCompanion.insert(
+  }) async {
+    await _writeFavourite(
       sourceId: sourceId,
-      itemKind: kind,
-      itemRemoteId: remoteId,
-      addedAt: at,
-    ),
-    mode: InsertMode.insertOrReplace,
-  );
+      kind: kind,
+      remoteId: remoteId,
+      at: at,
+    );
+    await _queue(
+      scope: BackupScope.favourite,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$remoteId',
+      at: at,
+      payload: {'addedAt': at.toUtc().toIso8601String()},
+    );
+  }
+
+  Future<void> _writeFavourite({
+    required int sourceId,
+    required ItemKind kind,
+    required String remoteId,
+    required DateTime at,
+  }) =>
+      into(favourites).insert(
+        FavouritesCompanion.insert(
+          sourceId: sourceId,
+          itemKind: kind,
+          itemRemoteId: remoteId,
+          addedAt: at,
+        ),
+        mode: InsertMode.insertOrReplace,
+      );
 
   Future<int> removeFavourite({
+    required int sourceId,
+    required ItemKind kind,
+    required String remoteId,
+    DateTime? at,
+  }) async {
+    final removed = await _deleteFavourite(
+      sourceId: sourceId,
+      kind: kind,
+      remoteId: remoteId,
+    );
+    // Queued whether or not a row was there. A device can be asked to remove
+    // something it does not have — because another device already told it —
+    // and the removal still has to reach the ones that do.
+    await _queue(
+      scope: BackupScope.favourite,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$remoteId',
+      at: at ?? DateTime.now().toUtc(),
+      payload: null,
+    );
+    return removed;
+  }
+
+  Future<int> _deleteFavourite({
     required int sourceId,
     required ItemKind kind,
     required String remoteId,
@@ -1038,19 +1897,57 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     String? parentRemoteId,
     bool? completed,
   }) async {
-    await into(playbackStates).insertOnConflictUpdate(
-      PlaybackStatesCompanion.insert(
-        sourceId: sourceId,
-        itemKind: kind,
-        itemRemoteId: remoteId,
-        lastWatchedUtc: at.toUtc(),
-        positionMs: Value(positionMs),
-        durationMs: Value(durationMs),
-        parentRemoteId: Value(parentRemoteId),
-        completed: Value(completed ?? false),
-      ),
+    await _writePlayback(
+      sourceId: sourceId,
+      kind: kind,
+      remoteId: remoteId,
+      at: at,
+      positionMs: positionMs,
+      durationMs: durationMs,
+      parentRemoteId: parentRemoteId,
+      completed: completed,
+    );
+    await _queue(
+      scope: BackupScope.playback,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$remoteId',
+      at: at,
+      payload: {
+        'positionMs': positionMs,
+        'durationMs': durationMs,
+        'parentRemoteId': parentRemoteId,
+        'completed': completed ?? false,
+      },
     );
   }
+
+  /// The write on its own, with nothing queued.
+  ///
+  /// What arrives from another device goes through here. Queueing it would
+  /// send it straight back where it came from, and two devices would hand the
+  /// same position to each other for as long as both were running.
+  Future<void> _writePlayback({
+    required int sourceId,
+    required ItemKind kind,
+    required String remoteId,
+    required DateTime at,
+    int? positionMs,
+    int? durationMs,
+    String? parentRemoteId,
+    bool? completed,
+  }) =>
+      into(playbackStates).insertOnConflictUpdate(
+        PlaybackStatesCompanion.insert(
+          sourceId: sourceId,
+          itemKind: kind,
+          itemRemoteId: remoteId,
+          lastWatchedUtc: at.toUtc(),
+          positionMs: Value(positionMs),
+          durationMs: Value(durationMs),
+          parentRemoteId: Value(parentRemoteId),
+          completed: Value(completed ?? false),
+        ),
+      );
 
   Future<PlaybackState?> playbackStateFor({
     required int sourceId,
@@ -1466,7 +2363,10 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// decide between Resume and Play.
   Future<List<({String seriesRemoteId, Episode next, bool resuming})>>
       continueSeries(int sourceId, {int limit = 20}) async {
-    // Completed rows included, unlike the film shelf.
+    // Completed rows included, unlike the film shelf. One read, and these
+    // same rows answer both questions the walk below asks — what was watched
+    // last in each show, and which episodes have been finished — so nothing
+    // in the loop needs to go back to the database.
     final states = await (select(playbackStates)
           ..where((p) =>
               p.sourceId.equals(sourceId) &
@@ -1477,36 +2377,139 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           ]))
         .get();
 
-    final out = <({String seriesRemoteId, Episode next, bool resuming})>[];
-    final seen = <String>{};
+    final finished = {
+      for (final state in states)
+        if (state.completed) state.itemRemoteId,
+    };
 
+    // The latest state for each show, in the order the shelf wants them.
+    final heads = <PlaybackState>[];
+    final seen = <String>{};
     for (final state in states) {
       final parent = state.parentRemoteId;
       if (parent == null || !seen.add(parent)) continue;
+      heads.add(state);
+    }
 
-      // Still mid-episode: that is where to carry on, whatever else is
-      // unwatched further down.
-      if (!state.completed) {
-        final current = await _episodeByRemoteId(sourceId, state.itemRemoteId);
-        if (current != null) {
-          out.add((seriesRemoteId: parent, next: current, resuming: true));
-          if (out.length >= limit) break;
-        }
-        continue;
+    final out = <({String seriesRemoteId, Episode next, bool resuming})>[];
+
+    // In batches rather than a show at a time. This asked the database twice
+    // per show, which cost nothing while a device only knew about the shows
+    // watched on it — and became seconds the moment the sync started
+    // delivering somebody's whole series history, because the loop is as long
+    // as their watching and every step of it crosses the isolate SQLite runs
+    // on. Reported, as this always is, as a tab that used to open instantly
+    // now saying "Reading…".
+    //
+    // Batched rather than fetched in full because most shelves stop at the
+    // first handful: a show yields at most one entry, so twice the limit is
+    // room for the ones that yield none, and a second batch is only read if
+    // that guess was wrong.
+    for (var start = 0; start < heads.length && out.length < limit;) {
+      final batch = heads.sublist(start, min(start + limit * 2, heads.length));
+      start += batch.length;
+
+      final byShow = <String, List<Episode>>{};
+      for (final episode in await _episodesOfShows(
+        sourceId,
+        [for (final head in batch) head.parentRemoteId!],
+      )) {
+        (byShow[episode.seriesRemoteId] ??= []).add(episode);
       }
 
-      final next = await _nextUnfinishedAfter(
-        sourceId,
-        parent,
-        state.itemRemoteId,
-      );
-      if (next == null) continue;
+      for (final head in batch) {
+        final parent = head.parentRemoteId!;
+        final all = byShow[parent] ?? const <Episode>[];
 
-      out.add((seriesRemoteId: parent, next: next, resuming: false));
-      if (out.length >= limit) break;
+        // Still mid-episode: that is where to carry on, whatever else is
+        // unwatched further down.
+        if (!head.completed) {
+          Episode? current;
+          for (final episode in all) {
+            if (episode.remoteId == head.itemRemoteId) {
+              current = episode;
+              break;
+            }
+          }
+          if (current != null) {
+            out.add((seriesRemoteId: parent, next: current, resuming: true));
+            if (out.length >= limit) break;
+          }
+          continue;
+        }
+
+        final next = _nextUnfinished(all, head.itemRemoteId, finished);
+        if (next == null) continue;
+
+        out.add((seriesRemoteId: parent, next: next, resuming: false));
+        if (out.length >= limit) break;
+      }
     }
 
     return out;
+  }
+
+  /// Every episode of several shows, in season and episode order within each.
+  ///
+  /// Served by `episode_series`, which is `(source_id, series_remote_id)`.
+  Future<List<Episode>> _episodesOfShows(
+    int sourceId,
+    List<String> seriesRemoteIds,
+  ) =>
+      (select(episodes)
+            ..where((e) =>
+                e.sourceId.equals(sourceId) &
+                e.seriesRemoteId.isIn(seriesRemoteIds))
+            ..orderBy([
+              (e) => OrderingTerm(expression: e.seriesRemoteId),
+              (e) => OrderingTerm(expression: e.season),
+              (e) => OrderingTerm(expression: e.episodeNumber),
+            ]))
+          .get();
+
+  /// Series this device has watch progress in and no episodes to show for.
+  ///
+  /// Episodes are fetched per show on demand, so a device only holds them for
+  /// shows somebody opened *on it*. A position arriving from another device
+  /// is therefore about an episode this one has never heard of —
+  /// [continueSeries] looks the row up, finds nothing, and drops the series
+  /// off the shelf. The sync worked, the position is in the table, and the
+  /// shelf is empty, which is the same silence as the feature being broken.
+  ///
+  /// Films and channels never showed this because the bulk sync writes both
+  /// tables in full.
+  ///
+  /// `episodesSyncedAt` is honoured, so a show the provider genuinely has no
+  /// episodes for is not asked for again on every pass.
+  Future<List<SeriesEntry>> seriesAwaitingEpisodes(
+    int sourceId, {
+    int limit = 20,
+  }) async {
+    // One statement rather than a lookup per row: this runs after a sync, on
+    // the database's own isolate, and a query inside a loop over rows is
+    // seconds on a television.
+    final rows = await customSelect(
+      'SELECT s.* FROM series_entries s '
+      'JOIN (SELECT parent_remote_id AS pid, '
+      '             MAX(last_watched_utc) AS watched '
+      '      FROM playback_states '
+      "      WHERE source_id = ? AND item_kind = 'episode' "
+      '        AND parent_remote_id IS NOT NULL '
+      '      GROUP BY parent_remote_id) p ON p.pid = s.remote_id '
+      'WHERE s.source_id = ? AND s.episodes_synced_at IS NULL '
+      '  AND NOT EXISTS (SELECT 1 FROM episodes e '
+      '                  WHERE e.source_id = s.source_id '
+      '                    AND e.series_remote_id = s.remote_id) '
+      'ORDER BY p.watched DESC LIMIT ?',
+      variables: [
+        Variable.withInt(sourceId),
+        Variable.withInt(sourceId),
+        Variable.withInt(limit),
+      ],
+      readsFrom: {seriesEntries, playbackStates, episodes},
+    ).get();
+
+    return [for (final row in rows) seriesEntries.map(row.data)];
   }
 
   /// The first unfinished episode *after* the one just watched.
@@ -1524,46 +2527,19 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   ///
   /// Null when there is nothing after it, which retires the series from the
   /// shelf.
-  Future<Episode?> _nextUnfinishedAfter(
-    int sourceId,
-    String seriesRemoteId,
+  static Episode? _nextUnfinished(
+    List<Episode> ordered,
     String afterRemoteId,
-  ) async {
-    final all = await (select(episodes)
-          ..where((e) =>
-              e.sourceId.equals(sourceId) &
-              e.seriesRemoteId.equals(seriesRemoteId))
-          ..orderBy([
-            (e) => OrderingTerm(expression: e.season),
-            (e) => OrderingTerm(expression: e.episodeNumber),
-          ]))
-        .get();
+    Set<String> finished,
+  ) {
+    final from = ordered.indexWhere((e) => e.remoteId == afterRemoteId);
+    if (from < 0 || from + 1 >= ordered.length) return null;
 
-    final from = all.indexWhere((e) => e.remoteId == afterRemoteId);
-    if (from < 0 || from + 1 >= all.length) return null;
-    final rest = all.sublist(from + 1);
-
-    final progress = {
-      for (final state in await playbackStatesFor(
-        sourceId: sourceId,
-        kind: ItemKind.episode,
-        remoteIds: [for (final e in rest) e.remoteId],
-      ))
-        state.itemRemoteId: state,
-    };
-
-    for (final episode in rest) {
-      if (!(progress[episode.remoteId]?.completed ?? false)) return episode;
+    for (var i = from + 1; i < ordered.length; i++) {
+      if (!finished.contains(ordered[i].remoteId)) return ordered[i];
     }
     return null;
   }
-
-  Future<Episode?> _episodeByRemoteId(int sourceId, String remoteId) =>
-      (select(episodes)
-            ..where((e) =>
-                e.sourceId.equals(sourceId) & e.remoteId.equals(remoteId))
-            ..limit(1))
-          .getSingleOrNull();
 
 
 }

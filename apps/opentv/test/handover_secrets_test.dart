@@ -27,9 +27,13 @@ void main() {
 
     // `static const somethingReference = '...'` — the shape every keystore
     // handle in this app is declared with.
-    final declaration = RegExp(
-      r'static const (\w*[Rr]eference|keyReference) = ',
-    );
+    // A capital R, deliberately. The looser `[Rr]eference` also matched
+    // `_keyForPreference` and `_watermarkPreference` — because "Preference"
+    // ends in "reference" — and demanded the handover carry two keys of the
+    // preferences table, which are not secrets and are already in the
+    // database it copies. Every keystore reference in this app is named
+    // `somethingReference`.
+    final declaration = RegExp(r'static const (\w+Reference) = ');
 
     final found = <String>{};
     for (final entity in lib.listSync(recursive: true)) {

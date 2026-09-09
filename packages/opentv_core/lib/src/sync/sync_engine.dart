@@ -33,6 +33,14 @@ class FatalSyncException implements Exception {
 abstract class CatalogueFetcher {
   Set<SyncStage> get stages;
 
+  /// What the provider says its own address is, once a stage has run.
+  ///
+  /// Null before anything has authenticated, and null for a source that has
+  /// no such notion — a playlist file is not asked where it lives. Only the
+  /// sync between a viewer's devices reads it, to recognise one provider
+  /// reached by two spellings of the same address.
+  String? get reportedAddress => null;
+
   Stream<List<CategoriesCompanion>> categories(int sourceId);
   Stream<List<ChannelsCompanion>> channels(int sourceId);
   Stream<List<MoviesCompanion>> movies(int sourceId);
@@ -201,6 +209,26 @@ class SyncEngine {
         );
       }
     }
+
+    // Kept even from a run that then failed, and even from one where every
+    // stage was skipped as already done. Authenticating is what produces it,
+    // and a half-finished sync that got that far knows something the next
+    // one would only have to ask again.
+    final reported = fetcher.reportedAddress;
+    if (reported != null && reported.isNotEmpty) {
+      await db.setSourceReportedUrl(sourceId, reported);
+    }
+
+    // The category counts, once, rather than on each of the hundreds of
+    // batches a sync writes. Counting reads every row of the table, and
+    // clearing it per batch left the cache empty for the whole of a sync —
+    // which is exactly when somebody is most likely to be browsing, and made
+    // the remembering worth nothing on any device that actually syncs.
+    //
+    // Recomputed here rather than left for the next tab switch: the work is
+    // the same either way, and this is a moment the viewer is already waiting
+    // on rather than one where they have just pressed something.
+    await db.warmCategoryCounts(sourceId);
 
     // Only a clean run counts as a sync. A partial one leaves the previous
     // timestamp alone so the interface keeps saying the catalogue is stale.

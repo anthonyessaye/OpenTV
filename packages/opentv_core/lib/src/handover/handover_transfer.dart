@@ -33,11 +33,17 @@ class HandoverCipher {
   /// The nonce is generated per call and prefixed to the output. Reusing one
   /// under the same key is the failure that breaks GCM outright, and the only
   /// reliable way not to reuse it is never to store it.
-  Future<Uint8List> seal(Uint8List payload, HandoverPairing pairing) async {
-    final box = await _algorithm.encrypt(
-      payload,
-      secretKey: SecretKey(pairing.key),
-    );
+  Future<Uint8List> seal(Uint8List payload, HandoverPairing pairing) =>
+      sealWith(payload, pairing.key);
+
+  /// The same, under a key that did not come from a pairing.
+  ///
+  /// Split out for the backup, which seals the same kind of payload under a
+  /// key that lives in the keystore rather than on a screen. One
+  /// implementation rather than two, because a second copy of this is a
+  /// second place for a nonce to be reused.
+  Future<Uint8List> sealWith(Uint8List payload, Uint8List key) async {
+    final box = await _algorithm.encrypt(payload, secretKey: SecretKey(key));
     return Uint8List.fromList([...box.nonce, ...box.cipherText, ...box.mac.bytes]);
   }
 
@@ -46,7 +52,11 @@ class HandoverCipher {
   /// A wrong key and altered bytes fail identically here, and that is correct
   /// rather than imprecise: GCM cannot distinguish them, and neither reading
   /// is one where the bundle should be trusted.
-  Future<Uint8List> open(Uint8List sealed, HandoverPairing pairing) async {
+  Future<Uint8List> open(Uint8List sealed, HandoverPairing pairing) =>
+      openWith(sealed, pairing.key);
+
+  /// The same, under a key that did not come from a pairing.
+  Future<Uint8List> openWith(Uint8List sealed, Uint8List key) async {
     const nonceLength = 12;
     final macLength = _algorithm.macAlgorithm.macLength;
     if (sealed.length < nonceLength + macLength) {
@@ -61,10 +71,7 @@ class HandoverCipher {
       mac: Mac(Uint8List.sublistView(sealed, sealed.length - macLength)),
     );
     try {
-      final clear = await _algorithm.decrypt(
-        box,
-        secretKey: SecretKey(pairing.key),
-      );
+      final clear = await _algorithm.decrypt(box, secretKey: SecretKey(key));
       return Uint8List.fromList(clear);
     } on SecretBoxAuthenticationError {
       throw const HandoverException(
@@ -83,20 +90,40 @@ class HandoverCipher {
 /// receiver that checked everything would still produce the case this exists
 /// to prevent: a long transfer that fails at the end.
 class HandoverCompatibility {
-  const HandoverCompatibility({required this.schemaVersion});
+  const HandoverCompatibility({
+    required this.schemaVersion,
+    this.appVersion,
+  });
 
   /// The schema this device's database is at.
   final int schemaVersion;
 
+  /// What this device calls itself, for the refusal message.
+  ///
+  /// The manifest has carried the other device's version since the format
+  /// was written and nothing ever read it, so a mismatch could only be
+  /// reported as two schema numbers — which name the thing that is wrong in
+  /// a vocabulary nobody outside this repository has. Both versions are the
+  /// same fact said in the words on the settings screen.
+  final String? appVersion;
+
   /// Throws when the manifest cannot be accepted, and returns otherwise.
   void check(HandoverManifest manifest) {
-    if (manifest.schemaVersion != schemaVersion) {
-      throw HandoverException(
-        HandoverRefusal.schemaMismatch,
-        'the other device is on database schema ${manifest.schemaVersion} '
-        'and this one is on $schemaVersion. Update both and try again.',
-      );
-    }
+    if (manifest.schemaVersion == schemaVersion) return;
+
+    final mine = appVersion;
+    final theirs = manifest.appVersion;
+    final older = manifest.schemaVersion < schemaVersion;
+    throw HandoverException(
+      HandoverRefusal.schemaMismatch,
+      mine == null
+          ? 'the other device is on database schema '
+              '${manifest.schemaVersion} and this one is on $schemaVersion. '
+              'Update both and try again.'
+          : 'the other device is on OpenTV $theirs and this one is on $mine. '
+              '${older ? 'It' : 'This one'} needs updating before a setup '
+              'can move between them.',
+    );
   }
 }
 
@@ -117,6 +144,8 @@ class HandoverServer {
     this.cipher = const HandoverCipher(),
     this.compatibility,
     this.onReceived,
+    this.onRefused,
+    this.stagingFile,
   });
 
   final HandoverPairing pairing;
@@ -139,7 +168,28 @@ class HandoverServer {
   /// Accepting a push is exactly as safe as serving a pull. Both are
   /// authenticated by the same key, and that key only ever existed on a
   /// screen and a camera in the same room.
-  final Future<void> Function(HandoverBundle)? onReceived;
+  /// Called once a pushed catalogue has been written to [stagingFile].
+  ///
+  /// A file and a secrets list rather than a bundle in memory, matching what
+  /// the pull hands back. The receiver here is frequently a television, which
+  /// is the device least able to hold a catalogue twice.
+  final Future<void> Function(
+    File staged,
+    HandoverManifest manifest,
+    List<HandoverSecret> secrets,
+  )? onReceived;
+
+  /// Called when this device turned a transfer away.
+  ///
+  /// The refusal is already answered to the sender; this is the same sentence
+  /// for whoever is standing at this end.
+  final void Function(HandoverException refusal)? onRefused;
+
+  /// Where a pushed catalogue is written as it arrives.
+  ///
+  /// Required for a device that accepts a push. Without it there is nowhere
+  /// to put the thing except memory, which is what used to happen.
+  final File? stagingFile;
 
   HttpServer? _server;
 
@@ -191,6 +241,11 @@ class HandoverServer {
       request.response
         ..statusCode = HttpStatus.badRequest
         ..write(error.message);
+      // Told to this device too. Both ends of a refused handover have a
+      // person in front of them, and the one that refused is the one holding
+      // the explanation — it used to keep it, leaving a television sitting on
+      // its code as though nothing had been tried.
+      onRefused?.call(error);
     }
     await request.response.close();
   }
@@ -244,9 +299,17 @@ class HandoverServer {
     }
   }
 
+  /// Takes a pushed catalogue, writing it to disk as the frames arrive.
+  ///
+  /// This used to gather the whole body into a buffer and open it in one go,
+  /// which put the catalogue, the sealed copy and the opened copy in memory
+  /// together — on whichever device was being pushed *to*, and the device
+  /// people push to is a television. The pull was rewritten to frames when
+  /// that killed one; this direction was left alone and failed the same way.
   Future<void> _accept(HttpRequest request) async {
     final receive = onReceived;
-    if (receive == null) {
+    final staged = stagingFile;
+    if (receive == null || staged == null) {
       request.response.statusCode = HttpStatus.methodNotAllowed;
       return;
     }
@@ -275,14 +338,48 @@ class HandoverServer {
     // told immediately rather than after a catalogue has crossed the room.
     compatibility?.check(manifest);
 
-    final sealed = BytesBuilder(copy: false);
-    await for (final chunk in request) {
-      sealed.add(chunk);
+    if (staged.existsSync()) await staged.delete();
+
+    final reader = HandoverFrameReader(pairing.key);
+    final sink = staged.openWrite();
+    List<HandoverSecret>? secrets;
+    var written = 0;
+
+    try {
+      await for (final chunk in request) {
+        await for (final frame in reader.add(chunk)) {
+          if (secrets == null) {
+            // The first frame is the secrets block, ahead of the catalogue so
+            // the receiver holds them before the long part begins.
+            secrets = HandoverFrames.readSecrets(frame);
+            continue;
+          }
+          sink.add(frame);
+          written += frame.length;
+        }
+      }
+      await sink.flush();
+    } finally {
+      await sink.close();
     }
 
-    final payload = await cipher.open(sealed.toBytes(), pairing);
-    await receive(HandoverBundle.fromPayload(manifest, payload));
+    if (secrets == null) {
+      throw const HandoverException(
+        HandoverRefusal.malformed,
+        'the push carried no secrets block',
+      );
+    }
+    // Truncation is what the frame tags cannot catch on their own: every
+    // frame that arrived was genuine, there were simply not enough of them.
+    if (written != manifest.databaseBytes) {
+      throw HandoverException(
+        HandoverRefusal.malformed,
+        'the catalogue arrived incomplete — '
+        '$written bytes of ${manifest.databaseBytes}',
+      );
+    }
 
+    await receive(staged, manifest, secrets);
     request.response.statusCode = HttpStatus.ok;
   }
 

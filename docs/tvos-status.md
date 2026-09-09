@@ -33,9 +33,31 @@ interface, two engines" is a claim that decays unless something checks it. See
 
 ## Blocking — these decide the shape of the app
 
-### 1. On-device storage is not durable on tvOS
+### 1. On-device storage is not durable on tvOS — designed around
 
-*documented, unverified on hardware — and the largest open risk.*
+*verified on hardware, and no longer blocking.*
+
+**Measured on an Apple TV HD:** the catalogue is 240MB and sits at
+`Library/Caches/opentv/catalogue.sqlite`, exactly where the rules said it
+would have to. Pulled off the device with `devicectl device copy from`, so
+this is no longer a reading of Apple's documentation.
+
+The architecture this item asked for is built. `RecoveryService` keeps the
+part of a setup that cannot be fetched again — which provider, which account,
+which bucket — plus the most recent watch history, in the Keychain, which is
+not purged. A purge now costs a slow launch: the sources come back, the folder
+comes back, the catalogue re-syncs, and the history is either restored locally
+or pulled from the viewer's own folder. See CLAUDE.md, *Surviving a purge on
+tvOS*.
+
+What remains unverified is only whether a purge happens in ordinary use, and
+the answer no longer changes the design. The original text follows because the
+reasoning in it is still the reasoning.
+
+---
+
+*Originally filed as: documented, unverified on hardware — and the largest
+open risk.*
 
 Android keeps the catalogue in an ordinary SQLite file that stays put. tvOS
 does not offer that. Apple's rules give a tvOS app a small key-value store
@@ -61,9 +83,21 @@ catalogue.
 should be verified on real hardware before it is designed around, because the
 purge behaviour is the part that cannot be observed in a simulator.
 
-### 2. The credential store is written but unproven on Apple TV
+### 2. The credential store is written but unproven on Apple TV — proven
 
-*implemented on both platforms; verified on Android, unverified on tvOS.*
+*verified on both platforms.*
+
+An Apple TV has now run it. A whole setup crossed from an Android phone by
+handover — provider password, bucket keys, recovery phrase and the folder's
+data key — and streams play, which is only possible if the Keychain is being
+read back correctly. The catalogue-purge interaction named at the end of this
+item is settled by item 1: the credential *reference* now survives in the
+Keychain beside the secret it names.
+
+---
+
+*Originally filed as: implemented on both platforms; verified on Android,
+unverified on tvOS.*
 
 This was listed here as missing on both platforms and is no longer. The
 schema had been right about it from the start — `Sources` holds a
@@ -155,12 +189,23 @@ will need anyway for Top Shelf.
 
 ### Hardware decode
 
-*unverified, and unverifiable here.* Everything on Apple TV so far has been the
-simulator, which runs on the host Mac and typically decodes in software. Frame
-rate measured there says nothing about an Apple TV. There is no hardware to
-test on. This is the single largest unknown in the playback work, and it is
-the one that decides whether libVLC is the right engine or merely the only one
-that decodes the formats.
+*verified on an Apple TV HD, and the answer is mixed.*
+
+There is hardware now, and it is the slowest tvOS still supports: an
+`AppleTV5,3` — A8, 2015. Ordinary channels, films and series play. High
+resolution H.264 and anything H.265 do not: the device log shows
+`get_buffer() failed` from the decoder, which is a frame allocation failure,
+and the A8 has no hardware H.265 decoder at all
+(`VTIsHardwareDecodeSupported` says so).
+
+So libVLC decodes the formats a portal serves, on hardware, which was the
+question. What it cannot do is make a 2015 box decode 4K. The player now says
+which codec and resolution a stalled stream reported rather than spinning —
+see CLAUDE.md — because the honest answer to some channels is that this
+machine will not play them.
+
+**An Apple TV 4K would answer a different question**, and nothing here has run
+on one.
 
 ### A VPN tunnel
 

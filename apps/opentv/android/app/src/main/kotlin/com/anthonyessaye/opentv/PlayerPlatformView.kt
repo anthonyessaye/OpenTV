@@ -2,7 +2,9 @@ package com.anthonyessaye.opentv
 
 import android.content.Context
 import android.graphics.Color
+import android.media.MediaCodecList
 import android.net.Uri
+import android.os.Build
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
@@ -13,11 +15,11 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
-import androidx.media3.common.text.CueGroup
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.common.text.CueGroup
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -432,6 +434,29 @@ class PlayerPlatformView(
      * a picture that comes out wrong can be diagnosed from the screen instead
      * of from a log.
      */
+    /**
+     * Whether a hardware H.265 decoder exists on this device.
+     *
+     * Worked out once: enumerating codecs allocates and this is asked twice a
+     * second while a stream plays.
+     */
+    private val hevcHardware: Boolean by lazy {
+        runCatching {
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+                !info.isEncoder &&
+                    info.supportedTypes.any { it.equals("video/hevc", true) } &&
+                    // isHardwareAccelerated needs Q; below it, the convention
+                    // is that a software decoder's name says so.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        info.isHardwareAccelerated
+                    } else {
+                        !info.name.startsWith("OMX.google.", true) &&
+                            !info.name.startsWith("c2.android.", true)
+                    }
+            }
+        }.getOrDefault(true)
+    }
+
     private fun hdrName(format: Format): String? = when (format.colorInfo?.colorTransfer) {
         C.COLOR_TRANSFER_ST2084 -> "HDR10"
         C.COLOR_TRANSFER_HLG -> "HLG"
@@ -581,6 +606,12 @@ class PlayerPlatformView(
             // picture that looks wrong can be diagnosed without a log.
             "dynamicRange" to video?.let { hdrName(it) },
             "videoCodec" to video?.codecs?.substringBefore('.'),
+            // Whether this box decodes H.265 in hardware. Every Android TV
+            // this app targets does, so it is constant here — but the key is
+            // in the contract because Apple TV HD does not, and a contract
+            // one engine answers and the other omits is how a state key ends
+            // up read on one platform and forgotten on the other.
+            "hevcHardware" to hevcHardware,
             "aspectMode" to aspectMode,
             "error" to lastError,
         )

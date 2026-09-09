@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opentv/mobile/mobile_player.dart';
@@ -129,5 +130,66 @@ void main() {
     await tester.pump();
 
     expect(find.text('SUBTITLES'), findsNothing);
+  });
+
+  group('a stream that opens and never shows anything', () {
+    // VLC calls this neither an error nor an end: it sits in playing or
+    // buffering with no frames, for ever, and the chrome spins. An Apple TV HD
+    // meets it on every H.265 channel — its A8 has no decoder for one, so
+    // software decoding runs and cannot allocate the buffers it needs. The
+    // first install on real hardware showed a channel that simply did not
+    // start, with nothing on screen saying why.
+    final source = File('lib/player_screen.dart').readAsStringSync();
+
+    test('says so rather than spinning', () {
+      expect(source, contains('bool get _stalled'));
+      expect(
+        source,
+        contains("'No picture from this channel."),
+        reason: 'a stream with no picture reports nothing again',
+      );
+    });
+
+    test('and reports what the stream says it is', () {
+      // Not a guess at the cause. The first version of this named H.265 and
+      // blamed the missing decoder, on the strength of `hevc …
+      // get_buffer() failed` in a device log — and the channels that actually
+      // fail report H.264. `get_buffer` is a frame allocation failure, which
+      // a 4K picture provokes on a two-gigabyte box whatever the codec is.
+      expect(source, contains("raw['videoCodec']"));
+      expect(
+        source,
+        contains("'\${w}x\$h'"),
+        reason: 'the resolution is what separates the channels that play from '
+            'the ones that do not, and it is not on screen',
+      );
+      expect(
+        source,
+        isNot(contains('This channel is H.265, and this device has no')),
+        reason: 'back to asserting a cause the evidence did not support',
+      );
+    });
+
+    test('the reason the device gave is preferred to one invented here', () {
+      // The native has always sent `error` and the phone has always read it.
+      // The television built its own sentence out of the state string and
+      // ignored the key, which is the same fault as a key nobody reads.
+      expect(
+        source,
+        contains("final reported = raw['error'];"),
+        reason: 'the television is inventing its own message again',
+      );
+    });
+
+    test('and the clock restarts when zapping to another channel', () {
+      // Left running, the first channel's stall is reported against every
+      // channel zapped to after it.
+      final start = source.indexOf('VoidCallback? _zap(');
+      expect(start, isNot(-1));
+      expect(
+        source.substring(start, start + 600),
+        contains('_startedAt = DateTime.now()'),
+      );
+    });
   });
 }

@@ -13,6 +13,8 @@ import '../app/subtitle_service.dart';
 import '../app/stream_resolver.dart';
 import '../app/vpn_service.dart';
 import 'channel_row.dart';
+import '../app/backup_sync.dart';
+import 'mobile_backup.dart';
 import 'mobile_detail.dart';
 import 'mobile_player.dart';
 import 'poster_card.dart';
@@ -45,6 +47,7 @@ class MobileHome extends StatefulWidget {
     required this.service,
     required this.sources,
     required this.vpn,
+    this.sync,
     required this.onSwitchSource,
     required this.onAddSource,
     required this.onRemoveSource,
@@ -58,6 +61,12 @@ class MobileHome extends StatefulWidget {
   final SourceService service;
   final List<Source> sources;
   final VpnService vpn;
+
+  /// Carries watch state to the viewer's other devices. The phone has always
+  /// run one at launch and on leaving; it had no screen to be pointed at a
+  /// folder from, which made the feature half a feature.
+  final BackupSync? sync;
+
   final ValueChanged<Source> onSwitchSource;
   final VoidCallback onAddSource;
   final Future<void> Function(Source) onRemoveSource;
@@ -197,6 +206,11 @@ class _MobileHomeState extends State<MobileHome> {
     // played straight from the live list never went through a detail screen,
     // so nothing else was going to do this.
     _refreshShelves();
+
+    // And the position is written, so this is the moment there is something
+    // worth sending to the other devices. Launch and leaving are the other
+    // two, and an evening's watching sits between them.
+    unawaited(widget.sync?.run());
   }
 
   /// Writes what was watched, under the kind the shelves ask for.
@@ -252,6 +266,19 @@ class _MobileHomeState extends State<MobileHome> {
 
   void _refreshShelves() {
     if (mounted) setState(() => _generation++);
+  }
+
+  /// Everything a pass can have changed, not only the shelves.
+  ///
+  /// Hidden categories and the region filter cross between devices now, and
+  /// both are read once into this state. Bumping the generation rebuilds the
+  /// strips against filters this screen read at launch, so a category hidden
+  /// on the television stayed visible here until the app was closed — the
+  /// same shape as the shelves that did not reload, one layer up.
+  void _reloadAfterSync() {
+    if (!mounted) return;
+    _loadRegions();
+    _refreshShelves();
   }
 
   /// Categories a PIN keeps out of browsing.
@@ -480,6 +507,27 @@ class _MobileHomeState extends State<MobileHome> {
       ];
     }
 
+    if (kind == ItemKind.live) {
+      // Live fell through to the series branch, so a favourited channel was
+      // looked for among the shows and never found. The heart on a channel
+      // wrote a row nothing could read back — the same fault this method was
+      // written to fix, left in the one kind it did not cover.
+      final rows = await widget.db.channelsByRemoteIds(widget.source.id, ids);
+      final byId = {for (final c in rows) c.remoteId: c};
+      return [
+        for (final id in ids)
+          if (byId[id] case final channel?
+              when !_locked.contains(channel.categoryRemoteId) &&
+                  !_regions.isHidden(ItemKind.live, channel.region))
+            (
+              title: channel.name,
+              imageUrl: channel.iconUrl,
+              progress: null,
+              onTap: () => _play(Playable.channel(channel)),
+            ),
+      ];
+    }
+
     final shows = await widget.db.seriesByRemoteIds(widget.source.id, ids);
     final byId = {for (final s in shows) s.remoteId: s};
     return [
@@ -492,6 +540,39 @@ class _MobileHomeState extends State<MobileHome> {
             imageUrl: show.coverUrl,
             progress: null,
             onTap: () => _openSeries(show),
+          ),
+    ];
+  }
+
+  /// Channels watched recently, newest first.
+  ///
+  /// The television's live section leads with these, for a reason that holds
+  /// harder on a phone: a wall of provider logos says nothing about what to
+  /// watch, and the handful you keep coming back to says quite a lot. The
+  /// phone had the single most recent one as a preview and nothing behind it.
+  Future<List<_ContinueItem>> _liveContinueItems() async {
+    final states = await widget.db.continueWatching(
+      sourceId: widget.source.id,
+      limit: 20,
+    );
+    final ids = [
+      for (final state in states)
+        if (state.itemKind == ItemKind.live) state.itemRemoteId,
+    ];
+    if (ids.isEmpty) return const [];
+
+    final rows = await widget.db.channelsByRemoteIds(widget.source.id, ids);
+    final byId = {for (final c in rows) c.remoteId: c};
+    return [
+      for (final id in ids)
+        if (byId[id] case final channel?
+            when !_locked.contains(channel.categoryRemoteId) &&
+                !_regions.isHidden(ItemKind.live, channel.region))
+          (
+            title: channel.name,
+            imageUrl: channel.iconUrl,
+            progress: null,
+            onTap: () => _play(Playable.channel(channel)),
           ),
     ];
   }
@@ -657,6 +738,11 @@ class _MobileHomeState extends State<MobileHome> {
   @override
   void initState() {
     super.initState();
+    // What arrives from another device lands in the database, and these
+    // shelves were read at launch. Without listening, a position set on the
+    // television sat there unseen until the next launch — the sync worked and
+    // looked exactly as though it had not.
+    widget.sync?.revision.addListener(_reloadAfterSync);
     _loadRegions();
   }
 
@@ -673,6 +759,7 @@ class _MobileHomeState extends State<MobileHome> {
 
   @override
   void dispose() {
+    widget.sync?.revision.removeListener(_reloadAfterSync);
     _noticeTimer?.cancel();
     super.dispose();
   }
@@ -772,6 +859,10 @@ class _MobileHomeState extends State<MobileHome> {
       0 => _LiveTab(
           key: ValueKey('live:$_generation:'
               '${_regions.forKind(ItemKind.live).join(',')}:${_locked.length}'),
+          shelves: _Shelves(
+            load: _liveContinueItems,
+            favourites: () => _favouriteItems(ItemKind.live),
+          ),
           db: widget.db,
           source: widget.source,
           hiddenRegions: _regions.forKind(ItemKind.live),
@@ -938,6 +1029,9 @@ class _MobileHomeState extends State<MobileHome> {
           ),
           onOpenTunnel: () => _push(MobileTunnelScreen(vpn: widget.vpn)),
           onScanHandover: widget.onScanHandover,
+          onOpenBackup: () => _push(
+            MobileBackupScreen(db: widget.db, sync: widget.sync),
+          ),
           onOpenSubtitles: () => _push(
             const MobileSubtitlesScreen(),
           ),
@@ -969,7 +1063,15 @@ class _LiveTab extends StatefulWidget {
     required this.onPlay,
     required this.resolve,
     required this.optionsFor,
+    this.shelves,
   });
+
+  /// What you were watching and what you kept.
+  ///
+  /// Films and series have had these since the phone grew shelves; live was
+  /// left with the channel list alone, so a favourited channel had nowhere to
+  /// appear and everything watched before the most recent one was gone.
+  final Widget? shelves;
 
   final OpenTvDatabase db;
   final Source source;
@@ -1178,36 +1280,56 @@ class _LiveTabState extends State<_LiveTab> {
     );
   }
 
+  /// One scroll view, and that is the whole point of it.
+  ///
+  /// The shelves and the channel list are slivers of the same
+  /// [CustomScrollView] rather than a strip above a list. The first version
+  /// put the list inside a `SliverFillRemaining(hasScrollBody: true)`, which
+  /// is a second scrollable filling the viewport: the inner one took every
+  /// gesture once it had them, so scrolling down past the shelves worked and
+  /// scrolling back up to reach them did not. Two containers, one of them
+  /// unreachable.
+  ///
+  /// The preview stays outside this, and that is not the same mistake. It is
+  /// a platform view — a real surface composited into the window rather than
+  /// something Flutter paints — and inside a scrollable it lags its own
+  /// position by a frame and smears the rows it passes.
   Widget _list(List<Channel> channels) {
-    return ListView.builder(
-      // One past the end while there is more, so the last row is a note
-      // saying so rather than a list that simply stops.
-      itemCount: channels.length + (_atEnd ? 0 : 1),
-      itemBuilder: (context, index) {
-        if (index >= channels.length) {
-          // Asked for as it comes into view. A button would be a second thing
-          // to press for something the viewer has already asked for by
-          // scrolling to the bottom.
-          _loadMore();
-          return const Padding(
-            padding: EdgeInsets.all(OpenTvTouchSpace.lg),
-            child: Center(
-              child: Text('Loading more…', style: OpenTvTouchType.bodyMuted),
-            ),
-          );
-        }
-        return ChannelRow(
-        name: channels[index].name,
-        number: channels[index].number?.toString(),
-        logoUrl: channels[index].iconUrl,
-        // The whole visible list travels with it, so a flick in the player
-        // moves to the next channel of what was being browsed.
-          onTap: () => widget.onPlay(
-            Playable.channel(channels[index]),
-            channels,
-          ),
-        );
-      },
+    final shelves = widget.shelves;
+    return CustomScrollView(
+      slivers: [
+        if (shelves != null) SliverToBoxAdapter(child: shelves),
+        SliverList.builder(
+          // One past the end while there is more, so the last row is a note
+          // saying so rather than a list that simply stops.
+          itemCount: channels.length + (_atEnd ? 0 : 1),
+          itemBuilder: (context, index) => _row(channels, index),
+        ),
+      ],
+    );
+  }
+
+  Widget _row(List<Channel> channels, int index) {
+    if (index >= channels.length) {
+      // Asked for as it comes into view. A button would be a second thing to
+      // press for something the viewer has already asked for by scrolling to
+      // the bottom.
+      _loadMore();
+      return const Padding(
+        padding: EdgeInsets.all(OpenTvTouchSpace.lg),
+        child: Center(
+          child: Text('Loading more…', style: OpenTvTouchType.bodyMuted),
+        ),
+      );
+    }
+
+    return ChannelRow(
+      name: channels[index].name,
+      number: channels[index].number?.toString(),
+      logoUrl: channels[index].iconUrl,
+      // The whole visible list travels with it, so a flick in the player
+      // moves to the next channel of what was being browsed.
+      onTap: () => widget.onPlay(Playable.channel(channels[index]), channels),
     );
   }
 }
@@ -1655,16 +1777,33 @@ class _SearchTabState extends State<_SearchTab> {
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_run);
+    _controller.addListener(_scheduleRun);
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_run);
+    _controller.removeListener(_scheduleRun);
+    _debounce?.cancel();
     _controller.dispose();
     _focus.dispose();
     super.dispose();
   }
+
+  /// One query after the typing stops, not one per keystroke.
+  ///
+  /// The television has debounced since its search was written and the phone
+  /// never did, so every letter ran three queries across the whole catalogue.
+  /// That is survivable on a small provider and is dropped frames on a real
+  /// one — the same 220 milliseconds, for the same reason.
+  Timer? _debounce;
+
+  void _scheduleRun() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 220), _run);
+  }
+
+  /// Why the last search did not answer, if it did not.
+  String? _failure;
 
   Future<void> _run() async {
     final term = _controller.text.trim();
@@ -1679,13 +1818,24 @@ class _SearchTabState extends State<_SearchTab> {
       return;
     }
     final id = widget.source.id;
-    final results = await Future.wait([
-      widget.db.searchChannels(id, term, limit: 20),
-      widget.db.searchMovies(id, term, limit: 20),
-      widget.db.searchSeries(id, term, limit: 20),
-    ]);
+    final List<Object> results;
+    try {
+      results = await Future.wait([
+        widget.db.searchChannels(id, term, limit: 20),
+        widget.db.searchMovies(id, term, limit: 20),
+        widget.db.searchSeries(id, term, limit: 20),
+      ]);
+    } on Object catch (error) {
+      // A search that cannot run said nothing here either, and an empty
+      // result is indistinguishable from a catalogue with no match in it.
+      if (mounted && _controller.text.trim() == term) {
+        setState(() => _failure = '$error');
+      }
+      return;
+    }
     if (!mounted || _controller.text.trim() != term) return;
     setState(() {
+      _failure = null;
       _channels = [
         for (final row in results[0] as List<Channel>)
           if (!widget.locked.contains(row.categoryRemoteId) &&
@@ -1754,6 +1904,27 @@ class _SearchTabState extends State<_SearchTab> {
         // at with nothing on it.
         if (_controller.text.trim().isEmpty)
           const Expanded(child: _SearchPrompt())
+        else if (_failure != null)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: OpenTvTouchSpace.page,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Search could not run',
+                        style: OpenTvTouchType.section),
+                    const SizedBox(height: OpenTvTouchSpace.sm),
+                    Text(
+                      _failure!,
+                      style: OpenTvTouchType.bodyMuted,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
         else if (_channels.isEmpty && _movies.isEmpty && _series.isEmpty)
           Expanded(
             child: Center(
@@ -1817,6 +1988,7 @@ class _SettingsTab extends StatelessWidget {
     required this.onOpenAccount,
     required this.onOpenTunnel,
     required this.onScanHandover,
+    required this.onOpenBackup,
   });
 
   final Source source;
@@ -1834,6 +2006,9 @@ class _SettingsTab extends StatelessWidget {
   final VoidCallback onOpenAccount;
   final VoidCallback onOpenTunnel;
   final VoidCallback onScanHandover;
+
+  /// The folder this device shares its watch state through.
+  final VoidCallback onOpenBackup;
 
   @override
   Widget build(BuildContext context) {
@@ -1906,6 +2081,12 @@ class _SettingsTab extends StatelessWidget {
           name: 'Scan another device',
           now: 'Take its setup, or send it this one',
           onTap: onScanHandover,
+          artwork: false,
+        ),
+        ChannelRow(
+          name: 'Device sync',
+          now: 'Carry on watching on your other devices',
+          onTap: onOpenBackup,
           artwork: false,
         ),
         ChannelRow(

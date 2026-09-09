@@ -5,6 +5,14 @@
 /// UI or the playback engine.
 library;
 
+export 'src/backup/backup_engine.dart';
+export 'src/backup/backup_http.dart';
+export 'src/backup/backup_identity.dart';
+export 'src/backup/backup_keyring.dart';
+export 'src/backup/backup_record.dart';
+export 'src/backup/backup_store.dart';
+export 'src/backup/s3_backup_store.dart';
+export 'src/backup/s3_signer.dart';
 export 'src/epg/epg_models.dart';
 export 'src/secret_match.dart';
 export 'src/subtitles/subtitle_store.dart';
@@ -20,6 +28,7 @@ export 'src/metadata/tmdb_models.dart';
 export 'src/playlist/m3u_parser.dart';
 export 'src/playlist/playlist_entry.dart';
 export 'src/store/database.dart';
+export 'src/store/recovery_snapshot.dart';
 export 'src/store/search_text.dart';
 export 'src/store/tables.dart';
 export 'src/sync/m3u_fetcher.dart';

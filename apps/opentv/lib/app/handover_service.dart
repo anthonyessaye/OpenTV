@@ -1,8 +1,12 @@
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:opentv_core/opentv_core.dart';
 
+import 'backup_service.dart';
+import 'backup_sync.dart';
 import 'host.dart';
+import 'recovery_service.dart';
 import 'settings_screen.dart';
 import 'subtitle_service.dart';
 import 'vpn_service.dart';
@@ -64,6 +68,25 @@ class HandoverService {
     await take(SettingsScreen.tmdbReference);
     await take(SubtitleService.keyReference);
     await take(VpnService.configReference);
+    // The backup folder's keys and its recovery phrase. A device that has
+    // just been handed a whole setup should be syncing with the others
+    // immediately, not asking for a bucket to be typed in again — and the
+    // phrase in particular is the one thing a viewer may not have written
+    // down anywhere else.
+    await take(BackupService.accessKeyReference);
+    await take(BackupService.secretKeyReference);
+    await take(BackupService.phraseReference);
+    // The folder's key itself, which is the QR route the keyring was built to
+    // allow: a device in the same room is handed the key rather than deriving
+    // it, and arrives already able to read everything ever written. The
+    // fingerprint that says which bucket it belongs to rides in the
+    // preferences table, which travels with the database.
+    await take(BackupSync.dataKeyReference);
+    // What this setup is, for a device whose catalogue the system may delete
+    // out from under it. The receiver's own database says the same thing the
+    // moment it writes its next record; carrying it means a device purged
+    // between the handover and its next launch is still recoverable.
+    await take(RecoveryService.recoveryReference);
 
     return out;
   }
@@ -80,6 +103,7 @@ class HandoverService {
     required List<String> hosts,
     int port = 8100,
     Future<void> Function()? onReceived,
+    void Function(String reason)? onRefused,
   }) async {
     await stop();
 
@@ -100,11 +124,18 @@ class HandoverService {
     final server = HandoverServer(
       pairing: pairing,
       bundle: bundle,
-      compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
-      onReceived: (incoming) async {
-        await _apply(incoming);
+      compatibility: HandoverCompatibility(
+        schemaVersion: db.schemaVersion,
+        appVersion: appVersion,
+      ),
+      // Beside the live catalogue, so a pushed one never has to be held in
+      // memory — the same file the pull direction stages into.
+      stagingFile: File('${databaseFile.path}.incoming'),
+      onReceived: (staged, manifest, secrets) async {
+        await _applyStaged(staged, secrets);
         await onReceived?.call();
       },
+      onRefused: (error) => onRefused?.call(error.message),
     );
     await server.start();
     _server = server;
@@ -132,7 +163,10 @@ class HandoverService {
     void Function(int received, int total)? onProgress,
   }) async {
     final client = HandoverClient(
-      compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
+      compatibility: HandoverCompatibility(
+        schemaVersion: db.schemaVersion,
+        appVersion: appVersion,
+      ),
     );
 
     // Ask for the network before using it.
@@ -178,25 +212,15 @@ class HandoverService {
       sourceCount: (await db.allSources()).length,
     );
     final client = HandoverClient(
-      compatibility: HandoverCompatibility(schemaVersion: db.schemaVersion),
+      compatibility: HandoverCompatibility(
+        schemaVersion: db.schemaVersion,
+        appVersion: appVersion,
+      ),
     );
     // Same reason as the pull: a push from a phone is the first thing to
     // touch the local network too.
     await client.warmUp(pairing);
     await client.send(pairing, bundle, onProgress: onProgress);
-  }
-
-  /// Writes a received bundle over this device's catalogue.
-  ///
-  /// Secrets first, and the order is the whole point: if writing them fails
-  /// the old catalogue is intact and still works, while the other order
-  /// leaves a device holding a new catalogue it has no passwords for. There
-  /// is a test that fails the keystore write and requires the catalogue to
-  /// survive.
-  Future<void> _apply(HandoverBundle bundle) async {
-    final staged = File('${databaseFile.path}.incoming');
-    await staged.writeAsBytes(bundle.database, flush: true);
-    await _applyStaged(staged, bundle.secrets);
   }
 
   /// Puts an already-written staging file into place.
@@ -216,6 +240,49 @@ class HandoverService {
       final journal = File('${databaseFile.path}$suffix');
       if (journal.existsSync()) await journal.delete();
     }
+    await _becomeItself(staged);
     await staged.rename(databaseFile.path);
+  }
+
+  /// Gives the arriving catalogue this device's own identity in the sync.
+  ///
+  /// A handover copies the sender's database, and three of the preferences in
+  /// it describe the *sender's* relationship with the backup folder rather
+  /// than anything about the catalogue:
+  ///
+  /// `backup.device-id` is the worst. Every device writes its chunks beneath
+  /// its own id and a pull skips its own id, so two devices sharing one means
+  /// each treats the other's chunks as its own: they can never read each
+  /// other, and both write to the same paths with sequence numbers worked out
+  /// independently. It looks exactly like a device that will not sync, and
+  /// only with the device it was set up from.
+  ///
+  /// `backup.watermarks` says how far the *sender* had read. Inherited, this
+  /// device believes it has already seen everything every other device wrote
+  /// before the handover, and skips the lot.
+  ///
+  /// `backup.announced` is what the sender told the folder it syncs for.
+  /// Cleared so this device says it in its own name on the next pass.
+  ///
+  /// `backup.key-for` and the cached data key are deliberately kept: the
+  /// folder is the same folder and the key is the right key, and re-deriving
+  /// it is a hundred and twenty thousand rounds of PBKDF2 on a television.
+  ///
+  /// Done to the staged file before it is put into place, so there is no
+  /// moment at which the wrong identity is the live one.
+  Future<void> _becomeItself(File staged) async {
+    final arriving = OpenTvDatabase(NativeDatabase(staged));
+    try {
+      for (final key in const [
+        'backup.device-id',
+        'backup.device-id-mine',
+        'backup.watermarks',
+        'backup.announced',
+      ]) {
+        await arriving.clearPreference(key);
+      }
+    } finally {
+      await arriving.close();
+    }
   }
 }

@@ -39,6 +39,9 @@ class XtreamCatalogueFetcher implements CatalogueFetcher {
   bool _authenticated = false;
 
   @override
+  String? reportedAddress;
+
+  @override
   Set<SyncStage> get stages => {
     SyncStage.categories,
     SyncStage.channels,
@@ -66,7 +69,27 @@ class XtreamCatalogueFetcher implements CatalogueFetcher {
       );
     }
 
-    final (user, _) = XtreamDecode.account(payload);
+    final (user, server) = XtreamDecode.account(payload);
+
+    // The panel's own address, which is the one part of a provider two
+    // devices cannot type differently — and until now it was parsed and
+    // dropped on the floor. It is what lets a phone and a television that
+    // were set up separately agree that they hold the same account.
+    //
+    // Reassembled rather than taken whole, because `url` is a bare hostname
+    // on most panels and the scheme and port arrive in their own fields.
+    final host = server.url?.trim();
+    if (host != null && host.isNotEmpty) {
+      final scheme = (server.protocol ?? 'http').toLowerCase() == 'https'
+          ? 'https'
+          : 'http';
+      final port = scheme == 'https' ? server.httpsPort : server.port;
+      final suffix =
+          port == null || port == (scheme == 'https' ? 443 : 80) ? '' : ':$port';
+      // A panel that already spells out a scheme is used as it stands.
+      reportedAddress = host.contains('://') ? host : '$scheme://$host$suffix';
+    }
+
     if (!user.authenticated) {
       throw const FatalSyncException('the portal rejected these credentials');
     }

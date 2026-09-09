@@ -1,5 +1,7 @@
 import Flutter
 import UIKit
+// For VTIsHardwareDecodeSupported: whether this box decodes H.265 at all.
+import VideoToolbox
 
 // libVLC, under whichever name the platform ships it.
 //
@@ -355,12 +357,53 @@ final class VlcPlayerView: NSObject, FlutterPlatformView, VLCMediaPlayerDelegate
             // reason at all — the contract test that should have caught that
             // matched the word "error" somewhere else entirely.
             "error": lastError as Any,
-            // dynamicRange and videoCodec are deliberately absent rather than
-            // present and empty. libVLC does not report a transfer function,
-            // so HDR cannot be named here the way Media3 names it, and the
-            // Dart side reads a missing key as "unknown" — which is honest.
-            // A wrong badge is worse than no badge.
+            "videoCodec": videoCodec() as Any,
+            // Whether this box decodes H.265 in hardware. An Apple TV HD does
+            // not — its A8 predates the decoder — so a channel encoded in it
+            // falls to software, fails to allocate the buffers it needs, and
+            // never produces a frame. On screen that is a channel that simply
+            // does not start, with nothing saying why. Asked of the system
+            // rather than inferred from a model number.
+            "hevcHardware": VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
+            // dynamicRange is deliberately absent rather than present and
+            // empty. libVLC does not report a transfer function, so HDR
+            // cannot be named here the way Media3 names it, and the Dart side
+            // reads a missing key as "unknown" — which is honest. A wrong
+            // badge is worse than no badge.
         ]
+    }
+
+    /// The video track's codec, as libVLC names it.
+    ///
+    /// This key is in the contract and Media3 has always filled it; here it
+    /// sat empty because it was written down beside `dynamicRange`, which
+    /// genuinely cannot be answered. The codec can: `tracksInformation`
+    /// carries a fourcc per track. It is what lets a stalled stream say
+    /// *which* codec it stalled on.
+    private func videoCodec() -> String? {
+        guard let tracks = player.media?.tracksInformation as? [[String: Any]]
+        else { return nil }
+        for track in tracks {
+            guard let type = track[VLCMediaTracksInformationType] as? String,
+                  type == VLCMediaTracksInformationTypeVideo,
+                  let raw = track[VLCMediaTracksInformationCodec] as? NSNumber
+            else { continue }
+            return fourcc(raw.uint32Value)
+        }
+        return nil
+    }
+
+    /// A fourcc as the four characters it is, lower-cased.
+    private func fourcc(_ value: UInt32) -> String {
+        let bytes = [
+            UInt8((value >> 24) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8(value & 0xFF),
+        ]
+        // libVLC packs these little-endian, so `hevc` arrives reversed.
+        let text = String(bytes: bytes.reversed(), encoding: .ascii) ?? ""
+        return text.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
     private func describe(_ state: VLCMediaPlayerState) -> String {
