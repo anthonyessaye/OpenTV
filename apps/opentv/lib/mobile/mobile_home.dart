@@ -268,6 +268,19 @@ class _MobileHomeState extends State<MobileHome> {
     if (mounted) setState(() => _generation++);
   }
 
+  /// Everything a pass can have changed, not only the shelves.
+  ///
+  /// Hidden categories and the region filter cross between devices now, and
+  /// both are read once into this state. Bumping the generation rebuilds the
+  /// strips against filters this screen read at launch, so a category hidden
+  /// on the television stayed visible here until the app was closed — the
+  /// same shape as the shelves that did not reload, one layer up.
+  void _reloadAfterSync() {
+    if (!mounted) return;
+    _loadRegions();
+    _refreshShelves();
+  }
+
   /// Categories a PIN keeps out of browsing.
   ///
   /// Absent rather than greyed out, which is the rule the television already
@@ -729,7 +742,7 @@ class _MobileHomeState extends State<MobileHome> {
     // shelves were read at launch. Without listening, a position set on the
     // television sat there unseen until the next launch — the sync worked and
     // looked exactly as though it had not.
-    widget.sync?.revision.addListener(_refreshShelves);
+    widget.sync?.revision.addListener(_reloadAfterSync);
     _loadRegions();
   }
 
@@ -746,7 +759,7 @@ class _MobileHomeState extends State<MobileHome> {
 
   @override
   void dispose() {
-    widget.sync?.revision.removeListener(_refreshShelves);
+    widget.sync?.revision.removeListener(_reloadAfterSync);
     _noticeTimer?.cancel();
     super.dispose();
   }

@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 721 core, 141 ui, 255 app.
+Tests: 727 core, 141 ui, 257 app.
 
 ## Two interfaces, one app
 
@@ -934,6 +934,44 @@ what it moved and says so.
 **Something has to tell the screen.** Records land in the database and the
 shelves were drawn from what was there at launch, so without `onApplied` the
 sync works and looks exactly as though it had not.
+
+**`hidden` and `preference` are written and read now, and they were the last
+two scopes declared and unused.** A viewer who spent ten minutes hiding four
+hundred categories on the television did it again on the phone and again on
+the Apple TV, while the names for carrying that decision sat in the enum. One
+record per category rather than one saying "all of them": hiding everything
+and showing four back is five decisions, and the four have to outlive the one.
+
+**The preference safelist is one key, on purpose.** Most of that table
+describes *this* device — which folder, how far it has read, what name it
+syncs under — and sending any of it is at best noise and at worst the bug that
+had two televisions writing chunks under one id. What is left is the region
+filter, which is a choice about what somebody wants to see. Queued from inside
+`setPreference` rather than at the screens that change one, so the safelist is
+the decision and not where the write happens to be made.
+
+**Schema 11 dates a preference** so the choice made last wins rather than the
+one that synced last — a device opened after a week away would otherwise
+overwrite a change made here an hour ago.
+
+**A synced filter has to reach the screen, and that is a second bug wearing
+the first one's clothes.** Hidden categories and the region filter are read
+once into each home screen's state, so a pass that applied them rebuilt the
+shelves against filters read at launch. Both `_reloadAfterSync` methods
+re-read the filters before reloading. The same shape as the shelves that did
+not reload, one layer up — which is worth remembering as the pattern rather
+than the incident.
+
+**A device compacts its own chunks and nobody else's.** The log is compactable
+by construction — records are state, so a snapshot is the merge of everything
+so far — and without it a folder grows for ever, since a position rewritten a
+thousand times is a thousand records answering one question. The snapshot goes
+*above* the chunks it replaces and is written before they are deleted: a peer
+that had read five of forty finds it at forty-one and takes the lot, and a
+peer that had read everything sees one more chunk it already agrees with. A
+chunk that cannot be read stops the compaction rather than being summarised
+away, because compacting around it would delete the original and keep a
+summary missing whatever it said.
 
 **What arrives from elsewhere is written without being queued.** Two devices
 that echoed each other would hand the same position back and forth for as

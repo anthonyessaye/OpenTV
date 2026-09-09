@@ -183,6 +183,16 @@ class BackupSync {
       await _saveWatermarks(pulled.watermarks);
       unlinked = await db.unlinkedProvidersSeen();
 
+      // Fold this device's own chunks together once there are enough of them
+      // to be worth it. After the pull rather than before: compacting first
+      // would rewrite the folder and then read it back in the same pass, for
+      // no benefit to either half.
+      //
+      // Only its own, which is what makes it safe to do here at all — every
+      // device compacts on its own schedule and none of them waits.
+      final folded = await engine.compact();
+      if (folded > 0) debugPrint('backup: folded $folded chunks into one');
+
       failure = pulled.unreadable.isEmpty ? null : pulled.unreadable.first;
     } on Object catch (error) {
       failure = '$error';

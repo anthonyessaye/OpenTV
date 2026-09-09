@@ -206,8 +206,15 @@ class _BrowseScreenState extends State<BrowseScreen> {
     widget.sync?.revision.addListener(_reloadAfterSync);
   }
 
-  void _reloadAfterSync() {
-    if (mounted) _loadSection();
+  Future<void> _reloadAfterSync() async {
+    if (!mounted) return;
+    // The filters first. Hidden categories and the region filter cross
+    // between devices now, and both are read once into this state — so
+    // reloading the section against filters read at launch would rebuild the
+    // rail from a decision this device has already been told about and not
+    // heard. The same shape as the shelves that did not reload.
+    await _readRegions();
+    if (mounted) await _loadSection();
   }
 
   /// Read before the first query rather than alongside it, or the first

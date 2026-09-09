@@ -6915,8 +6915,19 @@ class $PreferencesTable extends Preferences
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _changedAtMeta = const VerificationMeta(
+    'changedAt',
+  );
   @override
-  List<GeneratedColumn> get $columns => [key, value];
+  late final GeneratedColumn<DateTime> changedAt = GeneratedColumn<DateTime>(
+    'changed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, value, changedAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -6945,6 +6956,12 @@ class $PreferencesTable extends Preferences
     } else if (isInserting) {
       context.missing(_valueMeta);
     }
+    if (data.containsKey('changed_at')) {
+      context.handle(
+        _changedAtMeta,
+        changedAt.isAcceptableOrUnknown(data['changed_at']!, _changedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -6962,6 +6979,10 @@ class $PreferencesTable extends Preferences
         DriftSqlType.string,
         data['${effectivePrefix}value'],
       )!,
+      changedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}changed_at'],
+      ),
     );
   }
 
@@ -6974,17 +6995,35 @@ class $PreferencesTable extends Preferences
 class Preference extends DataClass implements Insertable<Preference> {
   final String key;
   final String value;
-  const Preference({required this.key, required this.value});
+
+  /// When this was last set, for the few that cross between devices.
+  ///
+  /// Without it there is no way to tell a choice made here an hour ago from
+  /// one made on another device last week and only now arriving, so the one
+  /// that syncs last wins rather than the one made last. Null for every
+  /// preference written before this column existed, and for the many that
+  /// describe the device rather than the viewer and never travel.
+  final DateTime? changedAt;
+  const Preference({required this.key, required this.value, this.changedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['key'] = Variable<String>(key);
     map['value'] = Variable<String>(value);
+    if (!nullToAbsent || changedAt != null) {
+      map['changed_at'] = Variable<DateTime>(changedAt);
+    }
     return map;
   }
 
   PreferencesCompanion toCompanion(bool nullToAbsent) {
-    return PreferencesCompanion(key: Value(key), value: Value(value));
+    return PreferencesCompanion(
+      key: Value(key),
+      value: Value(value),
+      changedAt: changedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(changedAt),
+    );
   }
 
   factory Preference.fromJson(
@@ -6995,6 +7034,7 @@ class Preference extends DataClass implements Insertable<Preference> {
     return Preference(
       key: serializer.fromJson<String>(json['key']),
       value: serializer.fromJson<String>(json['value']),
+      changedAt: serializer.fromJson<DateTime?>(json['changedAt']),
     );
   }
   @override
@@ -7003,15 +7043,24 @@ class Preference extends DataClass implements Insertable<Preference> {
     return <String, dynamic>{
       'key': serializer.toJson<String>(key),
       'value': serializer.toJson<String>(value),
+      'changedAt': serializer.toJson<DateTime?>(changedAt),
     };
   }
 
-  Preference copyWith({String? key, String? value}) =>
-      Preference(key: key ?? this.key, value: value ?? this.value);
+  Preference copyWith({
+    String? key,
+    String? value,
+    Value<DateTime?> changedAt = const Value.absent(),
+  }) => Preference(
+    key: key ?? this.key,
+    value: value ?? this.value,
+    changedAt: changedAt.present ? changedAt.value : this.changedAt,
+  );
   Preference copyWithCompanion(PreferencesCompanion data) {
     return Preference(
       key: data.key.present ? data.key.value : this.key,
       value: data.value.present ? data.value.value : this.value,
+      changedAt: data.changedAt.present ? data.changedAt.value : this.changedAt,
     );
   }
 
@@ -7019,44 +7068,51 @@ class Preference extends DataClass implements Insertable<Preference> {
   String toString() {
     return (StringBuffer('Preference(')
           ..write('key: $key, ')
-          ..write('value: $value')
+          ..write('value: $value, ')
+          ..write('changedAt: $changedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(key, value);
+  int get hashCode => Object.hash(key, value, changedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Preference &&
           other.key == this.key &&
-          other.value == this.value);
+          other.value == this.value &&
+          other.changedAt == this.changedAt);
 }
 
 class PreferencesCompanion extends UpdateCompanion<Preference> {
   final Value<String> key;
   final Value<String> value;
+  final Value<DateTime?> changedAt;
   final Value<int> rowid;
   const PreferencesCompanion({
     this.key = const Value.absent(),
     this.value = const Value.absent(),
+    this.changedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PreferencesCompanion.insert({
     required String key,
     required String value,
+    this.changedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : key = Value(key),
        value = Value(value);
   static Insertable<Preference> custom({
     Expression<String>? key,
     Expression<String>? value,
+    Expression<DateTime>? changedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (key != null) 'key': key,
       if (value != null) 'value': value,
+      if (changedAt != null) 'changed_at': changedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -7064,11 +7120,13 @@ class PreferencesCompanion extends UpdateCompanion<Preference> {
   PreferencesCompanion copyWith({
     Value<String>? key,
     Value<String>? value,
+    Value<DateTime?>? changedAt,
     Value<int>? rowid,
   }) {
     return PreferencesCompanion(
       key: key ?? this.key,
       value: value ?? this.value,
+      changedAt: changedAt ?? this.changedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7082,6 +7140,9 @@ class PreferencesCompanion extends UpdateCompanion<Preference> {
     if (value.present) {
       map['value'] = Variable<String>(value.value);
     }
+    if (changedAt.present) {
+      map['changed_at'] = Variable<DateTime>(changedAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -7093,6 +7154,7 @@ class PreferencesCompanion extends UpdateCompanion<Preference> {
     return (StringBuffer('PreferencesCompanion(')
           ..write('key: $key, ')
           ..write('value: $value, ')
+          ..write('changedAt: $changedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -11927,12 +11989,14 @@ typedef $$PreferencesTableCreateCompanionBuilder =
     PreferencesCompanion Function({
       required String key,
       required String value,
+      Value<DateTime?> changedAt,
       Value<int> rowid,
     });
 typedef $$PreferencesTableUpdateCompanionBuilder =
     PreferencesCompanion Function({
       Value<String> key,
       Value<String> value,
+      Value<DateTime?> changedAt,
       Value<int> rowid,
     });
 
@@ -11952,6 +12016,11 @@ class $$PreferencesTableFilterComposer
 
   ColumnFilters<String> get value => $composableBuilder(
     column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get changedAt => $composableBuilder(
+    column: $table.changedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -11974,6 +12043,11 @@ class $$PreferencesTableOrderingComposer
     column: $table.value,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PreferencesTableAnnotationComposer
@@ -11990,6 +12064,9 @@ class $$PreferencesTableAnnotationComposer
 
   GeneratedColumn<String> get value =>
       $composableBuilder(column: $table.value, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get changedAt =>
+      $composableBuilder(column: $table.changedAt, builder: (column) => column);
 }
 
 class $$PreferencesTableTableManager
@@ -12025,16 +12102,24 @@ class $$PreferencesTableTableManager
               ({
                 Value<String> key = const Value.absent(),
                 Value<String> value = const Value.absent(),
+                Value<DateTime?> changedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => PreferencesCompanion(key: key, value: value, rowid: rowid),
+              }) => PreferencesCompanion(
+                key: key,
+                value: value,
+                changedAt: changedAt,
+                rowid: rowid,
+              ),
           createCompanionCallback:
               ({
                 required String key,
                 required String value,
+                Value<DateTime?> changedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PreferencesCompanion.insert(
                 key: key,
                 value: value,
+                changedAt: changedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

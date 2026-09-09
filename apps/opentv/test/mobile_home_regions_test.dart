@@ -122,6 +122,20 @@ void main() {
     expect(find.text('Low Tide'), findsOneWidget);
   });
 
+  test('the phone re-reads its filters when a pass changes them', () {
+    final source = File('lib/mobile/mobile_home.dart').readAsStringSync();
+    final start = source.indexOf('void _reloadAfterSync() {');
+    expect(start, isNot(-1));
+    final body = source.substring(start, start + 300);
+    expect(body, contains('_loadRegions()'));
+    expect(body, contains('_refreshShelves()'));
+    expect(
+      source,
+      contains('revision.addListener(_reloadAfterSync)'),
+      reason: 'a pass rebuilds the strips and leaves the filters stale',
+    );
+  });
+
   group('the phone\'s live section', () {
     final source = File('lib/mobile/mobile_home.dart').readAsStringSync();
 

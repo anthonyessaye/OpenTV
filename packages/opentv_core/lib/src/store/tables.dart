@@ -472,6 +472,15 @@ class Preferences extends Table {
   TextColumn get key => text()();
   TextColumn get value => text()();
 
+  /// When this was last set, for the few that cross between devices.
+  ///
+  /// Without it there is no way to tell a choice made here an hour ago from
+  /// one made on another device last week and only now arriving, so the one
+  /// that syncs last wins rather than the one made last. Null for every
+  /// preference written before this column existed, and for the many that
+  /// describe the device rather than the viewer and never travel.
+  DateTimeColumn get changedAt => dateTime().nullable()();
+
   @override
   Set<Column<Object>> get primaryKey => {key};
 }

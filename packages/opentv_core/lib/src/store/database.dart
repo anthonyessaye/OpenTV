@@ -7,6 +7,7 @@ import '../backup/backup_engine.dart';
 import '../backup/backup_identity.dart';
 import '../backup/backup_record.dart';
 import '../metadata/title_cleaner.dart';
+import 'region_filter.dart';
 import 'search_text.dart';
 import 'tables.dart';
 
@@ -48,7 +49,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// upgrade that rebuilds a search index over a real catalogue is long
   /// enough that the viewer deserves to be told which of the two is
   /// happening.
-  static const latestSchema = 10;
+  static const latestSchema = 11;
 
   @override
   int get schemaVersion => latestSchema;
@@ -186,6 +187,12 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // change, and the answer only moves when the catalogue does. Created
       // empty: the first read after this fills it.
       if (from < 10) await m.createTable(categoryCounts);
+
+      // 11 dates the preferences that cross between devices, so the choice
+      // made last wins rather than the one that happened to sync last. Null
+      // for everything already written, which reads as "no opinion" and loses
+      // to anything that arrives with a date.
+      if (from < 11) await m.addColumn(preferences, preferences.changedAt);
     },
     onCreate: (m) async {
       await m.createAll();
@@ -916,6 +923,21 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     final byId = {for (final source in await allSources()) source.id: source};
     final records = <BackupRecord>[];
     for (final row in rows) {
+      // A preference belongs to the viewer rather than to a provider, and is
+      // queued against source 0 — which the schema has always allowed and
+      // nothing had yet used. Its key travels as it stands.
+      if (row.sourceId == 0) {
+        records.add(BackupRecord(
+          scope: row.scope,
+          key: row.localKey,
+          value: row.payload == null
+              ? null
+              : (jsonDecode(row.payload!) as Map).cast<String, Object?>(),
+          stamp: BackupStamp(wallClock: row.at, deviceId: deviceId),
+        ));
+        continue;
+      }
+
       final source = byId[row.sourceId];
       if (source == null) continue;
       records.add(BackupRecord(
@@ -966,6 +988,23 @@ class OpenTvDatabase extends _$OpenTvDatabase {
 
     var changed = 0;
     for (final record in records) {
+      // Neither of these is about an item, so neither has an item key to
+      // split. A preference is the viewer's own choice and belongs to no
+      // provider at all.
+      if (record.scope == BackupScope.preference) {
+        final value = record.value?['value'];
+        if (value is! String) continue;
+        if (!syncedPreferences.contains(record.key)) continue;
+        // Older wins nothing here either: a device that changed its regions
+        // an hour ago should not be overwritten by one that changed them last
+        // week and has only just been opened.
+        final held = await preferenceChangedAt(record.key);
+        if (held != null && !record.stamp.wallClock.isAfter(held)) continue;
+        await _writePreference(record.key, value, at: record.stamp.wallClock);
+        changed++;
+        continue;
+      }
+
       // Not about an item, so it has no item key to split.
       if (record.scope == BackupScope.identity) {
         final value = record.value;
@@ -1033,6 +1072,17 @@ class OpenTvDatabase extends _$OpenTvDatabase {
               kind: kind,
               remoteId: remoteId,
               at: record.stamp.wallClock,
+            );
+            changed++;
+          }
+
+        case BackupScope.hidden:
+          if (record.value?['hidden'] case final bool wanted) {
+            await _writeCategoryHidden(
+              sourceId: sourceId,
+              kind: kind,
+              categoryRemoteId: remoteId,
+              hidden: wanted,
             );
             changed++;
           }
@@ -1418,10 +1468,82 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     return row?.value;
   }
 
-  Future<void> setPreference(String key, String value) =>
-      into(preferences).insertOnConflictUpdate(
-        PreferencesCompanion.insert(key: key, value: value),
+  /// Preferences that belong to the viewer rather than to the device.
+  ///
+  /// A safelist, and a short one on purpose. Most of what is in this table
+  /// describes *this* device's relationship with something — which folder,
+  /// how far it has read, what name it syncs under — and sending any of that
+  /// to another device is at best noise and at worst the bug that had two
+  /// televisions writing chunks under one id. What is left is the choice a
+  /// viewer made about what they want to see, which should follow them.
+  static const syncedPreferences = <String>{RegionFilter.preferenceKey};
+
+  Future<void> setPreference(String key, String value) async {
+    final at = DateTime.now().toUtc();
+    await _writePreference(key, value, at: at);
+    // Queued here rather than at each screen that changes one. A list of call
+    // sites is a list somebody adds to and forgets, and the safelist is the
+    // decision — not where the write happens to be made.
+    if (syncedPreferences.contains(key)) {
+      await _queue(
+        scope: BackupScope.preference,
+        sourceId: 0,
+        localKey: key,
+        at: at,
+        payload: {'value': value},
       );
+    }
+  }
+
+  /// Hides a category and its rows without queueing. See [_writePlayback].
+  Future<void> _writeCategoryHidden({
+    required int sourceId,
+    required ItemKind kind,
+    required String categoryRemoteId,
+    required bool hidden,
+  }) async {
+    await (update(categories)..where(
+      (c) =>
+          c.sourceId.equals(sourceId) &
+          c.kind.equalsValue(kind) &
+          c.remoteId.equals(categoryRemoteId),
+    )).write(CategoriesCompanion(hidden: Value(hidden)));
+
+    await switch (kind) {
+      ItemKind.live => (update(channels)..where(
+          (c) =>
+              c.sourceId.equals(sourceId) &
+              c.categoryRemoteId.equals(categoryRemoteId),
+        )).write(ChannelsCompanion(hidden: Value(hidden))),
+      ItemKind.movie => (update(movies)..where(
+          (m) =>
+              m.sourceId.equals(sourceId) &
+              m.categoryRemoteId.equals(categoryRemoteId),
+        )).write(MoviesCompanion(hidden: Value(hidden))),
+      ItemKind.series || ItemKind.episode => (update(seriesEntries)..where(
+          (e) =>
+              e.sourceId.equals(sourceId) &
+              e.categoryRemoteId.equals(categoryRemoteId),
+        )).write(SeriesEntriesCompanion(hidden: Value(hidden))),
+    };
+    await invalidateCategoryCounts(sourceId);
+  }
+
+  /// The write on its own, with nothing queued. See [_writePlayback].
+  Future<void> _writePreference(String key, String value, {DateTime? at}) =>
+      into(preferences).insertOnConflictUpdate(
+        PreferencesCompanion.insert(
+          key: key,
+          value: value,
+          changedAt: Value(at),
+        ),
+      );
+
+  /// When a preference was last set, here or anywhere.
+  Future<DateTime?> preferenceChangedAt(String key) async =>
+      (await (select(preferences)..where((p) => p.key.equals(key)))
+              .getSingleOrNull())
+          ?.changedAt;
 
   Future<int> clearPreference(String key) =>
       (delete(preferences)..where((p) => p.key.equals(key))).go();
@@ -1503,6 +1625,14 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           c.remoteId.equals(categoryRemoteId),
     )).write(CategoriesCompanion(hidden: Value(hidden)));
 
+    await _queue(
+      scope: BackupScope.hidden,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$categoryRemoteId',
+      at: DateTime.now().toUtc(),
+      payload: {'hidden': hidden},
+    );
+
     // And its contents, so "All" does not quietly list them anyway.
     final changed = await switch (kind) {
       ItemKind.live => (update(channels)..where(
@@ -1563,6 +1693,20 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
     }
     await invalidateCategoryCounts(sourceId);
+
+    // One record per category rather than a single "all of them": a device
+    // that hides everything and then shows four back has made five decisions,
+    // and the four have to be able to outlive the one.
+    final at = DateTime.now().toUtc();
+    for (final category in await allCategoriesFor(sourceId, kind)) {
+      await _queue(
+        scope: BackupScope.hidden,
+        sourceId: sourceId,
+        localKey: '${kind.name}/${category.remoteId}',
+        at: at,
+        payload: {'hidden': hidden},
+      );
+    }
   }
 
   /// Every category, including the hidden ones, for a screen that manages

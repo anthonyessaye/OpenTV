@@ -173,6 +173,22 @@ void main() {
     });
   });
 
+  test('a synced filter reaches the screen, not just the shelves', () {
+    // Hidden categories and the region filter cross between devices now, and
+    // both are read once into this screen's state. Reloading the section
+    // against filters read at launch rebuilds the rail from a decision this
+    // device has already been told about and not heard — the same shape as
+    // the shelves that did not reload, one layer up.
+    final start = source.indexOf('_reloadAfterSync() async {');
+    expect(start, isNot(-1), reason: 'the sync reload has been renamed');
+    expect(
+      source.substring(start, start + 600),
+      contains('_readRegions()'),
+      reason: 'a region filter arriving from another device is ignored until '
+          'the app is closed',
+    );
+  });
+
   group('what a tab switch costs', () {
     /// One method's body, and no further.
     String body(String signature) {
