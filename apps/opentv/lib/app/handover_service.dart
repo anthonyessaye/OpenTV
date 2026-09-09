@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:opentv_core/opentv_core.dart';
 
 import 'backup_service.dart';
@@ -233,6 +234,48 @@ class HandoverService {
       final journal = File('${databaseFile.path}$suffix');
       if (journal.existsSync()) await journal.delete();
     }
+    await _becomeItself(staged);
     await staged.rename(databaseFile.path);
+  }
+
+  /// Gives the arriving catalogue this device's own identity in the sync.
+  ///
+  /// A handover copies the sender's database, and three of the preferences in
+  /// it describe the *sender's* relationship with the backup folder rather
+  /// than anything about the catalogue:
+  ///
+  /// `backup.device-id` is the worst. Every device writes its chunks beneath
+  /// its own id and a pull skips its own id, so two devices sharing one means
+  /// each treats the other's chunks as its own: they can never read each
+  /// other, and both write to the same paths with sequence numbers worked out
+  /// independently. It looks exactly like a device that will not sync, and
+  /// only with the device it was set up from.
+  ///
+  /// `backup.watermarks` says how far the *sender* had read. Inherited, this
+  /// device believes it has already seen everything every other device wrote
+  /// before the handover, and skips the lot.
+  ///
+  /// `backup.announced` is what the sender told the folder it syncs for.
+  /// Cleared so this device says it in its own name on the next pass.
+  ///
+  /// `backup.key-for` and the cached data key are deliberately kept: the
+  /// folder is the same folder and the key is the right key, and re-deriving
+  /// it is a hundred and twenty thousand rounds of PBKDF2 on a television.
+  ///
+  /// Done to the staged file before it is put into place, so there is no
+  /// moment at which the wrong identity is the live one.
+  Future<void> _becomeItself(File staged) async {
+    final arriving = OpenTvDatabase(NativeDatabase(staged));
+    try {
+      for (final key in const [
+        'backup.device-id',
+        'backup.watermarks',
+        'backup.announced',
+      ]) {
+        await arriving.clearPreference(key);
+      }
+    } finally {
+      await arriving.close();
+    }
   }
 }

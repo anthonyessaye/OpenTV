@@ -114,11 +114,22 @@ class BackupSync {
     if (_running) return;
     _running = true;
     try {
+      // Both of these are silent, ordinary states rather than failures — no
+      // folder has been set up, or one has and its key is not derivable yet.
+      // Silent is right on the settings panel and wrong in a log: "it is not
+      // syncing" and "it has nothing to sync to" look identical from outside
+      // and want completely different things done about them.
       final store = await backup.store();
-      if (store == null) return;
+      if (store == null) {
+        _report('no folder is set up on this device');
+        return;
+      }
 
       final key = await _key(store);
-      if (key == null) return;
+      if (key == null) {
+        _report('a folder is set up but its key could not be derived');
+        return;
+      }
 
       final engine = BackupEngine(
         store: store,
@@ -177,7 +188,36 @@ class BackupSync {
       failure = '$error';
     } finally {
       _running = false;
+      _report();
     }
+  }
+
+  /// Says once, to the log, what a pass could not do.
+  ///
+  /// A sync runs in the background at moments nobody is watching, and until
+  /// now the only place a failure appeared was one settings panel — which
+  /// means a viewer who never opens it has a feature that has been broken for
+  /// weeks and no way to find out, and whoever they tell has nothing to go
+  /// on. Once per distinct failure rather than every pass: this runs at
+  /// launch, on leaving, on saving a folder and on closing the player, and a
+  /// television with no internet would otherwise fill the log with one
+  /// sentence.
+  ///
+  /// Safe to print. The endpoint and bucket are not secrets — the keys are,
+  /// and they travel in headers that never reach here.
+  ///
+  /// A sentinel rather than null for "nothing said yet": a first pass that
+  /// succeeds leaves `failure` null, which compares equal to an unset field
+  /// and printed nothing at all — so silence meant both "it worked" and "it
+  /// never ran", which is the one distinction this exists to make.
+  static const _nothingSaid = '\u0000';
+  String? _reported = _nothingSaid;
+
+  void _report([String? instead]) {
+    final now = instead ?? failure;
+    if (now == _reported) return;
+    _reported = now;
+    debugPrint(now == null ? 'backup: $summary' : 'backup: $now');
   }
 
   /// Fetches episodes for shows that arrived with progress and no episodes.

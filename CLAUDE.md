@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 715 core, 141 ui, 239 app.
+Tests: 715 core, 141 ui, 241 app.
 
 ## Two interfaces, one app
 
@@ -546,6 +546,27 @@ and the OpenSubtitles key was added without touching it, which produced a
 handover that carried a whole setup in which subtitle search silently did
 nothing. `handover_secrets_test` reads every `...Reference` constant in
 `lib/` and fails if one is not named there.
+
+**A handover must not carry the sender's sync identity.** Three preferences
+in the copied database describe the *sender's* relationship with the backup
+folder rather than anything about the catalogue, and `backup.device-id` is the
+dangerous one: every device writes its chunks beneath its own id and a pull
+skips its own id, so two devices sharing one can never read each other — each
+takes the other's chunks for its own — while both write the same paths with
+sequence numbers worked out independently. It presents as a device that will
+not sync, and *only* with the device it was set up from, which is the last
+place anybody looks. `backup.watermarks` compounds it by claiming the sender's
+reading as this device's own, so everything written before the handover is
+skipped; `backup.announced` makes it introduce itself in the sender's name.
+`backup.key-for` and the cached data key are deliberately kept — same folder,
+right key, and re-deriving is 120,000 rounds of PBKDF2 on a television.
+Cleared on the staged file before it is put into place, so the wrong identity
+is never the live one.
+
+Found by pulling the catalogue off an Apple TV with
+`devicectl device copy from --domain-type appDataContainer`, which is the
+fastest way to answer "is this device actually syncing" and needs nothing from
+whoever is holding the remote.
 
 **Secrets are written before the database is replaced.** The other order
 leaves a device holding a new catalogue it has no passwords for. The `-wal` is

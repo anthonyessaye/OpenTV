@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opentv/app/backup_service.dart';
@@ -505,6 +506,28 @@ void main() {
 
       expect(fetched, 1, reason: 'the portal is asked again on every pass');
     });
+  });
+
+  test('a pass that fails says so somewhere other than one settings panel',
+      () async {
+    // A sync runs at moments nobody is watching, and its failure appeared on
+    // exactly one panel — so a feature broken for weeks looks identical to
+    // one working, and whoever is told has nothing to go on.
+    final logged = <String>[];
+    final previous = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) logged.add(message);
+    };
+    addTearDown(() => debugPrint = previous);
+
+    // No folder at all, which is silent on the panel and rightly so.
+    await syncFor(phoneDb).run();
+
+    expect(
+      logged.where((line) => line.startsWith('backup:')),
+      isNotEmpty,
+      reason: 'a device that is not syncing says nothing anywhere',
+    );
   });
 
   group('a provider under two addresses', () {
