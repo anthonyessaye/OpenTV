@@ -222,23 +222,20 @@ void main() {
       );
     });
 
-    test('and a wait too short to explain says nothing', () {
-      // A label that appears and vanishes inside a fifth of a second is not
-      // information. The screen answers in tens of milliseconds; saying
-      // "Reading…" for that made it look like one that struggles.
-      expect(source, contains('static const _sayReadingAfter'));
+    test('and says nothing at all while it loads', () {
+      // It said "Reading…", which was true and worth saying when a section
+      // change took over a second. It does not any more, and a label that
+      // appears and vanishes is not information — it is a flicker that makes
+      // a screen answering in a moment look like one that is struggling.
       expect(
         body('Widget _grid()'),
-        contains('if (!_sayReading) return const SizedBox.shrink();'),
-        reason: '"Reading…" is drawn the moment a load starts again',
+        contains('if (_loading) return const SizedBox.shrink();'),
+        reason: 'the grid draws something over a load again',
       );
-      // And it is cleared when the load ends, or the next short one inherits
-      // the last long one's label.
-      expect(source, contains('void _doneReading()'));
       expect(
-        RegExp(r'_doneReading\(\);').allMatches(source).length,
-        greaterThanOrEqualTo(2),
-        reason: 'a path that finishes loading leaves the label armed',
+        source,
+        isNot(contains("Text('Reading…'")),
+        reason: 'the label is back',
       );
     });
   });

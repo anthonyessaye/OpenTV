@@ -220,7 +220,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   @override
   void dispose() {
-    _readingTimer?.cancel();
     widget.sync?.revision.removeListener(_reloadAfterSync);
     _transport.close();
     super.dispose();
@@ -233,35 +232,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
     }
   }
 
-  /// How long a wait has to be before it is worth saying anything about.
-  ///
-  /// "Reading…" appearing and vanishing inside a fifth of a second is not
-  /// information, it is a flicker — and it made a screen that answers in tens
-  /// of milliseconds look like one that struggles. The label still arrives for
-  /// a wait long enough to need explaining; the grid area is simply empty
-  /// before then, rather than showing the section the viewer has just left.
-  static const _sayReadingAfter = Duration(milliseconds: 200);
-
-  Timer? _readingTimer;
-  bool _sayReading = false;
-
-  void _beginReading() {
-    _readingTimer?.cancel();
-    _sayReading = false;
-    _readingTimer = Timer(_sayReadingAfter, () {
-      if (mounted && _loading) setState(() => _sayReading = true);
-    });
-  }
-
-  void _doneReading() {
-    _readingTimer?.cancel();
-    _readingTimer = null;
-    _sayReading = false;
-  }
-
   Future<void> _loadSection() async {
     final generation = ++_generation;
-    _beginReading();
     setState(() {
       _loading = true;
       _category = null;
@@ -317,7 +289,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   Future<void> _loadItems({Set<String>? locked}) async {
     final generation = ++_generation;
-    _beginReading();
     setState(() => _loading = true);
 
     // A window, not the category. Nine thousand films in one category is
@@ -356,7 +327,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
       };
 
       if (!mounted || generation != _generation) return;
-      _doneReading();
       setState(() {
         // Newest first, which is the order the ids were asked for and not
         // the order `IN (...)` answers in.
@@ -406,7 +376,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
     final shelves = built;
 
     if (!mounted || generation != _generation) return;
-    _doneReading();
     setState(() {
       _items = items;
       _shelves = shelves;
@@ -1394,16 +1363,14 @@ class _BrowseScreenState extends State<BrowseScreen> {
       lead.movie?.rating ?? lead.series?.rating ?? details?.title.voteAverage;
 
   Widget _grid() {
-    if (_loading) {
-      if (!_sayReading) return const SizedBox.shrink();
-      return const Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: EdgeInsets.all(OpenTvSpace.md),
-          child: Text('Reading…', style: OpenTvType.bodyMuted),
-        ),
-      );
-    }
+    // Nothing at all while it loads, rather than a word about it.
+    //
+    // This said "Reading…", which was true and worth saying when a section
+    // change took over a second. It does not any more, and a label that
+    // appears and vanishes is not information — it is a flicker that makes a
+    // screen answering in a moment look like one that is struggling. The area
+    // is empty until there is something to put in it.
+    if (_loading) return const SizedBox.shrink();
 
     if (_items.isEmpty) {
       return const Align(

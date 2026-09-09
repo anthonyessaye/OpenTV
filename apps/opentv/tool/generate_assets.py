@@ -247,9 +247,16 @@ def icon_layers(size):
     stamped the bar into the middle layer and erased it again, which left a
     hole exactly the bar's shape — invisible flat, and a dark notch sliding
     out from behind the bar the moment parallax offset the layers.
+
+    No bezel, for the reason the store icon has none and the iOS icon has
+    none: tvOS masks the icon to its own rounded rectangle, so a stroke drawn
+    inset from the edge is a *second* frame sitting inside the system's one.
+    On the home screen that reads as a square drawn around the icon with the
+    artwork shown inside it, which is what shipped to the first Apple TV this
+    was ever installed on.
     """
     w, h = size
-    back = ground(size, bezel=True)
+    back = ground(size)
 
     bar_w = max(6, round(w * 0.055))
     bar_h = round(h * 0.46)
