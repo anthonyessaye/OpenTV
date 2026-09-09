@@ -93,10 +93,37 @@ them.
 
 This is the part that will waste your day if nobody tells you.
 
-**There are four targets and three of them can be run here.** Apple TV has
-still never been run on hardware. The iOS simulator is by far the most
-reliable of the three — the Android phone emulator ANRs its own system UI
-under software rendering, and the television emulator is worse.
+**There are four targets and all four have now been run.** The iOS simulator
+is by far the most reliable — the Android phone emulator ANRs its own system
+UI under software rendering, and the television emulator is worse, dying
+outright under a 100MB catalogue.
+
+**Apple TV, on hardware, needs the device as the build destination.**
+`flutter-tvos build tvos` builds for "Any tvOS Device", and a generic
+destination cannot register anything, so automatic signing fails with
+*"Your team has no devices from which to generate a provisioning profile"* —
+which reads as an account problem and is a destination problem. Pair the
+device first (Settings → Remotes and Devices on the Apple TV, then Xcode's
+Devices window), then build against it by id:
+
+```bash
+xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release \
+  -destination 'id=<device udid>' \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
+xcrun devicectl device install app --device <device id> <path to Runner.app>
+xcrun devicectl device process launch --device <device id> --console com.anthonyessaye.opentv
+```
+
+`xcrun devicectl list devices` is what finds it — `flutter-tvos devices` does
+not list tvOS hardware at all, and `xctrace` reported it Offline while
+devicectl had it paired and available. `--console` gives the device's stdout,
+which is the only log there is.
+
+Note that Xcode signed with whichever team could actually issue for the
+device rather than the `DEVELOPMENT_TEAM` in the project, and that the
+hardware to hand is an Apple TV HD (`AppleTV5,3`, A8, 2015) — the slowest
+thing tvOS still supports, which makes it the right machine to judge
+performance on and the wrong one to judge it as typical.
 
 For iOS, `xcrun simctl` does everything except tap: install, launch,
 `screenshot`, and `get_app_container data` to reach the catalogue. There is no
@@ -865,7 +892,7 @@ which stays correct on a d-pad in any language, but the layout order reverses
 under RTL so the two stop meaning the same thing.
 `docs/adding-a-language.md` carries the detail.
 
-Not done: Apple TV has never been run on hardware; no external player,
+Not done: no external player,
 recording or multi-screen; the tunnel is Android-only — `VpnService.isSupported`
 is `Platform.isAndroid`, never anything TV-specific, so an Android phone runs
 it too; iOS would need a Network Extension and a paid developer account.
