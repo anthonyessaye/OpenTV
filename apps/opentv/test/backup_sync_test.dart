@@ -508,6 +508,31 @@ void main() {
     });
   });
 
+  group('the name this device syncs under', () {
+    test('is kept once this device has minted it', () async {
+      final service = serviceFor(tvDb);
+      final first = await service.deviceId();
+      expect(await service.deviceId(), first);
+      expect(await serviceFor(tvDb).deviceId(), first,
+          reason: 'a device that renames itself is a new device to every '
+              'other one, and its whole history has to be merged again');
+    });
+
+    test('is replaced when it came from somebody else', () async {
+      // What a handover left behind before it was fixed: an id in the
+      // database with nothing saying this device generated it. Two devices
+      // holding one id write chunks to the same paths and skip each other's
+      // as their own, so it presents as a device that will not sync — and
+      // only with the device it was set up from.
+      await tvDb.setPreference('backup.device-id', 'the-senders-id');
+
+      expect(await serviceFor(tvDb).deviceId(), isNot('the-senders-id'));
+      // And having minted one, it settles.
+      final own = await serviceFor(tvDb).deviceId();
+      expect(await serviceFor(tvDb).deviceId(), own);
+    });
+  });
+
   test('a pass that fails says so somewhere other than one settings panel',
       () async {
     // A sync runs at moments nobody is watching, and its failure appeared on

@@ -40,6 +40,9 @@ class BackupService {
   static const _bucketKey = 'backup.bucket';
   static const _deviceKey = 'backup.device-id';
 
+  /// Set when *this* device generated the id beside it.
+  static const _deviceMintedKey = 'backup.device-id-mine';
+
   /// What this device calls itself to the others.
   ///
   /// Generated once and kept, rather than derived from anything about the
@@ -48,9 +51,28 @@ class BackupService {
   /// a new one whose whole history has to be merged again.
   Future<String> deviceId() async {
     final held = await db.preference(_deviceKey);
-    if (held != null && held.isNotEmpty) return held;
+    final minted = await db.preference(_deviceMintedKey);
+
+    // An id that arrived in somebody else's database is not this device's.
+    //
+    // A handover copies the sender's catalogue, and until it was fixed that
+    // carried `backup.device-id` with it — leaving two devices writing chunks
+    // beneath one id, unable to read each other, each taking the other's
+    // writes for its own. The receiving end is repaired now; every device
+    // handed a setup before that is still holding the wrong name, and cannot
+    // tell from the id alone.
+    //
+    // So the marker says who minted it. Absent, on a device that has an id,
+    // means it predates this and is re-minted once. That re-mints some ids
+    // that were never wrong, which costs one unread directory in the folder
+    // and a single re-read of history the merge is idempotent about — much
+    // cheaper than a device that silently never syncs with the one it was set
+    // up from.
+    if (held != null && held.isNotEmpty && minted == '1') return held;
+
     final made = newDeviceId();
     await db.setPreference(_deviceKey, made);
+    await db.setPreference(_deviceMintedKey, '1');
     return made;
   }
 

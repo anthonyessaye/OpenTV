@@ -269,6 +269,7 @@ class HandoverService {
     try {
       for (final key in const [
         'backup.device-id',
+        'backup.device-id-mine',
         'backup.watermarks',
         'backup.announced',
       ]) {

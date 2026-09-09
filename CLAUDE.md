@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 715 core, 141 ui, 241 app.
+Tests: 715 core, 141 ui, 243 app.
 
 ## Two interfaces, one app
 
@@ -562,6 +562,14 @@ skipped; `backup.announced` makes it introduce itself in the sender's name.
 right key, and re-deriving is 120,000 rounds of PBKDF2 on a television.
 Cleared on the staged file before it is put into place, so the wrong identity
 is never the live one.
+
+**Every device handed a setup before that fix is still holding the wrong
+name, and cannot tell from the id alone.** So  records
+who minted it: an id with no marker beside it predates this and is re-minted
+once, on the next launch, with no action from anybody. That re-mints some ids
+that were never wrong — one unread directory in the folder and one re-read of
+history the merge is idempotent about, against a device that silently never
+syncs with the one it was set up from.
 
 Found by pulling the catalogue off an Apple TV with
 `devicectl device copy from --domain-type appDataContainer`, which is the
