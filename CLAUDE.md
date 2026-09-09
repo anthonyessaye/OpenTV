@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 721 core, 141 ui, 254 app.
+Tests: 721 core, 141 ui, 255 app.
 
 ## Two interfaces, one app
 
@@ -976,6 +976,14 @@ restore would reach the folder as a fresh evening's watching stamped now, and
 beat the true state on every other device — worse than losing it. The original
 timestamps are preserved for the same reason a shelf ordered by "most recent"
 is only as good as they are.
+
+**Neither half may throw.** A recovery record saves somebody retyping a portal
+address; it is a convenience, and a convenience that can stop the app opening
+is worse than not having it. `restore` is awaited on the launch path, inside
+the try that turns anything thrown into a failure screen instead of a
+television, and `remember` is not awaited at all, where anything thrown is an
+unhandled async error nobody sees. Both are guarded, the same rule a sync pass
+follows.
 
 **It replaces rather than merges, and that is how a provider gets removed.** A
 record that only ever grew would put back what somebody had just deleted, on

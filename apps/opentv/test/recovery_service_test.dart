@@ -208,4 +208,22 @@ void main() {
     secrets[RecoveryService.recoveryReference] = 'not json at all';
     expect(await serviceFor(db).restore(), isFalse);
   });
+
+  test('and neither does a keystore that will not answer', () async {
+    // `restore` is awaited on the launch path, inside the try that turns
+    // anything thrown into a failure screen instead of a television. A
+    // convenience that saves somebody retyping a portal address must not be
+    // able to do that — the same rule a sync pass follows.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('opentv/host'), (
+      call,
+    ) async {
+      throw PlatformException(code: 'keychain', message: 'OSStatus -34018');
+    });
+
+    expect(await serviceFor(db).restore(), isFalse);
+    // And the other direction, which is not awaited at all — anything thrown
+    // there is an unhandled async error nobody ever sees.
+    await expectLater(serviceFor(db).remember(), completes);
+  });
 }

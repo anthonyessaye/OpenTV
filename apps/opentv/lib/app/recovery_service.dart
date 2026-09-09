@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart';
 import 'package:opentv_core/opentv_core.dart';
 
 import 'host.dart';
@@ -36,7 +37,24 @@ class RecoveryService {
   /// Replacing rather than merging is the whole of how a viewer removes a
   /// provider: a record that only ever grew would put back what they had just
   /// deleted, on every launch, for ever.
+  /// Neither of these may throw.
+  ///
+  /// A recovery record is a convenience — it saves somebody retyping a portal
+  /// address after the system deleted their catalogue — and a convenience
+  /// that can stop the app opening is worse than not having it. `restore` is
+  /// awaited on the launch path, where anything thrown becomes a failure
+  /// screen instead of a television; `remember` is not awaited at all, where
+  /// anything thrown is an unhandled async error nobody sees. The same rule
+  /// the sync pass follows, for the same reason.
   Future<void> remember() async {
+    try {
+      await _remember();
+    } on Object catch (error) {
+      debugPrint('recovery: could not record this setup — $error');
+    }
+  }
+
+  Future<void> _remember() async {
     final sources = await db.allSources();
     final endpoint = await db.preference('backup.endpoint');
     final bucket = await db.preference('backup.bucket');
@@ -120,6 +138,15 @@ class RecoveryService {
   /// The catalogue itself is not restored here. It is rebuilt by an ordinary
   /// sync, which the app already runs for a source that has never synced.
   Future<bool> restore() async {
+    try {
+      return await _restore();
+    } on Object catch (error) {
+      debugPrint('recovery: could not put a setup back — $error');
+      return false;
+    }
+  }
+
+  Future<bool> _restore() async {
     final snapshot = RecoverySnapshot.decode(
       await host.readSecret(recoveryReference),
     );
