@@ -35,6 +35,7 @@ part 'database.g.dart';
     SyncOutbox,
     ProviderAliases,
     UnlinkedProviders,
+    CategoryCounts,
   ],
 )
 class OpenTvDatabase extends _$OpenTvDatabase {
@@ -47,7 +48,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// upgrade that rebuilds a search index over a real catalogue is long
   /// enough that the viewer deserves to be told which of the two is
   /// happening.
-  static const latestSchema = 9;
+  static const latestSchema = 10;
 
   @override
   int get schemaVersion => latestSchema;
@@ -179,6 +180,12 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         await m.createTable(providerAliases);
         await m.createTable(unlinkedProviders);
       }
+
+      // 10 remembers how many items each category holds. Counting them means
+      // reading every row of the table, the rail asks on every section
+      // change, and the answer only moves when the catalogue does. Created
+      // empty: the first read after this fills it.
+      if (from < 10) await m.createTable(categoryCounts);
     },
     onCreate: (m) async {
       await m.createAll();
@@ -235,14 +242,23 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// Sync calls this repeatedly with bounded batches rather than accumulating
   /// a whole catalogue and writing once, so peak memory does not scale with
   /// the size of the provider.
-  Future<void> upsertChannels(List<ChannelsCompanion> rows) =>
-      batch((b) => b.insertAllOnConflictUpdate(channels, rows));
+  ///
+  /// Each of these clears the category counts. They are remembered rather
+  /// than recounted on every browse, and a sync is the thing that moves them.
+  Future<void> upsertChannels(List<ChannelsCompanion> rows) async {
+    await batch((b) => b.insertAllOnConflictUpdate(channels, rows));
+    await invalidateCategoryCounts();
+  }
 
-  Future<void> upsertMovies(List<MoviesCompanion> rows) =>
-      batch((b) => b.insertAllOnConflictUpdate(movies, rows));
+  Future<void> upsertMovies(List<MoviesCompanion> rows) async {
+    await batch((b) => b.insertAllOnConflictUpdate(movies, rows));
+    await invalidateCategoryCounts();
+  }
 
-  Future<void> upsertSeries(List<SeriesEntriesCompanion> rows) =>
-      batch((b) => b.insertAllOnConflictUpdate(seriesEntries, rows));
+  Future<void> upsertSeries(List<SeriesEntriesCompanion> rows) async {
+    await batch((b) => b.insertAllOnConflictUpdate(seriesEntries, rows));
+    await invalidateCategoryCounts();
+  }
 
   Future<void> upsertEpisodes(List<EpisodesCompanion> rows) =>
       batch((b) => b.insertAllOnConflictUpdate(episodes, rows));
@@ -417,6 +433,60 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// drawn, and the count is what tells a viewer which categories are worth
   /// entering at all.
   Future<Map<String, int>> countsByCategory(
+    int sourceId,
+    ItemKind kind,
+  ) async {
+    // Remembered rather than recounted. Counting reads every row of the table
+    // and the rail asks on every section change: measured on an Android TV
+    // emulator against 120,000 films, 725ms of a 1318ms switch. The answer
+    // only moves when the catalogue does, and the writers that move it clear
+    // this on their way past.
+    final held = await (select(categoryCounts)
+          ..where((c) =>
+              c.sourceId.equals(sourceId) & c.kind.equalsValue(kind)))
+        .get();
+    if (held.isNotEmpty) {
+      return {
+        for (final row in held)
+          if (row.items > 0) row.categoryRemoteId: row.items,
+      };
+    }
+    final counted = await _countByCategory(sourceId, kind);
+
+    // Every category, including the empty ones, so that an empty cache means
+    // "not counted" and not "counted, and there was nothing to find".
+    final all = await (select(categories)
+          ..where((c) =>
+              c.sourceId.equals(sourceId) & c.kind.equalsValue(kind)))
+        .get();
+    if (all.isNotEmpty) {
+      await batch((b) => b.insertAllOnConflictUpdate(categoryCounts, [
+            for (final category in all)
+              CategoryCountsCompanion.insert(
+                sourceId: sourceId,
+                kind: kind,
+                categoryRemoteId: category.remoteId,
+                items: Value(counted[category.remoteId] ?? 0),
+              ),
+          ]));
+    }
+    return counted;
+  }
+
+  /// Forgets the counts for a source, so the next read counts again.
+  ///
+  /// Called by everything that can change one. A count that outlives the rows
+  /// it describes is a rail advertising categories that are empty and hiding
+  /// ones that are not.
+  Future<void> invalidateCategoryCounts([int? sourceId]) {
+    final statement = delete(categoryCounts);
+    if (sourceId != null) {
+      statement.where((c) => c.sourceId.equals(sourceId));
+    }
+    return statement.go();
+  }
+
+  Future<Map<String, int>> _countByCategory(
     int sourceId,
     ItemKind kind,
   ) async {
@@ -1388,19 +1458,26 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     int sourceId,
     String remoteId,
     bool hidden,
-  ) => (update(channels)..where(
-    (c) => c.sourceId.equals(sourceId) & c.remoteId.equals(remoteId),
-  )).write(ChannelsCompanion(hidden: Value(hidden)));
+  ) async {
+    await (update(channels)..where(
+      (c) => c.sourceId.equals(sourceId) & c.remoteId.equals(remoteId),
+    )).write(ChannelsCompanion(hidden: Value(hidden)));
+    await invalidateCategoryCounts(sourceId);
+  }
 
-  Future<void> setMovieHidden(int sourceId, String remoteId, bool hidden) =>
-      (update(movies)..where(
-        (m) => m.sourceId.equals(sourceId) & m.remoteId.equals(remoteId),
-      )).write(MoviesCompanion(hidden: Value(hidden)));
+  Future<void> setMovieHidden(int sourceId, String remoteId, bool hidden) async {
+    await (update(movies)..where(
+      (m) => m.sourceId.equals(sourceId) & m.remoteId.equals(remoteId),
+    )).write(MoviesCompanion(hidden: Value(hidden)));
+    await invalidateCategoryCounts(sourceId);
+  }
 
-  Future<void> setSeriesHidden(int sourceId, String remoteId, bool hidden) =>
-      (update(seriesEntries)..where(
-        (e) => e.sourceId.equals(sourceId) & e.remoteId.equals(remoteId),
-      )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
+  Future<void> setSeriesHidden(int sourceId, String remoteId, bool hidden) async {
+    await (update(seriesEntries)..where(
+      (e) => e.sourceId.equals(sourceId) & e.remoteId.equals(remoteId),
+    )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
+    await invalidateCategoryCounts(sourceId);
+  }
 
   /// Hides or restores a whole category's worth of rows.
   Future<int> setCategoryHidden(
@@ -1418,7 +1495,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     )).write(CategoriesCompanion(hidden: Value(hidden)));
 
     // And its contents, so "All" does not quietly list them anyway.
-    return switch (kind) {
+    final changed = await switch (kind) {
       ItemKind.live => (update(channels)..where(
         (c) =>
             c.sourceId.equals(sourceId) &
@@ -1435,6 +1512,8 @@ class OpenTvDatabase extends _$OpenTvDatabase {
             e.categoryRemoteId.equals(categoryRemoteId),
       )).write(SeriesEntriesCompanion(hidden: Value(hidden))),
     };
+    await invalidateCategoryCounts(sourceId);
+    return changed;
   }
 
   /// Hides or shows every category of one kind at once.
@@ -1474,6 +1553,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
               e.sourceId.equals(sourceId) & e.categoryRemoteId.isNotNull(),
         )).write(SeriesEntriesCompanion(hidden: Value(hidden)));
     }
+    await invalidateCategoryCounts(sourceId);
   }
 
   /// Every category, including the hidden ones, for a screen that manages

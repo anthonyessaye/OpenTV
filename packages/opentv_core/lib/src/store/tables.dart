@@ -563,3 +563,29 @@ class UnlinkedProviders extends Table {
   @override
   Set<Column<Object>> get primaryKey => {providerKey};
 }
+
+
+/// How many items each category holds, as last counted.
+///
+/// `COUNT(*) ... GROUP BY category_remote_id` reads every row of the table it
+/// counts, and the browse rail asks for it on every section change. Measured
+/// on an Android TV emulator against 120,000 films: **725ms**, which is most
+/// of what a viewer sees as "Reading…" — and the answer only changes when the
+/// catalogue does.
+///
+/// A row is written for every category, including the empty ones, so an empty
+/// cache means "not counted yet" rather than "counted, and there was nothing".
+/// Without that a source whose categories are all empty would be recounted on
+/// every switch, which is the case this exists to avoid.
+class CategoryCounts extends Table {
+  IntColumn get sourceId =>
+      integer().references(Sources, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get kind => textEnum<ItemKind>()();
+  TextColumn get categoryRemoteId => text()();
+
+  IntColumn get items => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {sourceId, kind, categoryRemoteId};
+}

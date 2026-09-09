@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 704 core, 141 ui, 235 app.
+Tests: 712 core, 141 ui, 235 app.
 
 ## Two interfaces, one app
 
@@ -157,6 +157,39 @@ per key press is slower than that.
 adb shell 'input keyevent 22; sleep 1; input keyevent 23; sleep 6; screencap -p /sdcard/a.png'
 adb pull /sdcard/a.png
 ```
+
+### Measuring on the emulator
+
+The laptop is the wrong machine for any of this, and `flutter test` is the
+wrong harness. What worked:
+
+```bash
+dart run tool/seed_big.dart big.sqlite     # in opentv_core
+sqlite3 big.sqlite "PRAGMA user_version = 10;"
+```
+
+**`seed_big.dart` writes no categories at all** — it was built for search, and
+120,000 films all with a null `category_remote_id` make every browse
+measurement meaningless. Give them one before measuring anything about
+browsing, and insert the `categories` rows to match. One category holding a
+third and several hundred small ones is the shape to aim for.
+
+The seeder also writes today's table definitions and stamps schema 4, so
+replaying the migrations over it fails on columns that are already there.
+Stamp `user_version` to the current schema unless the migration itself is
+what is being measured.
+
+Then push it in, and read timings out of `logcat` rather than guessing:
+
+```bash
+adb shell "run-as com.anthonyessaye.opentv sh -c 'base64 -d > files/catalogue.sqlite'" < seed.b64
+adb logcat -c && adb shell 'input keyevent 19; sleep 1; input keyevent 22; sleep 1; input keyevent 23; sleep 8'
+adb logcat -d | grep PROBE
+```
+
+`print` reaches logcat from a profile build, which is enough to time a screen
+without any tooling. Take several measurements: the emulator's variance is
+wide enough that one reading says nothing.
 
 ### Seeding a catalogue
 
@@ -317,6 +350,16 @@ catalogue across the isolate: 86ms sequential, **22ms issued together** — and
 that gap is the whole of what a viewer sees, because the isolate crossing is
 the cost, not the query. `lockedCategories` was also fetched twice per
 switch, in each half of the same load.
+
+**And the batching was not the whole of it — measure on the device.** With
+the reads issued together a tab switch on an Android TV emulator, against
+120,000 films, still took **1318ms**, and probes through `adb logcat` said
+where it went: `countsByCategory` **725ms**, the page 395ms, the shelves
+521ms. Counting per category means reading every row of the table, and the
+rail asks on every section change. **Schema 10 remembers the answer**, and
+every writer that can move it clears it. Same emulator afterwards: 33, 60,
+86, 114, 153, 206, 226, 309ms across eight switches — a median around 130ms,
+which is under the threshold at which anything is said at all.
 
 **None of that is visible in a laptop benchmark, and the seed hid it twice.**
 `seed_big.dart` writes 120,000 films with no categories at all — built for

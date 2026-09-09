@@ -8170,6 +8170,332 @@ class UnlinkedProvidersCompanion extends UpdateCompanion<UnlinkedProvider> {
   }
 }
 
+class $CategoryCountsTable extends CategoryCounts
+    with TableInfo<$CategoryCountsTable, CategoryCount> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CategoryCountsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<int> sourceId = GeneratedColumn<int>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<ItemKind, String> kind =
+      GeneratedColumn<String>(
+        'kind',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<ItemKind>($CategoryCountsTable.$converterkind);
+  static const VerificationMeta _categoryRemoteIdMeta = const VerificationMeta(
+    'categoryRemoteId',
+  );
+  @override
+  late final GeneratedColumn<String> categoryRemoteId = GeneratedColumn<String>(
+    'category_remote_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _itemsMeta = const VerificationMeta('items');
+  @override
+  late final GeneratedColumn<int> items = GeneratedColumn<int>(
+    'items',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    sourceId,
+    kind,
+    categoryRemoteId,
+    items,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'category_counts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CategoryCount> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('category_remote_id')) {
+      context.handle(
+        _categoryRemoteIdMeta,
+        categoryRemoteId.isAcceptableOrUnknown(
+          data['category_remote_id']!,
+          _categoryRemoteIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryRemoteIdMeta);
+    }
+    if (data.containsKey('items')) {
+      context.handle(
+        _itemsMeta,
+        items.isAcceptableOrUnknown(data['items']!, _itemsMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sourceId, kind, categoryRemoteId};
+  @override
+  CategoryCount map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CategoryCount(
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_id'],
+      )!,
+      kind: $CategoryCountsTable.$converterkind.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}kind'],
+        )!,
+      ),
+      categoryRemoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category_remote_id'],
+      )!,
+      items: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}items'],
+      )!,
+    );
+  }
+
+  @override
+  $CategoryCountsTable createAlias(String alias) {
+    return $CategoryCountsTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<ItemKind, String, String> $converterkind =
+      const EnumNameConverter<ItemKind>(ItemKind.values);
+}
+
+class CategoryCount extends DataClass implements Insertable<CategoryCount> {
+  final int sourceId;
+  final ItemKind kind;
+  final String categoryRemoteId;
+  final int items;
+  const CategoryCount({
+    required this.sourceId,
+    required this.kind,
+    required this.categoryRemoteId,
+    required this.items,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['source_id'] = Variable<int>(sourceId);
+    {
+      map['kind'] = Variable<String>(
+        $CategoryCountsTable.$converterkind.toSql(kind),
+      );
+    }
+    map['category_remote_id'] = Variable<String>(categoryRemoteId);
+    map['items'] = Variable<int>(items);
+    return map;
+  }
+
+  CategoryCountsCompanion toCompanion(bool nullToAbsent) {
+    return CategoryCountsCompanion(
+      sourceId: Value(sourceId),
+      kind: Value(kind),
+      categoryRemoteId: Value(categoryRemoteId),
+      items: Value(items),
+    );
+  }
+
+  factory CategoryCount.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CategoryCount(
+      sourceId: serializer.fromJson<int>(json['sourceId']),
+      kind: $CategoryCountsTable.$converterkind.fromJson(
+        serializer.fromJson<String>(json['kind']),
+      ),
+      categoryRemoteId: serializer.fromJson<String>(json['categoryRemoteId']),
+      items: serializer.fromJson<int>(json['items']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sourceId': serializer.toJson<int>(sourceId),
+      'kind': serializer.toJson<String>(
+        $CategoryCountsTable.$converterkind.toJson(kind),
+      ),
+      'categoryRemoteId': serializer.toJson<String>(categoryRemoteId),
+      'items': serializer.toJson<int>(items),
+    };
+  }
+
+  CategoryCount copyWith({
+    int? sourceId,
+    ItemKind? kind,
+    String? categoryRemoteId,
+    int? items,
+  }) => CategoryCount(
+    sourceId: sourceId ?? this.sourceId,
+    kind: kind ?? this.kind,
+    categoryRemoteId: categoryRemoteId ?? this.categoryRemoteId,
+    items: items ?? this.items,
+  );
+  CategoryCount copyWithCompanion(CategoryCountsCompanion data) {
+    return CategoryCount(
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      categoryRemoteId: data.categoryRemoteId.present
+          ? data.categoryRemoteId.value
+          : this.categoryRemoteId,
+      items: data.items.present ? data.items.value : this.items,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryCount(')
+          ..write('sourceId: $sourceId, ')
+          ..write('kind: $kind, ')
+          ..write('categoryRemoteId: $categoryRemoteId, ')
+          ..write('items: $items')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(sourceId, kind, categoryRemoteId, items);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CategoryCount &&
+          other.sourceId == this.sourceId &&
+          other.kind == this.kind &&
+          other.categoryRemoteId == this.categoryRemoteId &&
+          other.items == this.items);
+}
+
+class CategoryCountsCompanion extends UpdateCompanion<CategoryCount> {
+  final Value<int> sourceId;
+  final Value<ItemKind> kind;
+  final Value<String> categoryRemoteId;
+  final Value<int> items;
+  final Value<int> rowid;
+  const CategoryCountsCompanion({
+    this.sourceId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.categoryRemoteId = const Value.absent(),
+    this.items = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CategoryCountsCompanion.insert({
+    required int sourceId,
+    required ItemKind kind,
+    required String categoryRemoteId,
+    this.items = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : sourceId = Value(sourceId),
+       kind = Value(kind),
+       categoryRemoteId = Value(categoryRemoteId);
+  static Insertable<CategoryCount> custom({
+    Expression<int>? sourceId,
+    Expression<String>? kind,
+    Expression<String>? categoryRemoteId,
+    Expression<int>? items,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sourceId != null) 'source_id': sourceId,
+      if (kind != null) 'kind': kind,
+      if (categoryRemoteId != null) 'category_remote_id': categoryRemoteId,
+      if (items != null) 'items': items,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CategoryCountsCompanion copyWith({
+    Value<int>? sourceId,
+    Value<ItemKind>? kind,
+    Value<String>? categoryRemoteId,
+    Value<int>? items,
+    Value<int>? rowid,
+  }) {
+    return CategoryCountsCompanion(
+      sourceId: sourceId ?? this.sourceId,
+      kind: kind ?? this.kind,
+      categoryRemoteId: categoryRemoteId ?? this.categoryRemoteId,
+      items: items ?? this.items,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sourceId.present) {
+      map['source_id'] = Variable<int>(sourceId.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(
+        $CategoryCountsTable.$converterkind.toSql(kind.value),
+      );
+    }
+    if (categoryRemoteId.present) {
+      map['category_remote_id'] = Variable<String>(categoryRemoteId.value);
+    }
+    if (items.present) {
+      map['items'] = Variable<int>(items.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryCountsCompanion(')
+          ..write('sourceId: $sourceId, ')
+          ..write('kind: $kind, ')
+          ..write('categoryRemoteId: $categoryRemoteId, ')
+          ..write('items: $items, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$OpenTvDatabase extends GeneratedDatabase {
   _$OpenTvDatabase(QueryExecutor e) : super(e);
   $OpenTvDatabaseManager get managers => $OpenTvDatabaseManager(this);
@@ -8191,6 +8517,7 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
   );
   late final $UnlinkedProvidersTable unlinkedProviders =
       $UnlinkedProvidersTable(this);
+  late final $CategoryCountsTable categoryCounts = $CategoryCountsTable(this);
   late final Index categorySourceKind = Index(
     'category_source_kind',
     'CREATE INDEX category_source_kind ON categories (source_id, kind)',
@@ -8311,6 +8638,7 @@ abstract class _$OpenTvDatabase extends GeneratedDatabase {
     syncOutbox,
     providerAliases,
     unlinkedProviders,
+    categoryCounts,
     categorySourceKind,
     channelSourceCategory,
     channelSearch,
@@ -12338,6 +12666,196 @@ typedef $$UnlinkedProvidersTableProcessedTableManager =
       UnlinkedProvider,
       PrefetchHooks Function()
     >;
+typedef $$CategoryCountsTableCreateCompanionBuilder =
+    CategoryCountsCompanion Function({
+      required int sourceId,
+      required ItemKind kind,
+      required String categoryRemoteId,
+      Value<int> items,
+      Value<int> rowid,
+    });
+typedef $$CategoryCountsTableUpdateCompanionBuilder =
+    CategoryCountsCompanion Function({
+      Value<int> sourceId,
+      Value<ItemKind> kind,
+      Value<String> categoryRemoteId,
+      Value<int> items,
+      Value<int> rowid,
+    });
+
+class $$CategoryCountsTableFilterComposer
+    extends Composer<_$OpenTvDatabase, $CategoryCountsTable> {
+  $$CategoryCountsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<ItemKind, ItemKind, String> get kind =>
+      $composableBuilder(
+        column: $table.kind,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<String> get categoryRemoteId => $composableBuilder(
+    column: $table.categoryRemoteId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get items => $composableBuilder(
+    column: $table.items,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CategoryCountsTableOrderingComposer
+    extends Composer<_$OpenTvDatabase, $CategoryCountsTable> {
+  $$CategoryCountsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get categoryRemoteId => $composableBuilder(
+    column: $table.categoryRemoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get items => $composableBuilder(
+    column: $table.items,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CategoryCountsTableAnnotationComposer
+    extends Composer<_$OpenTvDatabase, $CategoryCountsTable> {
+  $$CategoryCountsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<ItemKind, String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get categoryRemoteId => $composableBuilder(
+    column: $table.categoryRemoteId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get items =>
+      $composableBuilder(column: $table.items, builder: (column) => column);
+}
+
+class $$CategoryCountsTableTableManager
+    extends
+        RootTableManager<
+          _$OpenTvDatabase,
+          $CategoryCountsTable,
+          CategoryCount,
+          $$CategoryCountsTableFilterComposer,
+          $$CategoryCountsTableOrderingComposer,
+          $$CategoryCountsTableAnnotationComposer,
+          $$CategoryCountsTableCreateCompanionBuilder,
+          $$CategoryCountsTableUpdateCompanionBuilder,
+          (
+            CategoryCount,
+            BaseReferences<
+              _$OpenTvDatabase,
+              $CategoryCountsTable,
+              CategoryCount
+            >,
+          ),
+          CategoryCount,
+          PrefetchHooks Function()
+        > {
+  $$CategoryCountsTableTableManager(
+    _$OpenTvDatabase db,
+    $CategoryCountsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CategoryCountsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CategoryCountsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CategoryCountsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> sourceId = const Value.absent(),
+                Value<ItemKind> kind = const Value.absent(),
+                Value<String> categoryRemoteId = const Value.absent(),
+                Value<int> items = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CategoryCountsCompanion(
+                sourceId: sourceId,
+                kind: kind,
+                categoryRemoteId: categoryRemoteId,
+                items: items,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required int sourceId,
+                required ItemKind kind,
+                required String categoryRemoteId,
+                Value<int> items = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CategoryCountsCompanion.insert(
+                sourceId: sourceId,
+                kind: kind,
+                categoryRemoteId: categoryRemoteId,
+                items: items,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CategoryCountsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$OpenTvDatabase,
+      $CategoryCountsTable,
+      CategoryCount,
+      $$CategoryCountsTableFilterComposer,
+      $$CategoryCountsTableOrderingComposer,
+      $$CategoryCountsTableAnnotationComposer,
+      $$CategoryCountsTableCreateCompanionBuilder,
+      $$CategoryCountsTableUpdateCompanionBuilder,
+      (
+        CategoryCount,
+        BaseReferences<_$OpenTvDatabase, $CategoryCountsTable, CategoryCount>,
+      ),
+      CategoryCount,
+      PrefetchHooks Function()
+    >;
 
 class $OpenTvDatabaseManager {
   final _$OpenTvDatabase _db;
@@ -12372,4 +12890,6 @@ class $OpenTvDatabaseManager {
       $$ProviderAliasesTableTableManager(_db, _db.providerAliases);
   $$UnlinkedProvidersTableTableManager get unlinkedProviders =>
       $$UnlinkedProvidersTableTableManager(_db, _db.unlinkedProviders);
+  $$CategoryCountsTableTableManager get categoryCounts =>
+      $$CategoryCountsTableTableManager(_db, _db.categoryCounts);
 }
