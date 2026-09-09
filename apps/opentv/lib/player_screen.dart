@@ -793,16 +793,41 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     if (!_stalled) return null;
 
-    final codec = (raw['videoCodec'] as String?)?.toLowerCase();
-    final hevc = codec != null && (codec.contains('hev') || codec == 'h265');
-    if (hevc && raw['hevcHardware'] == false) {
-      return 'No picture. This channel is H.265, and this device has no '
-          'hardware decoder for it — an Apple TV 4K does. Films and series '
-          'in other formats are unaffected.';
-    }
-    return 'No picture from this channel. The stream opened but sent nothing '
-        'this device could decode.';
+    // What the stream says it is, rather than a guess at why it failed.
+    //
+    // An earlier version named H.265 and blamed the missing decoder, on the
+    // strength of `hevc … get_buffer() failed` in a device log. The channels
+    // that actually fail report H.264 — and `get_buffer` is a *frame
+    // allocation* failure, which a 4K picture provokes on a two-gigabyte box
+    // whatever the codec is. So this says what is known and leaves the
+    // conclusion to somebody who can see the whole picture, which is the same
+    // reason no HDR badge is guessed at.
+    final facts = <String>[
+      if ((raw['videoCodec'] as String?)?.trim() case final String c
+          when c.isNotEmpty)
+        _codecName(c),
+      if (raw['width'] case final int w when w > 0)
+        if (raw['height'] case final int h when h > 0) '${w}x$h',
+    ];
+
+    final detail = facts.isEmpty ? '' : ' It reports ${facts.join(', ')}.';
+    final hevc = raw['hevcHardware'] == false &&
+        (raw['videoCodec'] as String?)?.toLowerCase().contains('hev') == true;
+
+    return 'No picture from this channel. The stream opened and no frame '
+        'arrived.$detail${hevc ? ' This device has no hardware decoder for '
+            'H.265.' : ''}';
   }
+
+  /// A fourcc as a viewer would recognise it.
+  static String _codecName(String raw) => switch (raw.toLowerCase()) {
+        'h264' || 'avc1' || 'x264' => 'H.264',
+        'hevc' || 'hev1' || 'hvc1' || 'h265' => 'H.265',
+        'mp2v' || 'mpgv' => 'MPEG-2',
+        'vp09' || 'vp9' => 'VP9',
+        'av01' => 'AV1',
+        _ => raw,
+      };
 
   @override
   Widget build(BuildContext context) {

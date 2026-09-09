@@ -150,12 +150,23 @@ void main() {
       );
     });
 
-    test('and names H.265 where that is the reason', () {
+    test('and reports what the stream says it is', () {
+      // Not a guess at the cause. The first version of this named H.265 and
+      // blamed the missing decoder, on the strength of `hevc …
+      // get_buffer() failed` in a device log — and the channels that actually
+      // fail report H.264. `get_buffer` is a frame allocation failure, which
+      // a 4K picture provokes on a two-gigabyte box whatever the codec is.
+      expect(source, contains("raw['videoCodec']"));
       expect(
         source,
-        contains("raw['hevcHardware'] == false"),
-        reason: 'the message cannot tell a codec this box will never decode '
-            'from a stream that is merely broken',
+        contains("'\${w}x\$h'"),
+        reason: 'the resolution is what separates the channels that play from '
+            'the ones that do not, and it is not on screen',
+      );
+      expect(
+        source,
+        isNot(contains('This channel is H.265, and this device has no')),
+        reason: 'back to asserting a cause the evidence did not support',
       );
     });
 

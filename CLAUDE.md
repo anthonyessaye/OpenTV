@@ -467,14 +467,25 @@ comes back.
 
 **A stream can open, report no error, and never show anything.** VLC does not
 call that a failure: it sits in playing or buffering with no frames, for ever,
-and the chrome spins. An **Apple TV HD meets it on every H.265 channel** — the
-A8 has no hardware decoder for one, so software decoding runs and cannot
-allocate the buffers it needs (`get_buffer() failed` in the device log, and
-nothing at all on screen). Films and series were fine because they are not
-H.265. The player screen now notices no picture after twelve seconds and says
-so, and names H.265 when `hevcHardware` says this box could never have played
-it. `VTIsHardwareDecodeSupported` answers that on Apple; `MediaCodecList` on
-Android, where it is always true and the key exists so the two engines agree.
+and the chrome spins. The player screen notices no picture after twelve
+seconds and says so, with the codec and resolution the stream reports.
+
+**It reports those rather than naming a cause, and that is a correction.** The
+first version of this said "this channel is H.265 and this device has no
+decoder for it", on the strength of `hevc … get_buffer() failed` in the device
+log of an Apple TV HD. The channels that actually fail report **H.264** — and
+`get_buffer` is a *frame allocation* failure, which a 4K picture provokes on a
+two-gigabyte box whatever the codec is. A second capture showed the same
+decoder emitting `Could not find ref with POC`, which is missing reference
+frames and a different fault again. One log line, three plausible causes, and
+a message that picked one of them: state the facts on screen and let somebody
+who can see the channel draw the conclusion. `hevcHardware` is still reported
+by both engines — `VTIsHardwareDecodeSupported` on Apple, `MediaCodecList` on
+Android — and adds a sentence only when it is genuinely the answer.
+
+**A provider's own codec metadata is not evidence.** Xtream panels carry
+whatever was typed into them. `videoCodec` in the snapshot comes from the
+opened stream, which is the only version worth believing.
 
 **The television invented its own failure message and ignored the one the
 device sent.** `error` has been in the snapshot since the contract was
