@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
@@ -119,5 +120,38 @@ void main() {
       reason: 'a hidden region is still on the grid',
     );
     expect(find.text('Low Tide'), findsOneWidget);
+  });
+
+  group('the phone\'s live section', () {
+    final source = File('lib/mobile/mobile_home.dart').readAsStringSync();
+
+    test('has the two shelves films and series have', () {
+      // Every screen that exists on the television has to exist on the phone,
+      // and live was the one kind left out: the tab was the channel list and
+      // nothing else, so everything watched before the most recent channel
+      // was gone and a favourited channel had nowhere at all to appear.
+      final start = source.indexOf('0 => _LiveTab(');
+      expect(start, isNot(-1), reason: 'the live tab has been renamed');
+      final block = source.substring(start, start + 500);
+      expect(block, contains('shelves: _Shelves('));
+      expect(block, contains('load: _liveContinueItems'));
+      expect(block, contains('favourites: () => _favouriteItems(ItemKind.live)'));
+    });
+
+    test('and a favourited channel can be read back', () {
+      // `_favouriteItems` branched on movie, then fell through to series — so
+      // a live favourite was looked for among the shows and never found. The
+      // heart wrote a row nothing could read, which is the exact fault that
+      // method exists to have fixed.
+      final start = source.indexOf('Future<List<_ContinueItem>> _favouriteItems');
+      expect(start, isNot(-1));
+      final body = source.substring(start, source.indexOf('\n  }\n', start));
+      expect(
+        body,
+        contains('if (kind == ItemKind.live)'),
+        reason: 'live falls through to the series lookup again',
+      );
+      expect(body, contains('channelsByRemoteIds'));
+    });
   });
 }

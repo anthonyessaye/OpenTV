@@ -494,6 +494,27 @@ class _MobileHomeState extends State<MobileHome> {
       ];
     }
 
+    if (kind == ItemKind.live) {
+      // Live fell through to the series branch, so a favourited channel was
+      // looked for among the shows and never found. The heart on a channel
+      // wrote a row nothing could read back — the same fault this method was
+      // written to fix, left in the one kind it did not cover.
+      final rows = await widget.db.channelsByRemoteIds(widget.source.id, ids);
+      final byId = {for (final c in rows) c.remoteId: c};
+      return [
+        for (final id in ids)
+          if (byId[id] case final channel?
+              when !_locked.contains(channel.categoryRemoteId) &&
+                  !_regions.isHidden(ItemKind.live, channel.region))
+            (
+              title: channel.name,
+              imageUrl: channel.iconUrl,
+              progress: null,
+              onTap: () => _play(Playable.channel(channel)),
+            ),
+      ];
+    }
+
     final shows = await widget.db.seriesByRemoteIds(widget.source.id, ids);
     final byId = {for (final s in shows) s.remoteId: s};
     return [
@@ -506,6 +527,39 @@ class _MobileHomeState extends State<MobileHome> {
             imageUrl: show.coverUrl,
             progress: null,
             onTap: () => _openSeries(show),
+          ),
+    ];
+  }
+
+  /// Channels watched recently, newest first.
+  ///
+  /// The television's live section leads with these, for a reason that holds
+  /// harder on a phone: a wall of provider logos says nothing about what to
+  /// watch, and the handful you keep coming back to says quite a lot. The
+  /// phone had the single most recent one as a preview and nothing behind it.
+  Future<List<_ContinueItem>> _liveContinueItems() async {
+    final states = await widget.db.continueWatching(
+      sourceId: widget.source.id,
+      limit: 20,
+    );
+    final ids = [
+      for (final state in states)
+        if (state.itemKind == ItemKind.live) state.itemRemoteId,
+    ];
+    if (ids.isEmpty) return const [];
+
+    final rows = await widget.db.channelsByRemoteIds(widget.source.id, ids);
+    final byId = {for (final c in rows) c.remoteId: c};
+    return [
+      for (final id in ids)
+        if (byId[id] case final channel?
+            when !_locked.contains(channel.categoryRemoteId) &&
+                !_regions.isHidden(ItemKind.live, channel.region))
+          (
+            title: channel.name,
+            imageUrl: channel.iconUrl,
+            progress: null,
+            onTap: () => _play(Playable.channel(channel)),
           ),
     ];
   }
@@ -792,6 +846,10 @@ class _MobileHomeState extends State<MobileHome> {
       0 => _LiveTab(
           key: ValueKey('live:$_generation:'
               '${_regions.forKind(ItemKind.live).join(',')}:${_locked.length}'),
+          shelves: _Shelves(
+            load: _liveContinueItems,
+            favourites: () => _favouriteItems(ItemKind.live),
+          ),
           db: widget.db,
           source: widget.source,
           hiddenRegions: _regions.forKind(ItemKind.live),
@@ -992,7 +1050,15 @@ class _LiveTab extends StatefulWidget {
     required this.onPlay,
     required this.resolve,
     required this.optionsFor,
+    this.shelves,
   });
+
+  /// What you were watching and what you kept.
+  ///
+  /// Films and series have had these since the phone grew shelves; live was
+  /// left with the channel list alone, so a favourited channel had nowhere to
+  /// appear and everything watched before the most recent one was gone.
+  final Widget? shelves;
 
   final OpenTvDatabase db;
   final Source source;
@@ -1202,6 +1268,24 @@ class _LiveTabState extends State<_LiveTab> {
   }
 
   Widget _list(List<Channel> channels) {
+    final shelves = widget.shelves;
+    if (shelves == null) return _channelList(channels);
+
+    // Inside the scrollable, unlike the preview above: these are ordinary
+    // widgets and scroll the way the rows do. A viewer looking for a channel
+    // by name should be able to push them out of the way.
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(child: shelves),
+        SliverFillRemaining(
+          hasScrollBody: true,
+          child: _channelList(channels),
+        ),
+      ],
+    );
+  }
+
+  Widget _channelList(List<Channel> channels) {
     return ListView.builder(
       // One past the end while there is more, so the last row is a note
       // saying so rather than a list that simply stops.

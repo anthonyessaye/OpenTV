@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 715 core, 141 ui, 243 app.
+Tests: 715 core, 141 ui, 245 app.
 
 ## Two interfaces, one app
 
@@ -849,6 +849,15 @@ asked for again on every pass.
 **Announcements are not news.** They are excluded from the counts a pass
 reports, or a pass that moved nothing a viewer cares about would say it had —
 which is the exact thing those counts exist to prevent.
+
+**Live was the kind the phone's shelves left out.** Films and series each got
+a Continue and a Favourites strip; live got the channel list and a preview of
+the single most recent channel, so everything watched before that was gone and
+a favourited channel had nowhere to appear at all. `_favouriteItems` made it
+worse quietly — it branched on movie and then *fell through to series*, so a
+live favourite was looked for among the shows and never found. That is the
+exact fault the method was written to fix, left standing in the one kind it
+did not cover.
 
 **Every screen that exists on the television has to exist on the phone.**
 Device sync was built on one side only, and the phone ran a pass at launch
