@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 721 core, 141 ui, 253 app.
+Tests: 721 core, 141 ui, 254 app.
 
 ## Two interfaces, one app
 
@@ -849,6 +849,21 @@ asked for again on every pass.
 **Announcements are not news.** They are excluded from the counts a pass
 reports, or a pass that moved nothing a viewer cares about would say it had —
 which is the exact thing those counts exist to prevent.
+
+**A sliver that fills the viewport with a scrollable is a second scroll
+view.** The phone's live shelves went in above the channel list inside a
+`SliverFillRemaining(hasScrollBody: true)`, which looks like composition and
+is nesting: scrolling down past the shelves worked, and scrolling back up to
+reach them did not, because the inner list took the gesture and stopped at its
+own top. `_GridTab` had it right all along — one `CustomScrollView`, the
+shelves a `SliverToBoxAdapter` and the content a sliver.
+
+**It does not misbehave under `tester.drag`.** A widget test of the broken
+arrangement scrolls back perfectly, so it passes either way; the fault is in
+what a real finger does with two overlapping scrollables. That is why this one
+is guarded by reading the source for a single `CustomScrollView` rather than
+by laying it out — a test that cannot fail for the reason it names is worse
+than none, and the first two written here were exactly that.
 
 **Live was the kind the phone's shelves left out.** Films and series each got
 a Continue and a Favourites strip; live got the channel list and a preview of

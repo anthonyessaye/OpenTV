@@ -138,6 +138,34 @@ void main() {
       expect(block, contains('favourites: () => _favouriteItems(ItemKind.live)'));
     });
 
+    test('scrolls as one thing, not a list inside a list', () {
+      // The shelves went in above a `ListView` wrapped in a
+      // `SliverFillRemaining(hasScrollBody: true)` — a second scrollable
+      // filling the viewport. On a device, scrolling down past the shelves
+      // worked and scrolling back up to reach them did not: the inner list
+      // took the gesture and stopped at its own top.
+      //
+      // Read from the source rather than laid out, and deliberately so: the
+      // arrangement misbehaves under a finger and not under `tester.drag`, so
+      // a widget test of it passes either way. What can be checked is that
+      // there is one scrollable, which is the whole of the fix.
+      final start = source.indexOf('Widget _list(List<Channel> channels) {');
+      expect(start, isNot(-1), reason: 'the live list has been renamed');
+      final body = source.substring(start, source.indexOf('\n  }\n', start));
+
+      expect(
+        body,
+        isNot(contains('SliverFillRemaining')),
+        reason: 'the channel list is a scrollable inside a scrollable again',
+      );
+      expect(body, contains('SliverList.builder'));
+      expect(
+        RegExp(r'CustomScrollView').allMatches(body).length,
+        1,
+        reason: 'the shelves and the channels are in separate scroll views',
+      );
+    });
+
     test('and a favourited channel can be read back', () {
       // `_favouriteItems` branched on movie, then fell through to series — so
       // a live favourite was looked for among the shows and never found. The

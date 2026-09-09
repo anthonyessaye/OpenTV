@@ -1267,54 +1267,56 @@ class _LiveTabState extends State<_LiveTab> {
     );
   }
 
+  /// One scroll view, and that is the whole point of it.
+  ///
+  /// The shelves and the channel list are slivers of the same
+  /// [CustomScrollView] rather than a strip above a list. The first version
+  /// put the list inside a `SliverFillRemaining(hasScrollBody: true)`, which
+  /// is a second scrollable filling the viewport: the inner one took every
+  /// gesture once it had them, so scrolling down past the shelves worked and
+  /// scrolling back up to reach them did not. Two containers, one of them
+  /// unreachable.
+  ///
+  /// The preview stays outside this, and that is not the same mistake. It is
+  /// a platform view — a real surface composited into the window rather than
+  /// something Flutter paints — and inside a scrollable it lags its own
+  /// position by a frame and smears the rows it passes.
   Widget _list(List<Channel> channels) {
     final shelves = widget.shelves;
-    if (shelves == null) return _channelList(channels);
-
-    // Inside the scrollable, unlike the preview above: these are ordinary
-    // widgets and scroll the way the rows do. A viewer looking for a channel
-    // by name should be able to push them out of the way.
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(child: shelves),
-        SliverFillRemaining(
-          hasScrollBody: true,
-          child: _channelList(channels),
+        if (shelves != null) SliverToBoxAdapter(child: shelves),
+        SliverList.builder(
+          // One past the end while there is more, so the last row is a note
+          // saying so rather than a list that simply stops.
+          itemCount: channels.length + (_atEnd ? 0 : 1),
+          itemBuilder: (context, index) => _row(channels, index),
         ),
       ],
     );
   }
 
-  Widget _channelList(List<Channel> channels) {
-    return ListView.builder(
-      // One past the end while there is more, so the last row is a note
-      // saying so rather than a list that simply stops.
-      itemCount: channels.length + (_atEnd ? 0 : 1),
-      itemBuilder: (context, index) {
-        if (index >= channels.length) {
-          // Asked for as it comes into view. A button would be a second thing
-          // to press for something the viewer has already asked for by
-          // scrolling to the bottom.
-          _loadMore();
-          return const Padding(
-            padding: EdgeInsets.all(OpenTvTouchSpace.lg),
-            child: Center(
-              child: Text('Loading more…', style: OpenTvTouchType.bodyMuted),
-            ),
-          );
-        }
-        return ChannelRow(
-        name: channels[index].name,
-        number: channels[index].number?.toString(),
-        logoUrl: channels[index].iconUrl,
-        // The whole visible list travels with it, so a flick in the player
-        // moves to the next channel of what was being browsed.
-          onTap: () => widget.onPlay(
-            Playable.channel(channels[index]),
-            channels,
-          ),
-        );
-      },
+  Widget _row(List<Channel> channels, int index) {
+    if (index >= channels.length) {
+      // Asked for as it comes into view. A button would be a second thing to
+      // press for something the viewer has already asked for by scrolling to
+      // the bottom.
+      _loadMore();
+      return const Padding(
+        padding: EdgeInsets.all(OpenTvTouchSpace.lg),
+        child: Center(
+          child: Text('Loading more…', style: OpenTvTouchType.bodyMuted),
+        ),
+      );
+    }
+
+    return ChannelRow(
+      name: channels[index].name,
+      number: channels[index].number?.toString(),
+      logoUrl: channels[index].iconUrl,
+      // The whole visible list travels with it, so a flick in the player
+      // moves to the next channel of what was being browsed.
+      onTap: () => widget.onPlay(Playable.channel(channels[index]), channels),
     );
   }
 }
