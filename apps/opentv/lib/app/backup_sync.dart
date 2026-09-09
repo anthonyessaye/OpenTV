@@ -20,6 +20,7 @@ class BackupSync {
     required this.backup,
     required this.host,
     this.onApplied,
+    this.loadEpisodes,
   });
 
   final OpenTvDatabase db;
@@ -33,6 +34,19 @@ class BackupSync {
   /// television carries on drawing what it read at launch — the sync would
   /// work and look exactly as though it had not.
   final void Function()? onApplied;
+
+  /// Fetches a show's episode list from the provider.
+  ///
+  /// Episodes are loaded per show on demand, so this device only holds them
+  /// for shows somebody opened *here*. A position arriving from another
+  /// device is about an episode this one has never heard of, and the series
+  /// Continue shelf — which looks that episode up to know where to carry on —
+  /// simply left the show out. The position was in the table the whole time,
+  /// which made a working sync and a broken one look identical again.
+  ///
+  /// Injected rather than built here: fetching means the provider password,
+  /// and that belongs to `SourceService` and stops there.
+  final Future<void> Function(Source source, SeriesEntry series)? loadEpisodes;
 
   /// The folder's key, derived once and kept.
   ///
@@ -147,6 +161,10 @@ class BackupSync {
           BackupEngine.merge(pulled.records).values,
         );
         if (applied > 0) {
+          // Before the screens are told, so they redraw once and find the
+          // shows they need rather than drawing without them and waiting for
+          // the pass after.
+          await _fillEpisodeGaps();
           revision.value++;
           onApplied?.call();
         }
@@ -159,6 +177,29 @@ class BackupSync {
       failure = '$error';
     } finally {
       _running = false;
+    }
+  }
+
+  /// Fetches episodes for shows that arrived with progress and no episodes.
+  ///
+  /// Bounded on purpose. Each show is one request to the portal, and this
+  /// runs on a device that has just been handed somebody's whole watch
+  /// history — the most recently watched are what a Continue shelf shows, and
+  /// the rest arrive on later passes or when the show is opened.
+  ///
+  /// A provider that cannot be reached is not a failed sync. The records are
+  /// already applied; the shelf catches up next time.
+  Future<void> _fillEpisodeGaps() async {
+    final load = loadEpisodes;
+    if (load == null) return;
+    for (final source in await db.enabledSources()) {
+      for (final series in await db.seriesAwaitingEpisodes(source.id)) {
+        try {
+          await load(source, series);
+        } on Object {
+          return;
+        }
+      }
     }
   }
 

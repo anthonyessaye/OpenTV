@@ -2180,6 +2180,51 @@ class OpenTvDatabase extends _$OpenTvDatabase {
     return out;
   }
 
+  /// Series this device has watch progress in and no episodes to show for.
+  ///
+  /// Episodes are fetched per show on demand, so a device only holds them for
+  /// shows somebody opened *on it*. A position arriving from another device
+  /// is therefore about an episode this one has never heard of —
+  /// [continueSeries] looks the row up, finds nothing, and drops the series
+  /// off the shelf. The sync worked, the position is in the table, and the
+  /// shelf is empty, which is the same silence as the feature being broken.
+  ///
+  /// Films and channels never showed this because the bulk sync writes both
+  /// tables in full.
+  ///
+  /// `episodesSyncedAt` is honoured, so a show the provider genuinely has no
+  /// episodes for is not asked for again on every pass.
+  Future<List<SeriesEntry>> seriesAwaitingEpisodes(
+    int sourceId, {
+    int limit = 20,
+  }) async {
+    // One statement rather than a lookup per row: this runs after a sync, on
+    // the database's own isolate, and a query inside a loop over rows is
+    // seconds on a television.
+    final rows = await customSelect(
+      'SELECT s.* FROM series_entries s '
+      'JOIN (SELECT parent_remote_id AS pid, '
+      '             MAX(last_watched_utc) AS watched '
+      '      FROM playback_states '
+      "      WHERE source_id = ? AND item_kind = 'episode' "
+      '        AND parent_remote_id IS NOT NULL '
+      '      GROUP BY parent_remote_id) p ON p.pid = s.remote_id '
+      'WHERE s.source_id = ? AND s.episodes_synced_at IS NULL '
+      '  AND NOT EXISTS (SELECT 1 FROM episodes e '
+      '                  WHERE e.source_id = s.source_id '
+      '                    AND e.series_remote_id = s.remote_id) '
+      'ORDER BY p.watched DESC LIMIT ?',
+      variables: [
+        Variable.withInt(sourceId),
+        Variable.withInt(sourceId),
+        Variable.withInt(limit),
+      ],
+      readsFrom: {seriesEntries, playbackStates, episodes},
+    ).get();
+
+    return [for (final row in rows) seriesEntries.map(row.data)];
+  }
+
   /// The first unfinished episode *after* the one just watched.
   ///
   /// Forwards only, and that is the whole rule. Searching the series from the

@@ -390,10 +390,16 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
 
       // Built here rather than at startup: everything it does is expressed in
       // terms of a database, and the handover replaces that file underneath.
+      final service = _service!;
       _sync = BackupSync(
         db: db,
         backup: BackupService(db: db, host: _host),
         host: _host,
+        // A show watched on another device arrives as a position against an
+        // episode this one has never fetched, and the Continue shelf needs
+        // that episode to know where to carry on. Films and channels never
+        // needed this: the bulk sync writes both tables in full.
+        loadEpisodes: (source, series) => service.episodesFor(source, series),
         // What arrives from elsewhere lands in the database, and the shelves
         // showing it were drawn from what was there at launch. Without this
         // the sync works and looks exactly as though it had not.

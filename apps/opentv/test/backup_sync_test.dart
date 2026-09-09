@@ -86,12 +86,17 @@ void main() {
     ));
   }
 
-  BackupSync syncFor(OpenTvDatabase db, {void Function()? onApplied}) =>
+  BackupSync syncFor(
+    OpenTvDatabase db, {
+    void Function()? onApplied,
+    Future<void> Function(Source, SeriesEntry)? loadEpisodes,
+  }) =>
       BackupSync(
         db: db,
         backup: serviceFor(db),
         host: const Host(),
         onApplied: onApplied,
+        loadEpisodes: loadEpisodes,
       );
 
   test('a position crosses without anybody typing a phrase', () async {
@@ -385,6 +390,121 @@ void main() {
     // without their loaders running, so what arrived sat in the database
     // until the next launch.
     expect(told, 1);
+  });
+
+  group('a series watched on the other device', () {
+    /// The catalogue both devices get from the bulk sync: the show, but not
+    /// its episodes. Those are fetched per show, on the device that opens it.
+    Future<void> addShow(OpenTvDatabase db, int sourceId) => db.upsertSeries([
+          SeriesEntriesCompanion.insert(
+            sourceId: sourceId,
+            remoteId: 's1',
+            name: 'The Show',
+            searchName: 'the show',
+          ),
+        ]);
+
+    Future<void> addEpisode(OpenTvDatabase db, int sourceId) =>
+        db.upsertEpisodes([
+          EpisodesCompanion.insert(
+            sourceId: sourceId,
+            remoteId: 'e3',
+            seriesRemoteId: 's1',
+            title: 'Third',
+            season: const Value(1),
+            episodeNumber: const Value(3),
+          ),
+        ]);
+
+    late int onTv;
+    late int onPhone;
+
+    setUp(() async {
+      onTv = await addProvider(tvDb);
+      onPhone = await addProvider(phoneDb, padding: 2);
+      await addShow(tvDb, onTv);
+      await addShow(phoneDb, onPhone);
+      // Opened on the television, so only that device holds the episodes.
+      await addEpisode(tvDb, onTv);
+
+      await tvDb.recordPlayback(
+        sourceId: onTv,
+        kind: ItemKind.episode,
+        remoteId: 'e3',
+        at: DateTime.utc(2026, 9, 8, 20),
+        positionMs: 600000,
+        durationMs: 2400000,
+        parentRemoteId: 's1',
+      );
+      await syncFor(tvDb).run();
+    });
+
+    test('reaches the phone, and the shelf can draw it', () async {
+      var fetched = 0;
+      final sync = syncFor(phoneDb, loadEpisodes: (source, series) async {
+        fetched++;
+        await addEpisode(phoneDb, source.id);
+        await phoneDb.markEpisodesSynced(
+          source.id,
+          series.remoteId,
+          DateTime.utc(2026, 9, 8),
+        );
+      });
+      await sync.run();
+
+      expect(fetched, 1, reason: 'the show it needs was never asked for');
+      final shelf = await phoneDb.continueSeries(onPhone);
+      expect(shelf, hasLength(1));
+      expect(shelf.single.seriesRemoteId, 's1');
+      expect(shelf.single.next.remoteId, 'e3');
+      expect(shelf.single.resuming, isTrue);
+    });
+
+    test('and without the episodes the position is there and invisible',
+        () async {
+      // What this looked like before, and why it read as the sync not
+      // working for series while films and channels crossed perfectly: the
+      // row lands, and the shelf that draws it needs an episode this device
+      // has never fetched.
+      final sync = syncFor(phoneDb);
+      await sync.run();
+
+      expect(sync.applied, 1);
+      final landed = await phoneDb.playbackStateFor(
+        sourceId: onPhone,
+        kind: ItemKind.episode,
+        remoteId: 'e3',
+      );
+      expect(landed?.positionMs, 600000);
+      expect(await phoneDb.continueSeries(onPhone), isEmpty);
+    });
+
+    test('a show the provider has no episodes for is asked once', () async {
+      var fetched = 0;
+      Future<void> load(Source source, SeriesEntry series) async {
+        fetched++;
+        // The portal answers with nothing, which is a real answer.
+        await phoneDb.markEpisodesSynced(
+          source.id,
+          series.remoteId,
+          DateTime.utc(2026, 9, 8),
+        );
+      }
+
+      await syncFor(phoneDb, loadEpisodes: load).run();
+      await tvDb.recordPlayback(
+        sourceId: onTv,
+        kind: ItemKind.episode,
+        remoteId: 'e3',
+        at: DateTime.utc(2026, 9, 8, 21),
+        positionMs: 900000,
+        parentRemoteId: 's1',
+      );
+      await syncFor(tvDb).run();
+      await syncFor(phoneDb, loadEpisodes: load).run();
+
+      expect(fetched, 1, reason: 'the portal is asked again on every pass');
+    });
   });
 
   group('a provider under two addresses', () {

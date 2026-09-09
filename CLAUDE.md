@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 701 core, 138 ui, 223 app.
+Tests: 701 core, 138 ui, 226 app.
 
 ## Two interfaces, one app
 
@@ -618,6 +618,19 @@ but a provider is the case with no way out: the password is reissued on
 renewal, and a device whose own provider has not been added yet has nothing
 to offer at all. Both screens ask before the bucket, and neither will save
 one without a phrase.
+
+**A synced position is not enough to draw a shelf.** Episodes are fetched
+per show on demand, so a device only holds them for shows somebody opened *on
+it*. A position arriving from elsewhere is therefore about an episode this
+device has never heard of — `continueSeries` looks that row up to know where
+to carry on, finds nothing, and leaves the show out. The record was in the
+table the whole time. Reported as "films and live channels sync and series do
+not", and both of those work for the same reason: the bulk sync writes their
+tables in full. `seriesAwaitingEpisodes` finds the gaps and `BackupSync`
+fills them through the same on-demand loader a viewer opening the show would
+use — bounded per pass, since each show is a request to the portal, and
+honouring `episodesSyncedAt` so a show with genuinely no episodes is not
+asked for again on every pass.
 
 **Announcements are not news.** They are excluded from the counts a pass
 reports, or a pass that moved nothing a viewer cares about would say it had —
