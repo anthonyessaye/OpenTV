@@ -243,22 +243,19 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// a whole catalogue and writing once, so peak memory does not scale with
   /// the size of the provider.
   ///
-  /// Each of these clears the category counts. They are remembered rather
-  /// than recounted on every browse, and a sync is the thing that moves them.
-  Future<void> upsertChannels(List<ChannelsCompanion> rows) async {
-    await batch((b) => b.insertAllOnConflictUpdate(channels, rows));
-    await invalidateCategoryCounts();
-  }
+  /// These deliberately do **not** touch the category counts. A sync calls
+  /// them with bounded batches — hundreds of times over a real catalogue —
+  /// and clearing the counts on each one empties the cache the whole time a
+  /// sync is running, which is exactly when somebody is most likely to be
+  /// browsing. The engine clears them once, when the run is over.
+  Future<void> upsertChannels(List<ChannelsCompanion> rows) =>
+      batch((b) => b.insertAllOnConflictUpdate(channels, rows));
 
-  Future<void> upsertMovies(List<MoviesCompanion> rows) async {
-    await batch((b) => b.insertAllOnConflictUpdate(movies, rows));
-    await invalidateCategoryCounts();
-  }
+  Future<void> upsertMovies(List<MoviesCompanion> rows) =>
+      batch((b) => b.insertAllOnConflictUpdate(movies, rows));
 
-  Future<void> upsertSeries(List<SeriesEntriesCompanion> rows) async {
-    await batch((b) => b.insertAllOnConflictUpdate(seriesEntries, rows));
-    await invalidateCategoryCounts();
-  }
+  Future<void> upsertSeries(List<SeriesEntriesCompanion> rows) =>
+      batch((b) => b.insertAllOnConflictUpdate(seriesEntries, rows));
 
   Future<void> upsertEpisodes(List<EpisodesCompanion> rows) =>
       batch((b) => b.insertAllOnConflictUpdate(episodes, rows));
@@ -471,6 +468,18 @@ class OpenTvDatabase extends _$OpenTvDatabase {
           ]));
     }
     return counted;
+  }
+
+  /// Counts every kind for a source and remembers the answer.
+  ///
+  /// Called when a sync finishes. The count is a read of every row in the
+  /// table, and the choice is only ever *where* it happens: here, at the end
+  /// of a sync a viewer is already waiting on, or on their next tab switch.
+  Future<void> warmCategoryCounts(int sourceId) async {
+    await invalidateCategoryCounts(sourceId);
+    for (final kind in const [ItemKind.live, ItemKind.movie, ItemKind.series]) {
+      await countsByCategory(sourceId, kind);
+    }
   }
 
   /// Forgets the counts for a source, so the next read counts again.

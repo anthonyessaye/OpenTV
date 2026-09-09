@@ -67,14 +67,48 @@ void main() {
     expect(await db.countsByCategory(sourceId, ItemKind.movie), {'c1': 3});
   });
 
-  test('a sync moves the count and the rail follows', () async {
+  test('a finished sync moves the count and the rail follows', () async {
     await addFilms(3);
     expect(await db.countsByCategory(sourceId, ItemKind.movie), {'c1': 3});
 
     // The failure this exists to prevent: a rail still showing three after a
     // sync brought five.
     await addFilms(5);
+    await db.warmCategoryCounts(sourceId);
     expect(await db.countsByCategory(sourceId, ItemKind.movie), {'c1': 5});
+  });
+
+  test('a sync in progress does not empty the cache under a viewer', () async {
+    // A sync writes in bounded batches — hundreds of them on a real
+    // catalogue — and clearing the counts on each one left the cache empty
+    // for the whole of a sync. That is exactly when somebody is most likely
+    // to be browsing, and it made remembering them worth nothing on any
+    // device that actually syncs, which is every device.
+    await addFilms(3);
+    expect(await db.countsByCategory(sourceId, ItemKind.movie), {'c1': 3});
+
+    await addFilms(5);
+    expect(
+      await db.select(db.categoryCounts).get(),
+      isNotEmpty,
+      reason: 'writing a batch threw the counts away mid-sync',
+    );
+  });
+
+  test('and warming leaves them ready to read', () async {
+    await addFilms(4);
+    await db.warmCategoryCounts(sourceId);
+
+    // Every kind, so the first switch to any tab finds an answer waiting.
+    final held = await db.select(db.categoryCounts).get();
+    expect(
+      held.where((row) => row.kind == ItemKind.movie),
+      isNotEmpty,
+    );
+    expect(
+      held.singleWhere((row) => row.categoryRemoteId == 'c1').items,
+      4,
+    );
   });
 
   test('hiding one item moves it', () async {

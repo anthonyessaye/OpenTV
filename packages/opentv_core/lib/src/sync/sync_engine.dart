@@ -219,6 +219,17 @@ class SyncEngine {
       await db.setSourceReportedUrl(sourceId, reported);
     }
 
+    // The category counts, once, rather than on each of the hundreds of
+    // batches a sync writes. Counting reads every row of the table, and
+    // clearing it per batch left the cache empty for the whole of a sync —
+    // which is exactly when somebody is most likely to be browsing, and made
+    // the remembering worth nothing on any device that actually syncs.
+    //
+    // Recomputed here rather than left for the next tab switch: the work is
+    // the same either way, and this is a moment the viewer is already waiting
+    // on rather than one where they have just pressed something.
+    await db.warmCategoryCounts(sourceId);
+
     // Only a clean run counts as a sync. A partial one leaves the previous
     // timestamp alone so the interface keeps saying the catalogue is stale.
     if (failed.isEmpty && fatal == null) {

@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 712 core, 141 ui, 235 app.
+Tests: 715 core, 141 ui, 235 app.
 
 ## Two interfaces, one app
 
@@ -360,6 +360,17 @@ rail asks on every section change. **Schema 10 remembers the answer**, and
 every writer that can move it clears it. Same emulator afterwards: 33, 60,
 86, 114, 153, 206, 226, 309ms across eight switches — a median around 130ms,
 which is under the threshold at which anything is said at all.
+
+**And a cache invalidated per write is no cache at all.** The first version
+cleared the counts inside `upsertMovies` and its siblings, which is where the
+rows change — correct, and useless: a sync writes in bounded batches,
+hundreds of them over a real catalogue, so the cache was empty for the whole
+of every sync. That is exactly when somebody is browsing, and it is why this
+measured beautifully on an emulator holding a database that had been *pushed*
+rather than synced, and did nothing at all on a device that syncs. The engine
+clears them once, when the run is over, and recomputes them there — the work
+is the same either way, and a sync is a moment the viewer is already waiting
+on rather than one where they have just pressed something.
 
 **None of that is visible in a laptop benchmark, and the seed hid it twice.**
 `seed_big.dart` writes 120,000 films with no categories at all — built for

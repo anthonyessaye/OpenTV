@@ -409,6 +409,47 @@ void main() {
     );
   });
 
+  test('a finished sync leaves the category counts ready to read', () async {
+    // Counting per category reads every row of the table, and the browse rail
+    // asks on every section change. A sync is the thing that moves the
+    // answer, so it is also the moment to work it out — the viewer is already
+    // waiting on it, rather than on a tab they have just pressed.
+    final id = await _addSource();
+    final fetcher = FakeFetcher(
+      stages: {SyncStage.categories, SyncStage.movies},
+      categoryBatches: [
+        [
+          CategoriesCompanion.insert(
+            sourceId: id,
+            remoteId: 'c1',
+            name: 'Drama',
+            kind: ItemKind.movie,
+          ),
+        ],
+      ],
+      movieBatches: [
+        [
+          MoviesCompanion.insert(
+            sourceId: id,
+            remoteId: 'm1',
+            name: 'A Film',
+            searchName: 'a film',
+            categoryRemoteId: const Value('c1'),
+          ),
+        ],
+      ],
+    );
+
+    await engine.run(id, fetcher);
+
+    expect(
+      await db.select(db.categoryCounts).get(),
+      isNotEmpty,
+      reason: 'the first tab switch after a sync counts the whole catalogue',
+    );
+    expect(await db.countsByCategory(id, ItemKind.movie), {'c1': 1});
+  });
+
   group('progress events', () {
     test('reports item counts as stages finish', () async {
       final id = await _addSource();
