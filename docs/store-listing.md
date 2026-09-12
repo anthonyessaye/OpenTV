@@ -85,14 +85,19 @@ Source and issues: github.com/anthonyessaye/OpenTV
 
 ## Release notes — 1.2.0 (500)
 
+These are the Play notes, so they say nothing about Apple TV — the first
+draft did, which is a line about a platform nobody reading this can install
+on. And "indexed rather than scanned" was in it too: true, and a sentence
+about how the app is built rather than what changed for whoever is reading.
+
 ```
-Your devices now keep each other up to date. Point them at a storage bucket you own and what you watched, where you stopped, what you kept and which categories you hid follow you between them — encrypted before it leaves the device, on an account only you can read.
+Your devices now keep each other up to date. Point them at a storage bucket you own, and what you watched, where you stopped, what you kept and which categories you hid follow you between them — encrypted before it leaves your device, on an account only you can read.
 
-Continue watching leads the Films and Series pages, and the live section on phones has it too.
+Continue watching now leads the Films and Series pages, and Live has it too.
 
-Search is indexed rather than scanned, and works in every alphabet.
+Search is faster and finds titles in every alphabet, not only Latin ones.
 
-Also: OpenTV now runs on Apple TV hardware.
+Large catalogues open quicker, and episodes are named properly.
 ```
 
 ## Release notes — 1.1.0 (500)
