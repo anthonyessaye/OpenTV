@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 733 core, 141 ui, 257 app.
+Tests: 733 core, 141 ui, 258 app.
 
 ## Two interfaces, one app
 
@@ -519,6 +519,51 @@ not because libVLC cannot answer it but because it had been written down
 beside `dynamicRange`, which genuinely cannot be answered. `tracksInformation`
 carries a fourcc per track. A reason that applies to one key had quietly been
 extended to its neighbour.
+
+**1.2.0 shipped with no working player on Android, and nothing caught it.**
+`hevcHardware` was added to `PlayerPlatformView` as a `by lazy` instance
+property, declared *below* the `init` block that creates ExoPlayer and
+registers the view as its listener. Kotlin initialises in the order things are
+written; ExoPlayer calls a listener during that block; the listener built the
+snapshot; the snapshot read the property, whose `Lazy` had not been assigned
+because its line had not run. The view threw while being created, so no player
+existed at all — on phones and televisions alike, since they share the view.
+Reported from the store as `NullPointerException … jw1.getValue()`, `jw1`
+being R8's name for `kotlin.Lazy`. It now lives at file level, and
+`player_contract_test` fails if an instance `lazy` appears after `init`.
+
+**What let it through is the part worth keeping.** It was not a release-only
+bug — R8 only renamed the class — but every playback test after it was on the
+Apple TV, which runs the Swift player. Android was rebuilt, installed,
+launched and browsed a dozen times and never once asked to play, and it
+compiled every time because an initialisation-order fault is not a compile
+error. **After changing either native player, press play on that platform** —
+not on the other one, and not by trusting that the contract test covers it;
+the contract test checked the key was *present*, which it was.
+
+**A release build is not debuggable, so it cannot be seeded through
+`run-as`** — and setting `isDebuggable` on the release build type does not
+survive Flutter's Gradle plugin. The way in is the app's own setup server:
+choose *Fill the form on my phone*, note the code, and post the form from
+inside the emulator, where the server's LAN address is local. `nc` is on the
+image; `curl` is not. Escape `%` as `%%` or `printf` eats the URL encoding.
+
+```bash
+adb shell "printf 'POST /pair HTTP/1.1\r\nHost: 10.0.2.15:8099\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\nConnection: close\r\n\r\ncode=123456' | nc -w 5 10.0.2.15 8099"
+```
+
+Then `POST /setup` with the returned `opentv_setup` cookie, `kind=m3u` and a
+playlist URL served from the Mac at `10.0.2.2`. Public test streams from
+`test-streams.mux.dev` and `storage.googleapis.com/gtv-videos-bucket` play
+without an account.
+
+**Known and open: an interrupted first launch bricks the app.** `onCreate`
+runs `createAll`, which is not `IF NOT EXISTS`; kill the app before the
+first-ever open finishes and `user_version` stays 0 with the tables half made,
+so every later launch runs `onCreate` again and fails on an index that already
+exists. Found while reproducing the above by force-stopping a first launch
+after twenty seconds. Rare — a first launch takes seconds — and fatal when it
+happens.
 
 ## The handover
 

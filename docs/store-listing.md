@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.1 (500)
+
+```
+🎬 Fixes playback on Android — in 1.2.0 nothing would play. Sorry about that.
+```
+
 ## Release notes — 1.2.0 (500)
 
 These are the Play notes, so they say nothing about Apple TV — the first

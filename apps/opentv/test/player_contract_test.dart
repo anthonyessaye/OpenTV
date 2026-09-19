@@ -167,4 +167,41 @@ void main() {
           'the viewer just left',
     );
   });
+
+  test('nothing the listener reads is initialised after the listener exists',
+      () {
+    // `hevcHardware` was a `by lazy` property of the view, declared below the
+    // `init` block that creates ExoPlayer and registers the view as its
+    // listener. Kotlin initialises in the order things are written, and
+    // ExoPlayer calls a listener during that block — which built the
+    // snapshot, which read the property, whose `Lazy` had not been assigned
+    // because its line had not run. The view threw while being created, so
+    // no player existed: every stream on Android failed from the build that
+    // added it until the store release someone actually pressed play on.
+    //
+    // No widget test reaches this — it is a native constructor — and every
+    // Android build in between compiled and launched. So the rule is read
+    // from the source: an instance `lazy` after `init` is the whole trap.
+    final source = android.readAsStringSync();
+    final init = source.indexOf('\n    init {');
+    expect(init, isNot(-1), reason: 'the view no longer has an init block');
+
+    final classEnd = source.indexOf('\n}\n', init);
+    final afterInit = source.substring(init, classEnd);
+    expect(
+      RegExp(r'^    (private )?val \w+[^\n]*by lazy', multiLine: true)
+          .hasMatch(afterInit),
+      isFalse,
+      reason: 'an instance property declared after init is null while init '
+          'runs, and ExoPlayer calls the listener during init',
+    );
+
+    // And the property that did it lives outside the class altogether: it is
+    // a fact about the device, not about one player.
+    expect(
+      source,
+      contains('\nprivate val hevcHardware: Boolean by lazy'),
+      reason: 'hevcHardware is back inside the view',
+    );
+  });
 }

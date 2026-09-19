@@ -434,29 +434,6 @@ class PlayerPlatformView(
      * a picture that comes out wrong can be diagnosed from the screen instead
      * of from a log.
      */
-    /**
-     * Whether a hardware H.265 decoder exists on this device.
-     *
-     * Worked out once: enumerating codecs allocates and this is asked twice a
-     * second while a stream plays.
-     */
-    private val hevcHardware: Boolean by lazy {
-        runCatching {
-            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
-                !info.isEncoder &&
-                    info.supportedTypes.any { it.equals("video/hevc", true) } &&
-                    // isHardwareAccelerated needs Q; below it, the convention
-                    // is that a software decoder's name says so.
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        info.isHardwareAccelerated
-                    } else {
-                        !info.name.startsWith("OMX.google.", true) &&
-                            !info.name.startsWith("c2.android.", true)
-                    }
-            }
-        }.getOrDefault(true)
-    }
-
     private fun hdrName(format: Format): String? = when (format.colorInfo?.colorTransfer) {
         C.COLOR_TRANSFER_ST2084 -> "HDR10"
         C.COLOR_TRANSFER_HLG -> "HLG"
@@ -705,4 +682,37 @@ class PlayerPlatformViewFactory(
 
     override fun create(context: Context, viewId: Int, args: Any?): PlatformView =
         PlayerPlatformView(context, viewId, args, messenger)
+}
+
+/**
+ * Whether a hardware H.265 decoder exists on this device.
+ *
+ * **At file level, and that is the whole of the fix it is part of.** It was a
+ * `by lazy` property of [PlayerPlatformView], declared below the `init` block
+ * that creates the player and registers the view as its listener. Kotlin runs
+ * initialisers in the order they are written, and ExoPlayer calls a listener
+ * during that block — which reads the snapshot, which read this, whose `Lazy`
+ * had not been assigned yet because its line had not run. The view threw while
+ * it was being created, so no player existed at all: every stream on Android
+ * failed, silently, from the build that added this until the one that moved it.
+ * Found on a store release, where R8 had renamed the class to `jw1`.
+ *
+ * It is a fact about the device rather than about one player anyway, so here
+ * it is worked out once for the process and cannot be read too early.
+ */
+private val hevcHardware: Boolean by lazy {
+    runCatching {
+        MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+            !info.isEncoder &&
+                info.supportedTypes.any { it.equals("video/hevc", true) } &&
+                // isHardwareAccelerated needs Q; below it, the convention is
+                // that a software decoder's name says so.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    info.isHardwareAccelerated
+                } else {
+                    !info.name.startsWith("OMX.google.", true) &&
+                        !info.name.startsWith("c2.android.", true)
+                }
+        }
+    }.getOrDefault(true)
 }
