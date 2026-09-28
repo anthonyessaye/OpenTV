@@ -83,34 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
-## Release notes — 1.2.6 (500)
-
-```
-🔎 When a provider refuses a sign-in, the app now shows what they said about it instead of only the error number.
-```
-
-## Release notes — 1.2.5 (500)
-
-```
-🛠 When a channel is refused, the player no longer blames your provider for a failure it cannot trace, and says plainly when a status code is not a standard one.
-```
-
-## Release notes — 1.2.4 (500)
-
-```
-🛠 A channel refused by something on the network — a captive portal, or a VPN that needs signing in to — now says so instead of blaming your provider.
-```
-
-## Release notes — 1.2.3 (500)
-
-```
-🛠 Fixed an app that could not be opened again if its very first launch was interrupted. A device stuck on the OpenTV logo or showing a store error will now start normally.
-```
-
 ## Release notes — 1.2.2 (500)
 
 ```
-🔎 When a channel will not start, the player now says what your provider actually answered instead of showing an error code.
+🛠 Fixed an app that could not be opened again if its very first launch was interrupted.
+🔎 When a channel will not start, the player says what your provider actually answered instead of an error code — and no longer blames them for a refusal that came from the network in between.
+🔎 A provider refusing a sign-in now shows what they said about it, not just the error number.
 ```
 
 ## Release notes — 1.2.1 (500)
