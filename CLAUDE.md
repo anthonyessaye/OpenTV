@@ -513,6 +513,17 @@ body and reported as "answered 400". The status is stated now, with the
 readings that status usually has on a portal *offered* rather than one of them
 asserted — the rule the no-picture message already follows.
 
+**A band of status codes swallowed the one that did not belong to it.**
+`in 500..599` read as "the provider's own server failed, so there is nothing
+this end can do" — and 511 sits inside it. 511 and 407 are the two codes
+defined for whatever sits *between* a device and a server: they mean the
+network in the way wants signing in to first. So the one failure the provider
+had no part in was the one reported as the provider's, in the direction that
+sends somebody to argue with their portal about their own network. Reported
+over a tunnel, which is exactly where it turns up. Kotlin takes the first
+branch that matches, so the fix is a branch above the band — and the test
+asserts the *order*, since a branch below it is dead code that reads fine.
+
 **The stream address never goes in the message.** An Xtream URL carries the
 account password in its path, and `lastError` reaches a screen, a log and any
 crash report. `InvalidResponseCodeException` has the `dataSpec` right there,

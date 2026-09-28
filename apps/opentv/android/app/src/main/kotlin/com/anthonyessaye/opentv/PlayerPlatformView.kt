@@ -721,11 +721,28 @@ class PlayerPlatformView(
             456, 509 -> "The provider says too many connections. Most accounts " +
                 "allow one or two at a time, and another device — or this one, " +
                 "a moment ago — may still be holding one."
+            // Ahead of the 5xx band deliberately: 511 sits inside it and does
+            // not belong to it. Both of these are defined for whatever sits
+            // between a device and a server rather than for the server, so
+            // reading them as the provider failing points at the one party
+            // that is not involved.
+            407, 511 -> "That code means the network in the way wants signing " +
+                "in to first. A captive portal answers this way, and so does " +
+                "a tunnel whose own subscription has lapsed. Worth looking at " +
+                "before the portal."
             in 500..599 -> "The provider's own server failed, so there is " +
                 "nothing this end can do about it."
             else -> ""
         }
-        return "The provider answered HTTP $code$said.${if (reading.isEmpty()) "" else " $reading"}"
+        // Naming the provider as the one who answered is wrong for the two
+        // codes defined for an intermediary, and wrong in the direction that
+        // sends somebody to argue with their portal about their own network.
+        val who = if (code == 407 || code == 511) {
+            "Something between this device and the provider answered"
+        } else {
+            "The provider answered"
+        }
+        return "$who HTTP $code$said.${if (reading.isEmpty()) "" else " $reading"}"
     }
 }
 

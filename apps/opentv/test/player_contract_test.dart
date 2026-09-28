@@ -241,5 +241,24 @@ void main() {
             'put in a message',
       );
     }
+
+    // 511 sits inside the 5xx band and does not belong to it. It and 407 are
+    // the two codes defined for whatever sits between a device and a server,
+    // so reading them off the band blames the provider for the one failure
+    // the provider had no part in — and sends somebody to argue with their
+    // portal about their own network. Reported over a tunnel, which is
+    // exactly where it turns up.
+    final intermediary = body.indexOf('407, 511 ->');
+    expect(
+      intermediary,
+      isNot(-1),
+      reason: '511 has gone back to being read as the provider failing',
+    );
+    expect(
+      intermediary,
+      lessThan(body.indexOf('in 500..599')),
+      reason: 'Kotlin takes the first branch that matches, so the 5xx band '
+          'above this one swallows 511 again',
+    );
   });
 }

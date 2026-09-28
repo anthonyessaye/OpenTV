@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.4 (500)
+
+```
+🛠 A channel refused by something on the network — a captive portal, or a VPN that needs signing in to — now says so instead of blaming your provider.
+```
+
 ## Release notes — 1.2.3 (500)
 
 ```
