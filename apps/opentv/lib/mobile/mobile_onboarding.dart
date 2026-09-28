@@ -287,10 +287,13 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
             ),
             if (_showingTunnel) ...[
               const SizedBox(height: OpenTvTouchSpace.xs),
+              // "the portal address" rather than "the address above": this
+              // sits below the fields today and a direction is a claim about
+              // the layout that stops being true the moment anything moves.
               const Text(
                 'Some providers give out a different portal address that only '
                 'answers over their VPN. Paste the WireGuard .conf they gave '
-                'you and it will be carrying traffic before the address below '
+                'you and it will be carrying traffic before the portal address '
                 'is tried.',
                 style: OpenTvTouchType.caption,
               ),
