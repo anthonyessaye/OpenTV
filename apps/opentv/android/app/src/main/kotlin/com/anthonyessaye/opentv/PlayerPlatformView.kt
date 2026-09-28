@@ -730,21 +730,44 @@ class PlayerPlatformView(
                 "in to first. A captive portal answers this way, and so does " +
                 "a tunnel whose own subscription has lapsed. Worth looking at " +
                 "before the portal."
-            in 500..599 -> "The provider's own server failed, so there is " +
-                "nothing this end can do about it."
+            // Deliberately not a cause. This band used to say the provider's
+            // own server had failed and that nothing could be done — one
+            // sentence making two claims it cannot support, and the second of
+            // them false whenever a tunnel is in the path. A 5xx says the end
+            // that answered is reporting a failure of its own, and which end
+            // that was is the part nobody here knows.
+            in 500..599 -> "A 5xx status is the end that answered reporting a " +
+                "failure of its own rather than a fault in the request. Which " +
+                "end that was, this cannot tell: over a tunnel, something on " +
+                "the way answers as readily as the portal does." +
+                if (code in ASSIGNED_5XX) "" else " And HTTP $code is not one " +
+                    "the standard assigns, so it means whatever the server " +
+                    "that sent it decided it means."
             else -> ""
         }
-        // Naming the provider as the one who answered is wrong for the two
-        // codes defined for an intermediary, and wrong in the direction that
-        // sends somebody to argue with their portal about their own network.
-        val who = if (code == 407 || code == 511) {
-            "Something between this device and the provider answered"
-        } else {
-            "The provider answered"
+        // The attribution matches how much is actually known. Naming the
+        // provider is right where the reading is about a portal, wrong for the
+        // two codes defined for an intermediary, and a guess everywhere else —
+        // and a guess in that direction sends somebody to argue with their
+        // provider about somebody else's network.
+        val who = when (code) {
+            401, 403, 404, 410, 456, 509 -> "The provider answered"
+            407, 511 -> "Something between this device and the provider answered"
+            else -> "This channel was refused with"
         }
         return "$who HTTP $code$said.${if (reading.isEmpty()) "" else " $reading"}"
     }
 }
+
+/**
+ * The 5xx statuses the HTTP standard actually assigns.
+ *
+ * Everything else in the range is unregistered, and a provider answering 512
+ * or 513 has picked a number rather than sent a meaning. Worth saying so on
+ * screen: a status that looks official and is not will otherwise be looked up
+ * and not found.
+ */
+private val ASSIGNED_5XX = setOf(500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511)
 
 /** Builds [PlayerPlatformView]s for Flutter's platform view host. */
 class PlayerPlatformViewFactory(

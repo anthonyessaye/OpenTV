@@ -524,6 +524,19 @@ over a tunnel, which is exactly where it turns up. Kotlin takes the first
 branch that matches, so the fix is a branch above the band — and the test
 asserts the *order*, since a branch below it is dead code that reads fine.
 
+**And then the band itself was the problem, which is the more useful
+finding.** Adding a branch per status as each one turns up is a treadmill;
+what the ladder was actually doing wrong was asserting a cause for a whole
+range it knows nothing about. "The provider's own server failed, so there is
+nothing this end can do about it" makes two claims — whose server, and that
+nothing can be done — and the second is false whenever a tunnel is in the
+path, which both reports were. It says what a 5xx *is* now and leaves which
+end it came from open, which is the same correction the no-picture message and
+the 511 branch each got. **A status the standard does not assign says so**:
+512 and 513 look official, are not registered at all, and mean whatever the
+server that sent them decided — `ASSIGNED_5XX` is the list, and the reason
+phrase the server sent is the better guide.
+
 **The stream address never goes in the message.** An Xtream URL carries the
 account password in its path, and `lastError` reaches a screen, a log and any
 crash report. `InvalidResponseCodeException` has the `dataSpec` right there,

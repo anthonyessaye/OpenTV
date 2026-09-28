@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.5 (500)
+
+```
+🛠 When a channel is refused, the player no longer blames your provider for a failure it cannot trace, and says plainly when a status code is not a standard one.
+```
+
 ## Release notes — 1.2.4 (500)
 
 ```

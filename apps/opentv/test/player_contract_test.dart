@@ -260,5 +260,24 @@ void main() {
       reason: 'Kotlin takes the first branch that matches, so the 5xx band '
           'above this one swallows 511 again',
     );
+
+    // And the band names no cause. It used to say the provider's own server
+    // had failed and that nothing could be done about it — two claims it
+    // cannot support, the second of them false whenever a tunnel is in the
+    // path. A code arriving from an intermediary was being attributed to the
+    // one party that had no part in it, which is the same fault 511 was.
+    final band = body.indexOf('in 500..599');
+    final tail = body.substring(band, body.indexOf('else ->', band));
+    expect(
+      tail,
+      isNot(contains("provider's own server")),
+      reason: 'the 5xx band is asserting a cause it cannot know again',
+    );
+    expect(
+      tail,
+      contains('ASSIGNED_5XX'),
+      reason: 'a code the standard does not assign is presented as one that '
+          'means something',
+    );
   });
 }
