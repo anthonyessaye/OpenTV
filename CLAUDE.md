@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 733 core, 141 ui, 259 app.
+Tests: 737 core, 141 ui, 259 app.
 
 ## Two interfaces, one app
 
@@ -578,13 +578,40 @@ playlist URL served from the Mac at `10.0.2.2`. Public test streams from
 `test-streams.mux.dev` and `storage.googleapis.com/gtv-videos-bucket` play
 without an account.
 
-**Known and open: an interrupted first launch bricks the app.** `onCreate`
-runs `createAll`, which is not `IF NOT EXISTS`; kill the app before the
-first-ever open finishes and `user_version` stays 0 with the tables half made,
-so every later launch runs `onCreate` again and fails on an index that already
-exists. Found while reproducing the above by force-stopping a first launch
-after twenty seconds. Rare — a first launch takes seconds — and fatal when it
-happens.
+**An interrupted first launch used to brick the app for good.** Drift stamps
+`user_version` *after* `onCreate` returns and runs none of it in a
+transaction, so killing the app before the first-ever open finishes leaves a
+file holding half a schema and a version of 0 — which is exactly what a brand
+new file looks like. The next launch arrives in `onCreate` again, and
+everything `createAll` issues is `IF NOT EXISTS` **except the indexes**, so it
+failed on the first one the first attempt had already made, and went on
+failing on every launch after that. Found by force-stopping a first launch
+after twenty seconds; rare, and permanent when it happened.
+
+`onCreate` clears what it finds before creating anything. **It clears rather
+than completes, and that distinction is the fix.** Half a schema says nothing
+about which build made it — a device bricked on 1.1 is holding tables from
+schema 8, and `IF NOT EXISTS` is per table and not per column, so completing
+around them would leave those standing and then stamp 11 over a file that is
+not 11. That trades a database which will not open for one that opens and is
+wrong, which is worse. Nothing is lost by clearing: the only file that can
+reach `onCreate` is one with no schema version, which is one no sync has ever
+finished writing into.
+
+**`addColumn` is the same fault one step along.** An upgrade is not in a
+transaction either and its version is stamped at the end, so an interrupted
+one runs again from where it started. Every other statement in the migrations
+was already written to survive that — the rule is stated twice in this file —
+and the five `addColumn` calls were the exception nobody noticed, because
+`ALTER TABLE ADD COLUMN` fails hard enough to stop the database opening at
+all. `_addColumn` asks `PRAGMA table_info` first.
+
+**Verified on the emulator both ways, which is the only reason to believe it.**
+One catalogue file with `user_version` forced to 0, pushed to the same device
+twice: the build without this shows *"This television could not open its
+store — index category_source_kind already exists"*, and the build with it
+reaches onboarding. A unit test cannot tell you which of those a viewer
+gets.
 
 ## The handover
 
@@ -648,14 +675,6 @@ skipped; `backup.announced` makes it introduce itself in the sender's name.
 right key, and re-deriving is 120,000 rounds of PBKDF2 on a television.
 Cleared on the staged file before it is put into place, so the wrong identity
 is never the live one.
-
-**Every device handed a setup before that fix is still holding the wrong
-name, and cannot tell from the id alone.** So  records
-who minted it: an id with no marker beside it predates this and is re-minted
-once, on the next launch, with no action from anybody. That re-mints some ids
-that were never wrong — one unread directory in the folder and one re-read of
-history the merge is idempotent about, against a device that silently never
-syncs with the one it was set up from.
 
 **Every device handed a setup before that fix is still holding the wrong
 name, and cannot tell from the id alone.** So `backup.device-id-mine` records

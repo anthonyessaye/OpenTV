@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.3 (500)
+
+```
+🛠 Fixed an app that could not be opened again if its very first launch was interrupted. A device stuck on the OpenTV logo or showing a store error will now start normally.
+```
+
 ## Release notes — 1.2.2 (500)
 
 ```

@@ -96,9 +96,9 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // feature look broken on every existing install: the region list would
       // come up empty on a catalogue full of prefixed titles.
       if (from < 4) {
-        await m.addColumn(channels, channels.region);
-        await m.addColumn(movies, movies.region);
-        await m.addColumn(seriesEntries, seriesEntries.region);
+        await _addColumn(m, channels, channels.region);
+        await _addColumn(m, movies, movies.region);
+        await _addColumn(m, seriesEntries, seriesEntries.region);
         await backfillRegions();
       }
 
@@ -177,7 +177,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // authentication, and until it does the derived variants cover the
       // ordinary cases on their own.
       if (from < 9) {
-        await m.addColumn(sources, sources.reportedUrl);
+        await _addColumn(m, sources, sources.reportedUrl);
         await m.createTable(providerAliases);
         await m.createTable(unlinkedProviders);
       }
@@ -192,9 +192,30 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // made last wins rather than the one that happened to sync last. Null
       // for everything already written, which reads as "no opinion" and loses
       // to anything that arrives with a date.
-      if (from < 11) await m.addColumn(preferences, preferences.changedAt);
+      if (from < 11) await _addColumn(m, preferences, preferences.changedAt);
     },
     onCreate: (m) async {
+      // Drift stamps `user_version` *after* this returns, and runs none of it
+      // in a transaction. So a first launch killed part-way through leaves a
+      // file holding half a schema and a version of 0 — which is precisely
+      // what a brand new file looks like, so the next launch arrives here
+      // again. Everything `createAll` issues is `IF NOT EXISTS` except the
+      // indexes, so that second attempt failed on the first index the first
+      // attempt had already made, and went on failing on every launch after
+      // it: an app that had been opened once and could never be opened again.
+      //
+      // Clearing what is there first is what makes this runnable twice, and
+      // it clears rather than completes on purpose. Half a schema says
+      // nothing about which build made it: a device bricked on 1.1 holds
+      // tables from schema 8, and `createAll` would leave those standing —
+      // `IF NOT EXISTS` is per table, not per column — then stamp 11 over a
+      // file that is not 11, which trades a database that will not open for
+      // one that opens and is wrong.
+      //
+      // Nothing is lost. The only file that can reach `onCreate` is one with
+      // no schema version, and the version is stamped the first time this
+      // returns, so it is a file no sync has ever finished writing into.
+      await _clearSchema();
       await m.createAll();
       await createSearchIndex();
     },
@@ -741,6 +762,49 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   ///
   /// Safe to run twice. A device that took a catalogue from another one by
   /// handover already has the file the other device built.
+  /// Everything an interrupted first launch left behind.
+  Future<void> _clearSchema() async {
+    // The FTS tables go first. Dropping one takes its shadow tables with it,
+    // and SQLite refuses to drop a shadow table on its own.
+    for (final (_, index) in _searchIndexes) {
+      await customStatement('DROP TABLE IF EXISTS $index');
+    }
+
+    final rows = await customSelect(
+      "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'",
+    ).get();
+    // Named in this order because a table takes its indexes and triggers with
+    // it, and dropping those first keeps the second pass from being surprised.
+    for (final kind in const ['trigger', 'view', 'index', 'table']) {
+      for (final row in rows) {
+        if (row.read<String>('type') != kind) continue;
+        final name = row.read<String>('name').replaceAll('"', '""');
+        await customStatement('DROP $kind IF EXISTS "$name"');
+      }
+    }
+  }
+
+  /// `ALTER TABLE ADD COLUMN` where the column may already be there.
+  ///
+  /// An upgrade is not in a transaction either, and its version is stamped at
+  /// the end, so an interrupted one runs again from where it started. Every
+  /// other statement in the migrations is written to survive that; `addColumn`
+  /// is the one that cannot, and it fails hard enough to stop the database
+  /// opening at all.
+  Future<void> _addColumn(
+    Migrator m,
+    TableInfo<Table, dynamic> table,
+    GeneratedColumn column,
+  ) async {
+    final existing = await customSelect(
+      'PRAGMA table_info(${table.actualTableName})',
+    ).get();
+    final present = existing.any(
+      (row) => row.read<String>('name') == column.name,
+    );
+    if (!present) await m.addColumn(table, column);
+  }
+
   Future<void> createSearchIndex() async {
     for (final (table, index) in _searchIndexes) {
       await customStatement(
