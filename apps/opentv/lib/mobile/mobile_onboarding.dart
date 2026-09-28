@@ -19,11 +19,24 @@ class MobileOnboarding extends StatefulWidget {
     required this.onSubmit,
     this.onCancel,
     this.onTakeFromDevice,
+    this.onSaveTunnel,
     this.progress,
   });
 
   /// Returns a reason it failed, or null when the provider was added.
   final Future<String?> Function(OnboardingDraft) onSubmit;
+
+  /// Stores a WireGuard configuration, returning what is wrong with it.
+  ///
+  /// Offered here, before the provider, because some portals answer only from
+  /// inside a tunnel: they hand out a separate host for VPN access and that
+  /// host is silent on an ordinary connection. Setting the tunnel up
+  /// afterwards in settings cannot help, because there is no afterwards — the
+  /// sign-in that would get you there is the request that fails.
+  ///
+  /// Null on a platform with no tunnel of its own, which hides the section
+  /// rather than offering a field that could not do anything.
+  final Future<String?> Function(String)? onSaveTunnel;
 
   final VoidCallback? onCancel;
 
@@ -81,12 +94,38 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
     return true;
   }
 
+  /// Whether the tunnel field is showing.
+  ///
+  /// Folded away by default. Most providers need nothing here, and a
+  /// WireGuard configuration is the largest field on the screen — open, it
+  /// reads as something everybody has to fill in.
+  bool _showingTunnel = false;
+  final _tunnel = TextEditingController();
+
   Future<void> _submit() async {
     if (!_ready || _busy) return;
     setState(() {
       _busy = true;
       _problem = null;
     });
+
+    // Saved before the provider is submitted, and only saved — bringing it up
+    // belongs to the one place that knows a portal is about to be asked
+    // something, so that it happens on every route into this rather than only
+    // this one.
+    final tunnel = _tunnel.text.trim();
+    if (tunnel.isNotEmpty && widget.onSaveTunnel != null) {
+      final wrong = await widget.onSaveTunnel!(tunnel);
+      if (!mounted) return;
+      if (wrong != null) {
+        setState(() {
+          _busy = false;
+          _problem = wrong;
+        });
+        return;
+      }
+    }
+
     final failure = await widget.onSubmit(
       OnboardingDraft(
         kind: _kind,
@@ -226,6 +265,48 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
             onSubmitted: (_) => _submit(),
             enabled: !_busy,
           ),
+          if (widget.onSaveTunnel != null) ...[
+            const SizedBox(height: OpenTvTouchSpace.md),
+            TouchTile(
+              onTap: _busy
+                  ? null
+                  : () => setState(() => _showingTunnel = !_showingTunnel),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: OpenTvTouchSpace.sm,
+                ),
+                child: Text(
+                  _showingTunnel
+                      ? 'My provider does not need a VPN'
+                      : 'My provider needs a VPN',
+                  style: OpenTvTouchType.body.copyWith(
+                    color: OpenTvColors.tally,
+                  ),
+                ),
+              ),
+            ),
+            if (_showingTunnel) ...[
+              const SizedBox(height: OpenTvTouchSpace.xs),
+              const Text(
+                'Some providers give out a different portal address that only '
+                'answers over their VPN. Paste the WireGuard .conf they gave '
+                'you and it will be carrying traffic before the address below '
+                'is tried.',
+                style: OpenTvTouchType.caption,
+              ),
+              // Not masked, unlike the television's. `TouchField` refuses to
+              // obscure a multiline field — Flutter cannot — and a phone is
+              // held at arm's length rather than watched across a room, which
+              // is the reason the television masks its copy at all.
+              TouchField(
+                label: 'WireGuard configuration',
+                hint: 'Paste the .conf your provider gave you',
+                controller: _tunnel,
+                multiline: true,
+                enabled: !_busy,
+              ),
+            ],
+          ],
           if (_problem != null) ...[
             const SizedBox(height: OpenTvTouchSpace.md),
             Text(

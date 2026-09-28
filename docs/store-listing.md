@@ -83,12 +83,13 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
-## Release notes — 1.2.2 (500)
+## Release notes — 1.2.3 (500)
 
 ```
 🛠 Fixed an app that could not be opened again if its very first launch was interrupted.
 🔎 When a channel will not start, the player says what your provider actually answered instead of an error code — and no longer blames them for a refusal that came from the network in between.
 🔎 A provider refusing a sign-in now shows what they said about it, not just the error number.
+🔐 If your provider only answers over their VPN, the tunnel is now set up and connected before sign-in is tried, so those accounts can be added at all.
 ```
 
 ## Release notes — 1.2.1 (500)

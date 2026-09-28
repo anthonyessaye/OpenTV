@@ -410,7 +410,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       }
       setState(() {
         _db = db;
-        _service = SourceService(db: db, host: _host);
+        _service = SourceService(db: db, host: _host, vpn: _vpn);
         _resolver = StreamResolver(db: db, host: _host);
         _sources = sources;
         _source = sources.isEmpty ? null : sources.first;
@@ -732,6 +732,10 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
           onCancel: _addingSource
               ? () => setState(() => _addingSource = false)
               : null,
+          // Only where there is a tunnel to offer. The television reaches the
+          // same thing through the phone form, which has carried the field
+          // all along; a phone is the device, so it has to ask here.
+          onSaveTunnel: _vpn.isSupported ? _vpn.save : null,
           onSubmit: (draft) async {
             final failure = await service.add(draft);
             if (failure == null) await _adopt();

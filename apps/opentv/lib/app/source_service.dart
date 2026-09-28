@@ -8,6 +8,7 @@ import 'package:opentv_ui/opentv_ui.dart' show OnboardingDraft, OnboardingSource
 
 import '../http_transport.dart';
 import 'host.dart';
+import 'vpn_service.dart';
 
 /// Turns what a viewer typed into a source with a catalogue behind it.
 ///
@@ -16,10 +17,17 @@ import 'host.dart';
 /// portals and nothing about screens, and this joins them and owns the one
 /// thing neither should — the password.
 class SourceService {
-  SourceService({required this.db, this.host = const Host()});
+  SourceService({required this.db, this.host = const Host(), this.vpn});
 
   final OpenTvDatabase db;
   final Host host;
+
+  /// The tunnel, where this device has one.
+  ///
+  /// Here rather than at the three screens that register a provider, because
+  /// it is one idea — the tunnel has to be up before the portal is asked
+  /// anything — and three copies of one idea drift apart.
+  final VpnService? vpn;
 
   /// Forgets a provider, and everything kept on its behalf.
   ///
@@ -218,6 +226,24 @@ class SourceService {
   /// here are ordinary — a mistyped password is the single most common
   /// outcome of this screen — so they are answered rather than thrown.
   Future<String?> add(OnboardingDraft draft) async {
+    // The tunnel comes up before the portal is asked anything.
+    //
+    // Providers commonly hand out a separate host for VPN access, and that
+    // host answers nothing at all from an ordinary connection. So a
+    // configuration saved a moment earlier and not yet connected produces a
+    // sign-in that cannot succeed, on a screen whose only honest report is
+    // whatever the network in the way said — 511, 502, or nothing.
+    //
+    // It used to be connected in `_adopt`, which runs after a *successful*
+    // sync. That is exactly the wrong way round: the sync is the thing that
+    // needs the tunnel, so the one path that required it was the one path
+    // that could never reach it.
+    //
+    // `mayAsk` because this is a viewer setting the app up and expecting to
+    // be asked; the permission dialog is Android's and appears on the device
+    // being set up, which for the phone-form route is the television.
+    await vpn?.connectIfConfigured(mayAsk: true);
+
     try {
       return switch (draft.kind) {
         OnboardingSourceKind.xtream => await _addXtream(draft),

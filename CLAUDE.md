@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 737 core, 141 ui, 263 app.
+Tests: 737 core, 141 ui, 269 app.
 
 ## Two interfaces, one app
 
@@ -647,6 +647,50 @@ twice: the build without this shows *"This television could not open its
 store — index category_source_kind already exists"*, and the build with it
 reaches onboarding. A unit test cannot tell you which of those a viewer
 gets.
+
+## A provider that can only be reached through the tunnel
+
+Providers commonly hand out a **second portal address for VPN access**, and
+that address answers nothing at all from an ordinary connection. So the tunnel
+is not a preference somebody sets up afterwards — for those accounts it is a
+precondition of signing in, and the app had the order exactly backwards.
+
+**The tunnel was raised in `_adopt`, which runs after a *successful* sync.**
+The one arrangement that needed it was therefore the one arrangement that
+could never reach it: sign-in failed, the failure screen honestly reported
+whatever the network in the way said — 511, 502 — and settings, where a tunnel
+is configured, is behind the sign-in that cannot complete. Reported as a
+sequence of unexplained gateway errors over several days, which is what this
+looks like from the outside.
+
+**It is raised in `SourceService.add` now**, which is the one seam all three
+sign-in routes go through — the television's form, the phone form served to a
+browser, and the phone app's own. Three copies of that idea would have drifted;
+this is the class that already owns the other thing none of those screens
+should, which is the password.
+
+**The phone form always carried a tunnel field and it never worked**, because
+`SetupSubmission.wireGuardConfig` was saved to the keystore and `save` does not
+connect. Writer without reader, in the form where the writer looks finished.
+
+**Android asks permission to route traffic with a dialog on the television**,
+while the person filling the phone form is looking at their phone. The form
+says to go and look at the television, or it simply stops and the tap it wants
+is in another room.
+
+**The phone app needed a field of its own.** A phone is the device, so it
+cannot reach a tunnel through the phone form the television uses — a viewer
+whose provider answers only over a VPN had no route into the app at all.
+Folded away by default, because most providers need nothing there and a
+WireGuard file is the largest field on the screen. It is not masked, unlike
+the television's: `TouchField` refuses to obscure a multiline field, Flutter
+cannot, and a phone is held at arm's length rather than watched across a room,
+which is the reason the television masks its copy.
+
+**None of this exists on Apple.** `VpnService.isSupported` is Android only, so
+the field is absent there rather than present and useless — a provider that
+requires a VPN needs a system-level WireGuard profile on those devices, which
+is outside this app.
 
 ## The handover
 

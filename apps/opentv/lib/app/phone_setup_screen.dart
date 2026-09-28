@@ -120,7 +120,17 @@ class _PhoneSetupScreenState extends State<PhoneSetupScreen> {
       await widget.vpn.save(tunnel);
     }
 
-    _server.report(SetupPhase.working, 'Reading the catalogue…');
+    // Said before the portal is reached, because reaching it is what brings
+    // the tunnel up — and Android asks permission to route traffic with a
+    // dialog on the television, while the person setting this up is looking
+    // at their phone. Without this the form simply stops, and the tap it is
+    // waiting for is in another room.
+    _server.report(
+      SetupPhase.working,
+      tunnel == null || !widget.vpn.isSupported
+          ? 'Reading the catalogue…'
+          : 'Look at your television: it may ask to allow the tunnel.',
+    );
 
     final failure = await widget.service.add(
       OnboardingDraft(
