@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 737 core, 141 ui, 259 app.
+Tests: 737 core, 141 ui, 263 app.
 
 ## Two interfaces, one app
 
@@ -344,6 +344,17 @@ explained in a sentence arrived as "the other device answered 400". And
 devices cannot type differently — was parsed on every authentication since
 the models were written and read by nothing, while the sync that needed it
 was splitting one account into two for want of exactly that.
+
+And `HttpTransport.getJson` called `drain` on the body of every refusal and
+reported the number — the same `drain`, with the same consequence, as the
+handover sender two entries above, sitting on the one path a viewer meets
+before anything else works. `getJsonWithBody` next to it reads the body first
+and carries a comment explaining exactly why. **A rule applied to one method
+and not to its neighbour is the same fault as a key nobody reads**, and this
+is the second time in this file that one has been found by reading the two
+side by side. The markup guard is the part worth keeping: a gateway answers
+502 with a page whose whole content is the number already in hand, and putting
+that on a television is worse than the number.
 
 None of these fail. Nothing logs, nothing throws, and each one looks like
 working software in a screenshot. **If a feature is silent, grep both ends

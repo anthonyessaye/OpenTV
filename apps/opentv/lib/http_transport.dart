@@ -22,16 +22,23 @@ class HttpTransport implements Transport {
       headers?.forEach(request.headers.set);
       final response = await request.close();
 
+      final body = await response.transform(utf8.decoder).join();
+
+      // The body is read before the status is judged, for the reason
+      // `getJsonWithBody` already gives: a panel that troubles to explain why
+      // it refused an account writes that explanation here, and draining it
+      // trades a sentence for a number. This is the same `drain` the handover
+      // sender had, which turned a refusal somebody had written out into "the
+      // other device answered 400" — and it was sitting on the one path a
+      // viewer meets before anything else works.
       if (response.statusCode != 200) {
-        await response.drain<void>();
         throw TransportException(
-          'HTTP ${response.statusCode}',
+          _explanationIn(body) ?? 'HTTP ${response.statusCode}',
           statusCode: response.statusCode,
           url: url,
         );
       }
 
-      final body = await response.transform(utf8.decoder).join();
       return jsonDecode(body);
     } on TransportException {
       rethrow;
@@ -72,6 +79,24 @@ class HttpTransport implements Transport {
     } on Object catch (e) {
       throw TransportException('$e', url: url);
     }
+  }
+
+  /// What a refusal said, where it said anything worth repeating.
+  ///
+  /// Deliberately narrow. A gateway answering 502 sends a page of HTML whose
+  /// entire content is the number already in hand, and putting that on a
+  /// television is worse than the number — so markup is refused outright, and
+  /// so is anything long enough to be a document rather than a sentence.
+  static String? _explanationIn(String body) {
+    final said = _messageIn(body);
+    if (said != null) return said.trim().isEmpty ? null : said.trim();
+
+    final text = body.trim();
+    if (text.isEmpty || text.length > 200) return null;
+    if (text.startsWith('<') || text.toLowerCase().contains('<html')) {
+      return null;
+    }
+    return text;
   }
 
   static String? _messageIn(String body) {

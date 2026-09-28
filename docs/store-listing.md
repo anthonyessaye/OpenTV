@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.6 (500)
+
+```
+🔎 When a provider refuses a sign-in, the app now shows what they said about it instead of only the error number.
+```
+
 ## Release notes — 1.2.5 (500)
 
 ```
