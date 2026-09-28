@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.2 (500)
+
+```
+🔎 When a channel will not start, the player now says what your provider actually answered instead of showing an error code.
+```
+
 ## Release notes — 1.2.1 (500)
 
 ```

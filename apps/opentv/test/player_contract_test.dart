@@ -204,4 +204,42 @@ void main() {
       reason: 'hevcHardware is back inside the view',
     );
   });
+
+  test('a refusal keeps the status the server sent', () {
+    // `errorCodeName` alone turns every refusal a portal can make into one
+    // string: ERROR_CODE_IO_BAD_HTTP_STATUS is 403 and 404 and 456 and 512 —
+    // a blocked address, a stream that has gone, an account already watching
+    // somewhere else, and an expired subscription. Media3 carries the number
+    // the whole way and it was dropped on the last line.
+    final source = android.readAsStringSync();
+
+    // The call, not the presence of the function: reverting the one line that
+    // uses it leaves both functions sitting in the file, and an assertion on
+    // the file alone passes over dead code.
+    final start = source.indexOf('override fun onPlayerError(');
+    expect(start, isNot(-1), reason: 'onPlayerError has been renamed');
+    final handler = source.substring(start, source.indexOf('\n    }', start));
+    expect(
+      handler,
+      contains('lastError = reasonFor(error)'),
+      reason: 'the HTTP status is thrown away again',
+    );
+    expect(source, contains('InvalidResponseCodeException'));
+    expect(source, contains('responseCode'));
+
+    // And the address never goes in. An Xtream stream URL carries the account
+    // password in its path, and this string reaches a screen, a log and any
+    // crash report.
+    final refusal = source.indexOf('private fun refusal(');
+    expect(refusal, isNot(-1), reason: 'refusal() has been renamed');
+    final body = source.substring(refusal, source.indexOf('\n    }', refusal));
+    for (final leak in ['uri', 'dataSpec', 'url']) {
+      expect(
+        body.toLowerCase(),
+        isNot(contains(leak)),
+        reason: 'the stream address embeds the password and must not be '
+            'put in a message',
+      );
+    }
+  });
 }

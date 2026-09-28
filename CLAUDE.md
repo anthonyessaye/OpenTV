@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 733 core, 141 ui, 258 app.
+Tests: 733 core, 141 ui, 259 app.
 
 ## Two interfaces, one app
 
@@ -502,6 +502,27 @@ a message that picked one of them: state the facts on screen and let somebody
 who can see the channel draw the conclusion. `hevcHardware` is still reported
 by both engines — `VTIsHardwareDecodeSupported` on Apple, `MediaCodecList` on
 Android — and adds a sentence only when it is genuinely the answer.
+
+**`errorCodeName` turns every refusal a portal can make into one string.**
+`ERROR_CODE_IO_BAD_HTTP_STATUS` is 403 and 404 and 456 and 512 — a blocked
+address, a stream that has gone, an account already watching somewhere else,
+and an expired subscription. Media3 carries the number the whole way in
+`InvalidResponseCodeException` and it was being dropped on the last line of
+`onPlayerError`, which is the same fault as a refusal explained in a response
+body and reported as "answered 400". The status is stated now, with the
+readings that status usually has on a portal *offered* rather than one of them
+asserted — the rule the no-picture message already follows.
+
+**The stream address never goes in the message.** An Xtream URL carries the
+account password in its path, and `lastError` reaches a screen, a log and any
+crash report. `InvalidResponseCodeException` has the `dataSpec` right there,
+which is exactly why the test asserts the message cannot mention it.
+
+**Playing over a VPN is the ordinary way to meet a 403.** Portals refuse
+addresses they do not recognise, and they also refuse a second connection
+while the first is held — which a tunnel makes more likely, since the old
+connection was made from a different address. Neither is something this end
+can fix; saying which status arrived is.
 
 **A provider's own codec metadata is not evidence.** Xtream panels carry
 whatever was typed into them. `videoCodec` in the snapshot comes from the

@@ -22,6 +22,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.CaptionStyleCompat
@@ -670,8 +671,61 @@ class PlayerPlatformView(
     override fun onPlayerError(error: PlaybackException) {
         // Named rather than swallowed: on a real provider a dead channel is
         // routine, and the interface says so instead of spinning forever.
-        lastError = error.errorCodeName
+        lastError = reasonFor(error)
         channel.invokeMethod("state", snapshot())
+    }
+
+    /**
+     * What went wrong, in the terms the server used where it used any.
+     *
+     * `errorCodeName` alone turns every refusal a portal can make into one
+     * string: `ERROR_CODE_IO_BAD_HTTP_STATUS` is 403 and 404 and 456 and 512,
+     * which are a blocked address, a stream that has gone, an account already
+     * watching somewhere else, and an expired subscription. Media3 carries the
+     * number the whole way here and it was being dropped on the last line —
+     * the same fault as a refusal explained in a response body and reported as
+     * "answered 400".
+     *
+     * **The address never goes in.** An Xtream stream URL has the account
+     * password in its path, and this string reaches a screen, a log and any
+     * crash report. Only the status and the server's own short reason.
+     */
+    private fun reasonFor(error: PlaybackException): String {
+        var cause: Throwable? = error.cause
+        while (cause != null) {
+            if (cause is HttpDataSource.InvalidResponseCodeException) {
+                return refusal(cause.responseCode, cause.responseMessage)
+            }
+            cause = cause.cause
+        }
+        return error.errorCodeName
+    }
+
+    /**
+     * A portal's HTTP status, and what it usually means on one.
+     *
+     * The status is stated and the readings are offered, rather than one of
+     * them being asserted — the same rule the no-picture message follows.
+     * Guessing a single cause from one signal is how a message ends up
+     * confidently wrong.
+     */
+    private fun refusal(code: Int, message: String?): String {
+        val said = message?.trim()?.takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: ""
+        val reading = when (code) {
+            401, 403 -> "Portals commonly answer this way when the account is " +
+                "already watching on another device, and when they do not " +
+                "recognise the address a request arrives from — which is what " +
+                "a VPN changes."
+            404, 410 -> "The provider no longer has this stream. A catalogue " +
+                "refresh usually settles it."
+            456, 509 -> "The provider says too many connections. Most accounts " +
+                "allow one or two at a time, and another device — or this one, " +
+                "a moment ago — may still be holding one."
+            in 500..599 -> "The provider's own server failed, so there is " +
+                "nothing this end can do about it."
+            else -> ""
+        }
+        return "The provider answered HTTP $code$said.${if (reading.isEmpty()) "" else " $reading"}"
     }
 }
 
