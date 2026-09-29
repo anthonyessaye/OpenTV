@@ -69,6 +69,7 @@ List<String> providerKeyCandidates({
   required String url,
   String? username,
   String? reportedUrl,
+  String? alternateUrl,
   Iterable<String> aliases = const [],
 }) {
   final keys = <String>[];
@@ -86,6 +87,18 @@ List<String> providerKeyCandidates({
   if (reportedUrl != null && reportedUrl.trim().isNotEmpty) {
     offer(providerKey(reportedUrl, username));
     for (final variant in _addressVariants(reportedUrl)) {
+      offer(providerKey(variant, username));
+    }
+  }
+
+  // The provider's other door, where they hand one out — commonly a host that
+  // only answers from inside their VPN. Accepted and never written under: it
+  // is [url] that owns the identity, so a device coming in through the tunnel
+  // records its watching under the same key as one that did not, and a
+  // household does not acquire a second history the day it turns a tunnel on.
+  if (alternateUrl != null && alternateUrl.trim().isNotEmpty) {
+    offer(providerKey(alternateUrl, username));
+    for (final variant in _addressVariants(alternateUrl)) {
       offer(providerKey(variant, username));
     }
   }
@@ -168,4 +181,29 @@ String normaliseProviderUrl(String url) {
   }
 
   return '$scheme://${parsed.host.toLowerCase()}$port$path';
+}
+
+/// Which of a provider's addresses to actually talk to.
+///
+/// A provider may hand out two doors — an ordinary one and a host that only
+/// answers from inside their VPN. The tunnel decides which is reachable, so
+/// the tunnel decides which is used.
+///
+/// Deliberately the only rule, and deliberately not a fallback: a device with
+/// the tunnel up and a VPN address given uses it, full stop. Trying the other
+/// one when it fails would mean every stream that a provider refuses is
+/// attempted twice, from an address the provider has already said no to — and
+/// on a television that is a doubled wait before any message appears.
+///
+/// Says nothing about identity. [providerWriteKey] is built from the main
+/// address whichever door is in use, so turning a tunnel on does not start a
+/// second history.
+String addressFor({
+  required String url,
+  String? vpnUrl,
+  required bool tunnelUp,
+}) {
+  if (!tunnelUp) return url;
+  final other = vpnUrl?.trim();
+  return (other == null || other.isEmpty) ? url : other;
 }

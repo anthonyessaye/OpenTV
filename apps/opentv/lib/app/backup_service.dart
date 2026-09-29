@@ -249,6 +249,12 @@ class BackupService {
         url: source.url,
         username: source.username,
         reportedUrl: source.reportedUrl,
+        // A folder claimed by a device that was set up through the VPN door
+        // has a keyslot named after that address. Offering it costs no
+        // derivation — the keyring skips a slot that is not there before
+        // deriving anything — and not offering it is a phrase typed for
+        // nothing.
+        alternateUrl: source.vpnUrl,
       )) {
         offered.add(BackupSecret(
           id: BackupSecret.providerId(key),

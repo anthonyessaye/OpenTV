@@ -74,6 +74,15 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, Source> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _vpnUrlMeta = const VerificationMeta('vpnUrl');
+  @override
+  late final GeneratedColumn<String> vpnUrl = GeneratedColumn<String>(
+    'vpn_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _credentialRefMeta = const VerificationMeta(
     'credentialRef',
   );
@@ -151,6 +160,7 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, Source> {
     url,
     username,
     reportedUrl,
+    vpnUrl,
     credentialRef,
     epgUrl,
     enabled,
@@ -202,6 +212,12 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, Source> {
           data['reported_url']!,
           _reportedUrlMeta,
         ),
+      );
+    }
+    if (data.containsKey('vpn_url')) {
+      context.handle(
+        _vpnUrlMeta,
+        vpnUrl.isAcceptableOrUnknown(data['vpn_url']!, _vpnUrlMeta),
       );
     }
     if (data.containsKey('credential_ref')) {
@@ -283,6 +299,10 @@ class $SourcesTable extends Sources with TableInfo<$SourcesTable, Source> {
         DriftSqlType.string,
         data['${effectivePrefix}reported_url'],
       ),
+      vpnUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}vpn_url'],
+      ),
       credentialRef: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}credential_ref'],
@@ -339,6 +359,18 @@ class Source extends DataClass implements Insertable<Source> {
   /// sync will match, and is trusted for nothing else.
   final String? reportedUrl;
 
+  /// A second door to the same account, for providers that hand out one.
+  ///
+  /// Portals commonly give a separate host that only answers from inside
+  /// their VPN, and the account behind the two addresses is one account.
+  /// Used in place of [url] whenever the tunnel is carrying traffic, and for
+  /// nothing else — in particular **not** for identity. A provider that
+  /// changed key depending on which door the device came in through would
+  /// split one person's history in two every time the tunnel went up or
+  /// down, which is the failure this file has most of its paragraphs about.
+  /// [url] owns the identity; this is offered as another name for it.
+  final String? vpnUrl;
+
   /// Keystore handle for the secret. Never the secret itself.
   final String? credentialRef;
 
@@ -356,6 +388,7 @@ class Source extends DataClass implements Insertable<Source> {
     required this.url,
     this.username,
     this.reportedUrl,
+    this.vpnUrl,
     this.credentialRef,
     this.epgUrl,
     required this.enabled,
@@ -377,6 +410,9 @@ class Source extends DataClass implements Insertable<Source> {
     }
     if (!nullToAbsent || reportedUrl != null) {
       map['reported_url'] = Variable<String>(reportedUrl);
+    }
+    if (!nullToAbsent || vpnUrl != null) {
+      map['vpn_url'] = Variable<String>(vpnUrl);
     }
     if (!nullToAbsent || credentialRef != null) {
       map['credential_ref'] = Variable<String>(credentialRef);
@@ -405,6 +441,9 @@ class Source extends DataClass implements Insertable<Source> {
       reportedUrl: reportedUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(reportedUrl),
+      vpnUrl: vpnUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(vpnUrl),
       credentialRef: credentialRef == null && nullToAbsent
           ? const Value.absent()
           : Value(credentialRef),
@@ -434,6 +473,7 @@ class Source extends DataClass implements Insertable<Source> {
       url: serializer.fromJson<String>(json['url']),
       username: serializer.fromJson<String?>(json['username']),
       reportedUrl: serializer.fromJson<String?>(json['reportedUrl']),
+      vpnUrl: serializer.fromJson<String?>(json['vpnUrl']),
       credentialRef: serializer.fromJson<String?>(json['credentialRef']),
       epgUrl: serializer.fromJson<String?>(json['epgUrl']),
       enabled: serializer.fromJson<bool>(json['enabled']),
@@ -454,6 +494,7 @@ class Source extends DataClass implements Insertable<Source> {
       'url': serializer.toJson<String>(url),
       'username': serializer.toJson<String?>(username),
       'reportedUrl': serializer.toJson<String?>(reportedUrl),
+      'vpnUrl': serializer.toJson<String?>(vpnUrl),
       'credentialRef': serializer.toJson<String?>(credentialRef),
       'epgUrl': serializer.toJson<String?>(epgUrl),
       'enabled': serializer.toJson<bool>(enabled),
@@ -470,6 +511,7 @@ class Source extends DataClass implements Insertable<Source> {
     String? url,
     Value<String?> username = const Value.absent(),
     Value<String?> reportedUrl = const Value.absent(),
+    Value<String?> vpnUrl = const Value.absent(),
     Value<String?> credentialRef = const Value.absent(),
     Value<String?> epgUrl = const Value.absent(),
     bool? enabled,
@@ -483,6 +525,7 @@ class Source extends DataClass implements Insertable<Source> {
     url: url ?? this.url,
     username: username.present ? username.value : this.username,
     reportedUrl: reportedUrl.present ? reportedUrl.value : this.reportedUrl,
+    vpnUrl: vpnUrl.present ? vpnUrl.value : this.vpnUrl,
     credentialRef: credentialRef.present
         ? credentialRef.value
         : this.credentialRef,
@@ -502,6 +545,7 @@ class Source extends DataClass implements Insertable<Source> {
       reportedUrl: data.reportedUrl.present
           ? data.reportedUrl.value
           : this.reportedUrl,
+      vpnUrl: data.vpnUrl.present ? data.vpnUrl.value : this.vpnUrl,
       credentialRef: data.credentialRef.present
           ? data.credentialRef.value
           : this.credentialRef,
@@ -524,6 +568,7 @@ class Source extends DataClass implements Insertable<Source> {
           ..write('url: $url, ')
           ..write('username: $username, ')
           ..write('reportedUrl: $reportedUrl, ')
+          ..write('vpnUrl: $vpnUrl, ')
           ..write('credentialRef: $credentialRef, ')
           ..write('epgUrl: $epgUrl, ')
           ..write('enabled: $enabled, ')
@@ -542,6 +587,7 @@ class Source extends DataClass implements Insertable<Source> {
     url,
     username,
     reportedUrl,
+    vpnUrl,
     credentialRef,
     epgUrl,
     enabled,
@@ -559,6 +605,7 @@ class Source extends DataClass implements Insertable<Source> {
           other.url == this.url &&
           other.username == this.username &&
           other.reportedUrl == this.reportedUrl &&
+          other.vpnUrl == this.vpnUrl &&
           other.credentialRef == this.credentialRef &&
           other.epgUrl == this.epgUrl &&
           other.enabled == this.enabled &&
@@ -574,6 +621,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
   final Value<String> url;
   final Value<String?> username;
   final Value<String?> reportedUrl;
+  final Value<String?> vpnUrl;
   final Value<String?> credentialRef;
   final Value<String?> epgUrl;
   final Value<bool> enabled;
@@ -587,6 +635,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     this.url = const Value.absent(),
     this.username = const Value.absent(),
     this.reportedUrl = const Value.absent(),
+    this.vpnUrl = const Value.absent(),
     this.credentialRef = const Value.absent(),
     this.epgUrl = const Value.absent(),
     this.enabled = const Value.absent(),
@@ -601,6 +650,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     required String url,
     this.username = const Value.absent(),
     this.reportedUrl = const Value.absent(),
+    this.vpnUrl = const Value.absent(),
     this.credentialRef = const Value.absent(),
     this.epgUrl = const Value.absent(),
     this.enabled = const Value.absent(),
@@ -618,6 +668,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     Expression<String>? url,
     Expression<String>? username,
     Expression<String>? reportedUrl,
+    Expression<String>? vpnUrl,
     Expression<String>? credentialRef,
     Expression<String>? epgUrl,
     Expression<bool>? enabled,
@@ -632,6 +683,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
       if (url != null) 'url': url,
       if (username != null) 'username': username,
       if (reportedUrl != null) 'reported_url': reportedUrl,
+      if (vpnUrl != null) 'vpn_url': vpnUrl,
       if (credentialRef != null) 'credential_ref': credentialRef,
       if (epgUrl != null) 'epg_url': epgUrl,
       if (enabled != null) 'enabled': enabled,
@@ -648,6 +700,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     Value<String>? url,
     Value<String?>? username,
     Value<String?>? reportedUrl,
+    Value<String?>? vpnUrl,
     Value<String?>? credentialRef,
     Value<String?>? epgUrl,
     Value<bool>? enabled,
@@ -662,6 +715,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
       url: url ?? this.url,
       username: username ?? this.username,
       reportedUrl: reportedUrl ?? this.reportedUrl,
+      vpnUrl: vpnUrl ?? this.vpnUrl,
       credentialRef: credentialRef ?? this.credentialRef,
       epgUrl: epgUrl ?? this.epgUrl,
       enabled: enabled ?? this.enabled,
@@ -694,6 +748,9 @@ class SourcesCompanion extends UpdateCompanion<Source> {
     if (reportedUrl.present) {
       map['reported_url'] = Variable<String>(reportedUrl.value);
     }
+    if (vpnUrl.present) {
+      map['vpn_url'] = Variable<String>(vpnUrl.value);
+    }
     if (credentialRef.present) {
       map['credential_ref'] = Variable<String>(credentialRef.value);
     }
@@ -724,6 +781,7 @@ class SourcesCompanion extends UpdateCompanion<Source> {
           ..write('url: $url, ')
           ..write('username: $username, ')
           ..write('reportedUrl: $reportedUrl, ')
+          ..write('vpnUrl: $vpnUrl, ')
           ..write('credentialRef: $credentialRef, ')
           ..write('epgUrl: $epgUrl, ')
           ..write('enabled: $enabled, ')
@@ -8740,6 +8798,7 @@ typedef $$SourcesTableCreateCompanionBuilder =
       required String url,
       Value<String?> username,
       Value<String?> reportedUrl,
+      Value<String?> vpnUrl,
       Value<String?> credentialRef,
       Value<String?> epgUrl,
       Value<bool> enabled,
@@ -8755,6 +8814,7 @@ typedef $$SourcesTableUpdateCompanionBuilder =
       Value<String> url,
       Value<String?> username,
       Value<String?> reportedUrl,
+      Value<String?> vpnUrl,
       Value<String?> credentialRef,
       Value<String?> epgUrl,
       Value<bool> enabled,
@@ -8800,6 +8860,11 @@ class $$SourcesTableFilterComposer
 
   ColumnFilters<String> get reportedUrl => $composableBuilder(
     column: $table.reportedUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get vpnUrl => $composableBuilder(
+    column: $table.vpnUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8873,6 +8938,11 @@ class $$SourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get vpnUrl => $composableBuilder(
+    column: $table.vpnUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get credentialRef => $composableBuilder(
     column: $table.credentialRef,
     builder: (column) => ColumnOrderings(column),
@@ -8933,6 +9003,9 @@ class $$SourcesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get vpnUrl =>
+      $composableBuilder(column: $table.vpnUrl, builder: (column) => column);
+
   GeneratedColumn<String> get credentialRef => $composableBuilder(
     column: $table.credentialRef,
     builder: (column) => column,
@@ -8990,6 +9063,7 @@ class $$SourcesTableTableManager
                 Value<String> url = const Value.absent(),
                 Value<String?> username = const Value.absent(),
                 Value<String?> reportedUrl = const Value.absent(),
+                Value<String?> vpnUrl = const Value.absent(),
                 Value<String?> credentialRef = const Value.absent(),
                 Value<String?> epgUrl = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
@@ -9003,6 +9077,7 @@ class $$SourcesTableTableManager
                 url: url,
                 username: username,
                 reportedUrl: reportedUrl,
+                vpnUrl: vpnUrl,
                 credentialRef: credentialRef,
                 epgUrl: epgUrl,
                 enabled: enabled,
@@ -9018,6 +9093,7 @@ class $$SourcesTableTableManager
                 required String url,
                 Value<String?> username = const Value.absent(),
                 Value<String?> reportedUrl = const Value.absent(),
+                Value<String?> vpnUrl = const Value.absent(),
                 Value<String?> credentialRef = const Value.absent(),
                 Value<String?> epgUrl = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
@@ -9031,6 +9107,7 @@ class $$SourcesTableTableManager
                 url: url,
                 username: username,
                 reportedUrl: reportedUrl,
+                vpnUrl: vpnUrl,
                 credentialRef: credentialRef,
                 epgUrl: epgUrl,
                 enabled: enabled,

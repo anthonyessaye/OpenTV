@@ -411,7 +411,11 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       setState(() {
         _db = db;
         _service = SourceService(db: db, host: _host, vpn: _vpn);
-        _resolver = StreamResolver(db: db, host: _host);
+        _resolver = StreamResolver(
+          db: db,
+          host: _host,
+          tunnelUp: () => _vpn.state.value == VpnState.up,
+        );
         _sources = sources;
         _source = sources.isEmpty ? null : sources.first;
       });

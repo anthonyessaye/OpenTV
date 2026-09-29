@@ -29,6 +29,19 @@ class SourceService {
   /// anything — and three copies of one idea drift apart.
   final VpnService? vpn;
 
+  /// The address to talk to this provider on right now.
+  ///
+  /// A provider may have two doors and the tunnel decides which one is
+  /// reachable. Used for every request and never for identity, which stays
+  /// with the main address so that turning a tunnel on does not start a
+  /// second history. That split is worth keeping visible: every caller in
+  /// this class is network, and the four in `BackupService` are identity.
+  String addressOf(Source source) => addressFor(
+        url: source.url,
+        vpnUrl: source.vpnUrl,
+        tunnelUp: vpn?.state.value == VpnState.up,
+      );
+
   /// Forgets a provider, and everything kept on its behalf.
   ///
   /// The keystore entry goes with it. Removing a provider and leaving its
@@ -93,7 +106,7 @@ class SourceService {
     try {
       final fetcher = XtreamCatalogueFetcher(
         credentials: XtreamCredentials(
-          host: source.url,
+          host: addressOf(source),
           username: username,
           password: password,
         ),
@@ -144,7 +157,7 @@ class SourceService {
     try {
       final urls = XtreamUrls(
         XtreamCredentials(
-          host: source.url,
+          host: addressOf(source),
           username: username,
           password: password,
         ),
@@ -186,7 +199,7 @@ class SourceService {
           source.id,
           XtreamCatalogueFetcher(
             credentials: XtreamCredentials(
-              host: source.url,
+              host: addressOf(source),
               username: username,
               password: password,
             ),
@@ -199,7 +212,7 @@ class SourceService {
       progress.value = 'Fetching the playlist…';
       final playlist = await _download(
         transport,
-        Uri.parse(source.url),
+        Uri.parse(addressOf(source)),
         'playlist',
       );
       try {
@@ -264,8 +277,17 @@ class SourceService {
   Future<String?> _addXtream(OnboardingDraft draft) async {
     final transport = HttpTransport();
     try {
+      // Signed in to through whichever door the tunnel makes reachable, and
+      // recorded under the main address regardless. Storing the door that
+      // happened to answer would make the identity depend on whether a
+      // tunnel was up while somebody was typing, which is the one thing this
+      // must not depend on.
       final credentials = XtreamCredentials(
-        host: draft.url,
+        host: addressFor(
+          url: draft.url,
+          vpnUrl: draft.vpnUrl,
+          tunnelUp: vpn?.state.value == VpnState.up,
+        ),
         username: draft.username,
         password: draft.password,
       );
@@ -303,10 +325,12 @@ class SourceService {
           // across the top of the home screen is both ugly and the one part
           // worth not reading aloud to a room.
           name: draft.name.isEmpty
-              ? Uri.parse(credentials.host).host
+              ? Uri.parse(draft.url).host
               : draft.name,
           kind: SourceKind.xtream,
-          url: credentials.host,
+          // The main address, never `credentials.host` — see above.
+          url: draft.url,
+          vpnUrl: Value(draft.vpnUrl.trim().isEmpty ? null : draft.vpnUrl.trim()),
           username: Value(credentials.username),
           credentialRef: Value(reference),
           epgUrl: Value(urls.fullEpg().toString()),

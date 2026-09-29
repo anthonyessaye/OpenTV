@@ -101,6 +101,7 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
   /// reads as something everybody has to fill in.
   bool _showingTunnel = false;
   final _tunnel = TextEditingController();
+  final _vpnUrl = TextEditingController();
 
   Future<void> _submit() async {
     if (!_ready || _busy) return;
@@ -130,6 +131,7 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
       OnboardingDraft(
         kind: _kind,
         url: _url.text.trim(),
+        vpnUrl: _vpnUrl.text.trim(),
         username: _username.text.trim(),
         password: _password.text,
         name: _name.text.trim(),
@@ -294,7 +296,9 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
                 'Some providers give out a different portal address that only '
                 'answers over their VPN. Paste the WireGuard .conf they gave '
                 'you and it will be carrying traffic before the portal address '
-                'is tried.',
+                'is tried. If they gave you a second address too, put it '
+                'below — it is used whenever the tunnel is up, and the '
+                'account stays one account either way.',
                 style: OpenTvTouchType.caption,
               ),
               // Not masked, unlike the television's. `TouchField` refuses to
@@ -306,6 +310,15 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
                 hint: 'Paste the .conf your provider gave you',
                 controller: _tunnel,
                 multiline: true,
+                enabled: !_busy,
+              ),
+              // Beside the tunnel because it is meaningless without one: this
+              // address is used only while the tunnel is carrying traffic.
+              TouchField(
+                label: 'Portal address over the VPN',
+                hint: 'Only if they gave you a second one',
+                controller: _vpnUrl,
+                keyboardType: TextInputType.url,
                 enabled: !_busy,
               ),
             ],

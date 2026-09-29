@@ -50,6 +50,18 @@ class Sources extends Table {
   /// sync will match, and is trusted for nothing else.
   TextColumn get reportedUrl => text().nullable()();
 
+  /// A second door to the same account, for providers that hand out one.
+  ///
+  /// Portals commonly give a separate host that only answers from inside
+  /// their VPN, and the account behind the two addresses is one account.
+  /// Used in place of [url] whenever the tunnel is carrying traffic, and for
+  /// nothing else — in particular **not** for identity. A provider that
+  /// changed key depending on which door the device came in through would
+  /// split one person's history in two every time the tunnel went up or
+  /// down, which is the failure this file has most of its paragraphs about.
+  /// [url] owns the identity; this is offered as another name for it.
+  TextColumn get vpnUrl => text().nullable()();
+
   /// Keystore handle for the secret. Never the secret itself.
   TextColumn get credentialRef => text().nullable()();
 

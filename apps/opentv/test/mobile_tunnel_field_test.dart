@@ -13,7 +13,12 @@ void main() {
     required Future<String?> Function(String)? onSaveTunnel,
     Future<String?> Function(OnboardingDraft)? onSubmit,
   }) async {
-    await tester.binding.setSurfaceSize(const Size(400, 900));
+    // Tall on purpose. The form is a lazy list, so a phone-height surface
+    // simply does not build the fields past the fold and a presence assertion
+    // fails for a reason that has nothing to do with what it is testing.
+    // Whether this fits a real phone is not a question a widget test can
+    // answer anyway — Ahem measures about twice what Archivo draws.
+    await tester.binding.setSurfaceSize(const Size(400, 2000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(

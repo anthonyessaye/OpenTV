@@ -18,10 +18,16 @@ import 'host.dart';
 ///   the address is assembled at the moment of playback from the row's id and
 ///   the password fetched from the keystore, and never written down.
 class StreamResolver {
-  StreamResolver({required this.db, this.host = const Host()});
+  StreamResolver({required this.db, this.host = const Host(), this.tunnelUp});
 
   final OpenTvDatabase db;
   final Host host;
+
+  /// Whether the tunnel is carrying traffic, asked at the moment a stream is
+  /// resolved rather than captured once — it goes up and down under a viewer
+  /// while the app is running, and a stale answer sends the request through
+  /// the door that is currently shut.
+  final bool Function()? tunnelUp;
 
   /// Cached for the life of the app rather than re-read per item: zapping
   /// through channels would otherwise hit the keystore on every press, and
@@ -132,7 +138,14 @@ class StreamResolver {
     if (password == null) return null;
 
     return XtreamCredentials(
-      host: source.url,
+      // The door the tunnel makes reachable, not necessarily the one the
+      // provider is known by. A stream refused because it was asked for on
+      // the wrong address is the whole reason a second one exists.
+      host: addressFor(
+        url: source.url,
+        vpnUrl: source.vpnUrl,
+        tunnelUp: tunnelUp?.call() ?? false,
+      ),
       username: username,
       password: password,
     );

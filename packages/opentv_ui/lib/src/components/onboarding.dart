@@ -39,6 +39,7 @@ class OnboardingDraft {
     this.username = '',
     this.password = '',
     this.name = '',
+    this.vpnUrl = '',
   });
 
   final OnboardingSourceKind kind;
@@ -55,6 +56,12 @@ class OnboardingDraft {
   /// across the top of the home screen — which is both ugly and the one part
   /// of an address worth not reading aloud to a room.
   final String name;
+
+  /// A second address for the same account, where the provider hands one out.
+  ///
+  /// Used in place of [url] whenever the tunnel is carrying traffic. Empty
+  /// for almost everybody: most portals have one door.
+  final String vpnUrl;
 }
 
 /// One field the viewer fills in, in the order they are asked for it.

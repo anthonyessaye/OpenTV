@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 737 core, 141 ui, 269 app.
+Tests: 741 core, 141 ui, 274 app.
 
 ## Two interfaces, one app
 
@@ -686,6 +686,36 @@ WireGuard file is the largest field on the screen. It is not masked, unlike
 the television's: `TouchField` refuses to obscure a multiline field, Flutter
 cannot, and a phone is held at arm's length rather than watched across a room,
 which is the reason the television masks its copy.
+
+**Schema 12 gives a provider two addresses, and the whole risk is that it
+becomes two providers.** A portal that hands out a VPN-only host is still one
+account, so the second address is a *door* and never an identity: `url` owns
+the key this device writes, and `vpnUrl` is offered to `providerKeyCandidates`
+as another name to accept. Get that backwards and a household acquires a
+second history the day it turns a tunnel on — one set of positions recorded
+through the tunnel, another without, each syncing contentedly with itself.
+
+**The split is a grep, and it is worth keeping that way.** Every use of an
+address is either a request or an identity. `SourceService.addressOf` and
+`StreamResolver` are requests and follow the tunnel; the four in
+`BackupService` are identity and never move. Onboarding is the one place both
+meet: it *signs in* through whichever door the tunnel makes reachable and
+*records* the main address regardless, because storing the door that happened
+to answer would make identity depend on whether a tunnel was up while somebody
+was typing.
+
+**`addressFor` is deliberately not a fallback.** Tunnel up and a second
+address given means that address, full stop. Trying the other one when it
+fails would attempt every refused stream twice, from an address the provider
+has already said no to, and on a television that is a doubled wait before any
+message appears.
+
+**It is edited in the tunnel panel rather than beside the provider**, because
+it is meaningless without a tunnel and that is the screen somebody setting up
+VPN access is already on. The panel names which provider it belongs to. The
+television's onboarding does not offer it: that wizard shows one required
+field at a time, and an optional fifth step makes everybody press through a
+field almost nobody needs.
 
 **None of this exists on Apple.** `VpnService.isSupported` is Android only, so
 the field is absent there rather than present and useless — a provider that

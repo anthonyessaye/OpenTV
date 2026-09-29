@@ -176,6 +176,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   WireGuardConfig? _tunnel;
   String _tunnelDraft = '';
   String? _tunnelProblem;
+
+  /// The active provider's second address, as typed.
+  ///
+  /// Lives in the tunnel panel rather than beside the provider because it is
+  /// meaningless without a tunnel — it is only ever used while one is
+  /// carrying traffic — and this is the screen somebody setting up VPN access
+  /// is already looking at. It belongs to a provider, so the panel names
+  /// which one.
+  String _vpnUrlDraft = '';
+  String? _vpnUrlSaved;
   bool _connecting = false;
 
   @override
@@ -211,11 +221,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final counts = await widget.db.countsOf(widget.active.id);
 
     final tunnel = await widget.vpn.stored();
+    final vpnUrl = widget.active.vpnUrl ?? '';
     await widget.vpn.resync();
 
     if (!mounted) return;
     setState(() {
       _tunnel = tunnel;
+      _vpnUrlDraft = vpnUrl;
+      _vpnUrlSaved = vpnUrl;
       _counts = counts;
       _hasPin = pin != null && pin.isNotEmpty;
       _tmdbKey = tmdb ?? '';
@@ -1805,6 +1818,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
 
+          // The provider's other door. Offered whether or not a tunnel is
+          // saved yet, because the two are usually typed in one sitting.
+          const SizedBox(height: OpenTvSpace.lg),
+          Text(
+            'A second address for ${widget.active.name}',
+            style: OpenTvType.title,
+          ),
+          const SizedBox(height: OpenTvSpace.xs),
+          const Text(
+            'Some providers answer only on a different host once you are '
+            'inside their VPN. Put that address here and it is used whenever '
+            'the tunnel is carrying traffic, and the ordinary one whenever it '
+            'is not. It stays the same account either way — your history does '
+            'not split in two.',
+            style: OpenTvType.bodyMuted,
+          ),
+          const SizedBox(height: OpenTvSpace.sm),
+          SizedBox(
+            width: 900,
+            child: TextEntryField(
+              label: 'Portal address over the VPN',
+              value: _vpnUrlDraft,
+              hint: 'Leave empty if they only gave you one address',
+              active: true,
+              onChanged: (text) => setState(() => _vpnUrlDraft = text),
+              onDone: _saveVpnUrl,
+            ),
+          ),
+          const SizedBox(height: OpenTvSpace.sm),
+          PlayerButton(
+            label: _vpnUrlDraft.trim() == (_vpnUrlSaved ?? '').trim()
+                ? 'SAVED'
+                : 'SAVE ADDRESS',
+            emphasis: _vpnUrlDraft.trim() != (_vpnUrlSaved ?? '').trim(),
+            onSelect: _vpnUrlDraft.trim() == (_vpnUrlSaved ?? '').trim()
+                ? null
+                : _saveVpnUrl,
+          ),
+
           if (widget.vpn.problem.value != null) ...[
             const SizedBox(height: OpenTvSpace.sm),
             Text(
@@ -1815,6 +1867,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  /// Keeps the active provider's second address.
+  ///
+  /// An empty field means "they only gave me one", not "keep what is stored"
+  /// — unlike a secret field this is a value the panel renders back, so
+  /// clearing it is a thing somebody can mean.
+  Future<void> _saveVpnUrl() async {
+    final typed = _vpnUrlDraft.trim();
+    await widget.db.setSourceVpnUrl(
+      widget.active.id,
+      typed.isEmpty ? null : typed,
+    );
+    if (!mounted) return;
+    setState(() => _vpnUrlSaved = typed);
   }
 
   /// Asks before forgetting a provider.

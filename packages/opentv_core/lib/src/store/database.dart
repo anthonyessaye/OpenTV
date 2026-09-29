@@ -49,7 +49,7 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   /// upgrade that rebuilds a search index over a real catalogue is long
   /// enough that the viewer deserves to be told which of the two is
   /// happening.
-  static const latestSchema = 11;
+  static const latestSchema = 12;
 
   @override
   int get schemaVersion => latestSchema;
@@ -193,6 +193,11 @@ class OpenTvDatabase extends _$OpenTvDatabase {
       // for everything already written, which reads as "no opinion" and loses
       // to anything that arrives with a date.
       if (from < 11) await _addColumn(m, preferences, preferences.changedAt);
+
+      // 12 gives a provider a second address. Some portals hand out a host
+      // that only answers from inside their VPN, and the account behind the
+      // two is one account — so this is a door, never an identity.
+      if (from < 12) await _addColumn(m, sources, sources.vpnUrl);
     },
     onCreate: (m) async {
       // Drift stamps `user_version` *after* this returns, and runs none of it
@@ -1190,6 +1195,10 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         url: source.url,
         username: source.username,
         reportedUrl: source.reportedUrl,
+        // The VPN door reads as the same provider. Accepted, never written
+        // under: history recorded through one address has to be found through
+        // the other, and `url` stays the one key this device writes.
+        alternateUrl: source.vpnUrl,
         aliases: aliasesFor[source.id] ?? const [],
       )) {
         byKey.putIfAbsent(key, () => source.id);
@@ -1264,6 +1273,22 @@ class OpenTvDatabase extends _$OpenTvDatabase {
         .go();
     await (delete(unlinkedProviders)..where((u) => u.providerKey.equals(key)))
         .go();
+  }
+
+  /// The provider's other door, or null to go back to having one.
+  ///
+  /// Only ever the address requests are made on. The key this device writes
+  /// its history under is built from the main address and is untouched by
+  /// this, so a provider does not become two the day a tunnel is set up.
+  Future<void> setSourceVpnUrl(int sourceId, String? url) {
+    final trimmed = url?.trim();
+    return (update(sources)..where((s) => s.id.equals(sourceId))).write(
+      SourcesCompanion(
+        vpnUrl: Value(
+          trimmed == null || trimmed.isEmpty ? null : trimmed,
+        ),
+      ),
+    );
   }
 
   /// What the portal said its own address was.
