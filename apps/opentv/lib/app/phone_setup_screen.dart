@@ -129,7 +129,7 @@ class _PhoneSetupScreenState extends State<PhoneSetupScreen> {
       SetupPhase.working,
       tunnel == null || !widget.vpn.isSupported
           ? 'Reading the catalogue…'
-          : 'Look at your television: it may ask to allow the tunnel.',
+          : 'Look at your television: it may ask to allow the VPN.',
     );
 
     final failure = await widget.service.add(

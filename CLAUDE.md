@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 741 core, 141 ui, 274 app.
+Tests: 741 core, 141 ui, 276 app.
 
 ## Two interfaces, one app
 
@@ -710,12 +710,24 @@ fails would attempt every refused stream twice, from an address the provider
 has already said no to, and on a television that is a doubled wait before any
 message appears.
 
-**It is edited in the tunnel panel rather than beside the provider**, because
+**It is edited on the VPN screen rather than beside the provider**, because
 it is meaningless without a tunnel and that is the screen somebody setting up
-VPN access is already on. The panel names which provider it belongs to. The
+VPN access is already on. The screen names which provider it belongs to. The
 television's onboarding does not offer it: that wizard shows one required
 field at a time, and an optional fifth step makes everybody press through a
 field almost nobody needs.
+
+**And it went onto the television only, one commit after the rule was written
+down again.** An existing install is exactly who needs this — somebody whose
+provider has always had two doors and who is not going to re-add the account
+to get a field — and on the phone there was nowhere to type it. Both screens
+have it now. Worth noticing that the failure was not a hard one: the feature
+worked, on one device, which is what makes this rule so easy to break.
+
+**The feature is called "VPN" on screen now, not "Private tunnel".** The old
+name described the mechanism to somebody who already knew what it was; VPN is
+what people call it. `tunnel` stays throughout the code, where it is the
+accurate word.
 
 **None of this exists on Apple.** `VpnService.isSupported` is Android only, so
 the field is absent there rather than present and useless — a provider that

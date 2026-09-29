@@ -297,7 +297,7 @@ class _MobileOnboardingState extends State<MobileOnboarding> {
                 'answers over their VPN. Paste the WireGuard .conf they gave '
                 'you and it will be carrying traffic before the portal address '
                 'is tried. If they gave you a second address too, put it '
-                'below — it is used whenever the tunnel is up, and the '
+                'below — it is used whenever the VPN is connected, and the '
                 'account stays one account either way.',
                 style: OpenTvTouchType.caption,
               ),

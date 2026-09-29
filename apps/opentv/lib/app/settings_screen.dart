@@ -322,7 +322,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _Panel.regions => 'Regions',
                       _Panel.metadata => 'Metadata',
                       _Panel.subtitles => 'Subtitles',
-                      _Panel.vpn => 'Private tunnel',
+                      _Panel.vpn => 'VPN',
                       _Panel.parental => 'Parental lock',
                       _Panel.handover => 'Another device',
                       // Two words, because the panel buttons are one line
@@ -1745,9 +1745,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: OpenTvSpace.sm),
 
           const Text(
-            'A WireGuard tunnel carries this app\'s traffic to your provider '
+            'A WireGuard VPN carries this app\'s traffic to your provider '
             'instead of over your own connection. It moves who can see that '
-            'traffic — from your network to whoever runs the tunnel. It does '
+            'traffic — from your network to whoever runs the VPN. It does '
             'not make it invisible, and it is only as trustworthy as they are.',
             style: OpenTvType.bodyMuted,
           ),
@@ -1829,7 +1829,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Text(
             'Some providers answer only on a different host once you are '
             'inside their VPN. Put that address here and it is used whenever '
-            'the tunnel is carrying traffic, and the ordinary one whenever it '
+            'the VPN is connected, and the ordinary one whenever it '
             'is not. It stays the same account either way — your history does '
             'not split in two.',
             style: OpenTvType.bodyMuted,

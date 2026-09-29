@@ -1027,7 +1027,13 @@ class _MobileHomeState extends State<MobileHome> {
               source: widget.source,
             ),
           ),
-          onOpenTunnel: () => _push(MobileTunnelScreen(vpn: widget.vpn)),
+          onOpenTunnel: () => _push(
+            MobileTunnelScreen(
+              vpn: widget.vpn,
+              db: widget.db,
+              source: widget.source,
+            ),
+          ),
           onScanHandover: widget.onScanHandover,
           onOpenBackup: () => _push(
             MobileBackupScreen(db: widget.db, sync: widget.sync),
@@ -2097,7 +2103,7 @@ class _SettingsTab extends StatelessWidget {
         ),
         const _Heading('Tunnel'),
         ChannelRow(
-          name: 'Private tunnel',
+          name: 'VPN',
           now: vpn.isSupported
               ? 'WireGuard, for this device’s traffic'
               : 'Not available on this platform',

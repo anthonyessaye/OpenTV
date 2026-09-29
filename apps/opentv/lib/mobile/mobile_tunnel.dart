@@ -1,7 +1,9 @@
 import 'package:flutter/widgets.dart';
+import 'package:opentv_core/opentv_core.dart';
 import 'package:opentv_ui/opentv_ui.dart';
 
 import '../app/vpn_service.dart';
+import 'touch_field.dart';
 
 /// The WireGuard tunnel, on a phone.
 ///
@@ -14,9 +16,25 @@ import '../app/vpn_service.dart';
 /// phone is unambiguously better than a remote — a `.conf` is several lines
 /// and a private key is 44 characters of base64.
 class MobileTunnelScreen extends StatefulWidget {
-  const MobileTunnelScreen({super.key, required this.vpn});
+  const MobileTunnelScreen({
+    super.key,
+    required this.vpn,
+    required this.db,
+    required this.source,
+  });
 
   final VpnService vpn;
+  final OpenTvDatabase db;
+
+  /// The provider whose second address this screen edits.
+  ///
+  /// Here rather than beside the provider because the address is meaningless
+  /// without a VPN, and because this is the screen somebody setting VPN
+  /// access up is already on — the same placement the television uses. The
+  /// television had it first and the phone did not, which is the rule this
+  /// codebase keeps breaking: every screen that exists on one has to exist on
+  /// the other.
+  final Source source;
 
   @override
   State<MobileTunnelScreen> createState() => _MobileTunnelScreenState();
@@ -25,7 +43,9 @@ class MobileTunnelScreen extends StatefulWidget {
 class _MobileTunnelScreenState extends State<MobileTunnelScreen> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
+  late final _portal = TextEditingController(text: widget.source.vpnUrl ?? '');
   bool _configured = false;
+  String? _portalNote;
   String? _note;
 
   @override
@@ -37,6 +57,7 @@ class _MobileTunnelScreenState extends State<MobileTunnelScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _portal.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -44,6 +65,27 @@ class _MobileTunnelScreenState extends State<MobileTunnelScreen> {
   Future<void> _read() async {
     final stored = await widget.vpn.stored();
     if (mounted) setState(() => _configured = stored != null);
+  }
+
+  /// Keeps the provider's second address.
+  ///
+  /// An empty field clears it rather than meaning "keep what is stored". The
+  /// rule about never saving a blank over a secret is about secrets; this is
+  /// a value the screen renders back, so clearing it is a thing somebody can
+  /// mean and has no other way to say.
+  Future<void> _savePortal() async {
+    final typed = _portal.text.trim();
+    await widget.db.setSourceVpnUrl(
+      widget.source.id,
+      typed.isEmpty ? null : typed,
+    );
+    if (!mounted) return;
+    setState(() {
+      _portalNote = typed.isEmpty
+          ? 'Cleared. The ordinary address is used whether or not the VPN is '
+              'connected.'
+          : 'Saved. Used whenever the VPN is connected.';
+    });
   }
 
   Future<void> _save() async {
@@ -77,7 +119,7 @@ class _MobileTunnelScreenState extends State<MobileTunnelScreen> {
   Widget build(BuildContext context) {
     if (!widget.vpn.isSupported) {
       return TouchScaffold(
-        title: 'Private tunnel',
+        title: 'VPN',
         onBack: () => Navigator.of(context).maybePop(),
         // Said in words somebody recognises.
         //
@@ -107,7 +149,7 @@ class _MobileTunnelScreenState extends State<MobileTunnelScreen> {
     }
 
     return TouchScaffold(
-      title: 'Private tunnel',
+      title: 'VPN',
       onBack: () => Navigator.of(context).maybePop(),
       body: ValueListenableBuilder<VpnState>(
         valueListenable: widget.vpn.state,
@@ -182,6 +224,37 @@ class _MobileTunnelScreenState extends State<MobileTunnelScreen> {
             ],
             const SizedBox(height: OpenTvTouchSpace.lg),
             _Button(label: 'Save', emphasis: true, onTap: _save),
+
+            // The provider's other door. Separate from the .conf above and
+            // saved separately, because they are two different things a
+            // provider hands out and somebody may already have one of them.
+            const SizedBox(height: OpenTvTouchSpace.xl),
+            Text(
+              'A SECOND ADDRESS FOR ${widget.source.name.toUpperCase()}',
+              style: OpenTvTouchType.label,
+            ),
+            const SizedBox(height: OpenTvTouchSpace.xs),
+            const Text(
+              'Some providers answer only on a different host once you are '
+              'inside their VPN. Put that address here and it is used '
+              'whenever the VPN is connected, and the ordinary one whenever '
+              'it is not. It stays the same account either way — your history '
+              'does not split in two.',
+              style: OpenTvTouchType.bodyMuted,
+            ),
+            const SizedBox(height: OpenTvTouchSpace.sm),
+            TouchField(
+              label: 'Portal address over the VPN',
+              hint: 'Leave empty if they only gave you one address',
+              controller: _portal,
+              keyboardType: TextInputType.url,
+            ),
+            if (_portalNote != null) ...[
+              const SizedBox(height: OpenTvTouchSpace.xs),
+              Text(_portalNote!, style: OpenTvTouchType.caption),
+            ],
+            const SizedBox(height: OpenTvTouchSpace.sm),
+            _Button(label: 'Save address', onTap: _savePortal),
             if (_configured) ...[
               const SizedBox(height: OpenTvTouchSpace.sm),
               _Button(

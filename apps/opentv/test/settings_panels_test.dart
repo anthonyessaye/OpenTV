@@ -53,7 +53,7 @@ void main() {
     'Regions',
     'Metadata',
     'Subtitles',
-    'Private tunnel',
+    'VPN',
     'Parental lock',
     'Another device',
     'About',
