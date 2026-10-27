@@ -804,6 +804,70 @@ class _BrowseScreenState extends State<BrowseScreen> {
     );
   }
 
+  /// What to do with a show offered as something to carry on with.
+  ///
+  /// Three answers and no default: resume, open the list, or be rid of it.
+  /// Null means the viewer backed out, which is not the same as any of them.
+  Future<String?> _continueChoice(SeriesEntry series, Episode next) async {
+    final watched = await widget.db.watchedEpisodeCount(
+      sourceId: widget.source.id,
+      seriesRemoteId: series.remoteId,
+    );
+    if (!mounted) return null;
+
+    return Navigator.of(context).push<String>(
+      PageRouteBuilder<String>(
+        opaque: false,
+        barrierColor: const Color(0x99000000),
+        pageBuilder: (context, _, _) => TrackSheet(
+          title: series.name,
+          note: 'Where you are in this show.',
+          options: [
+            SheetOption(
+              id: 'resume',
+              label: 'Carry on',
+              detail: episodeLabel(
+                title: next.title,
+                number: next.episodeNumber,
+                withNumber: true,
+              ),
+              selected: true,
+            ),
+            const SheetOption(
+              id: 'episodes',
+              label: 'All episodes',
+              detail: 'Pick one yourself',
+            ),
+            SheetOption(
+              id: 'forget',
+              label: 'Remove from Continue watching',
+              // Named rather than implied. Removing a show forgets where it
+              // had got to in every episode, and a button that quietly threw
+              // away twelve of those is not one somebody agreed to.
+              detail: watched == 1
+                  ? 'Forgets where you were in 1 episode'
+                  : 'Forgets where you were in $watched episodes',
+            ),
+          ],
+          onSelect: (id) => Navigator.of(context).pop(id),
+          onDismiss: () => Navigator.of(context).pop(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _forgetSeries(SeriesEntry series) async {
+    await widget.db.forgetSeriesPlayback(
+      sourceId: widget.source.id,
+      seriesRemoteId: series.remoteId,
+    );
+    if (!mounted) return;
+    // The shelf is derived from those rows, so it has to be read again —
+    // a setState over a list held in this screen's own state would redraw
+    // exactly what was there before.
+    await _loadSection();
+  }
+
   Future<void> _openInner(_Item item) async {
     // A series is not a stream; it is a list of them. It gets its own screen,
     // which fetches the episodes the bulk sync deliberately skipped.
@@ -817,17 +881,35 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (item.resuming && item.series != null) {
       final next = _continueNext[item.series!.remoteId];
       if (next != null) {
-        final episodes = await widget.db.episodesOf(
-          widget.source.id,
-          item.series!.remoteId,
-        );
-        await _play(
-          Playable.episode(next),
-          queue: [for (final row in episodes) Playable.episode(row)],
-        );
-        return;
+        // Asked rather than assumed. Carrying on is the common answer and
+        // used to be the only one, which left no way to reach the episode
+        // list of a show you are part-way through except by finding it again
+        // somewhere else — and no way at all to take it off this shelf.
+        final choice = await _continueChoice(item.series!, next);
+        if (!mounted || choice == null) return;
+        switch (choice) {
+          case 'resume':
+            final episodes = await widget.db.episodesOf(
+              widget.source.id,
+              item.series!.remoteId,
+            );
+            await _play(
+              Playable.episode(next),
+              queue: [for (final row in episodes) Playable.episode(row)],
+            );
+            return;
+          case 'forget':
+            await _forgetSeries(item.series!);
+            return;
+          case 'episodes':
+            break;
+        }
       }
     }
+
+    // Choosing "All episodes" above falls through to here, which is now on
+    // the far side of an await.
+    if (!mounted) return;
 
     if (item.series case final SeriesEntry entry) {
       await Navigator.of(context).push(
@@ -968,16 +1050,25 @@ class _BrowseScreenState extends State<BrowseScreen> {
     final episodes = playable.itemKind == ItemKind.episode
         ? [
             for (var i = 0; i < _queue.length; i++)
-              episodeLabel(
-                title: _queue[i].title,
-                number: _queue[i].number,
-                index: i,
-                // Numbered here and nowhere else: this list runs across every
-                // season with nothing beside it to say what order it is in.
-                withNumber: true,
+              (
+                label: episodeLabel(
+                  title: _queue[i].title,
+                  number: _queue[i].number,
+                  index: i,
+                  // Numbered here and nowhere else: this list runs across
+                  // every season with nothing beside it to say what order it
+                  // is in.
+                  withNumber: true,
+                ),
+                // Null where the provider filed the show flat, which is
+                // common enough that the sheet has to draw a list with no
+                // headings at all rather than inventing a season.
+                season: _queue[i].season == null
+                    ? null
+                    : 'Season ${_queue[i].season}',
               ),
           ]
-        : const <String>[];
+        : const <EpisodeEntry>[];
     final at = _queue.indexWhere((item) => item.remoteId == playable.remoteId);
 
     final route = _fade(
@@ -1550,7 +1641,7 @@ class _PlayerRoute extends StatefulWidget {
 
   /// The series this episode belongs to, as labels, so the player can offer
   /// the list without knowing what an episode is.
-  final List<String> episodes;
+  final List<EpisodeEntry> episodes;
   final int? episodeIndex;
   final void Function(int index)? onChooseEpisode;
 

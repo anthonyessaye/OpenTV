@@ -14,6 +14,15 @@ import 'app/subtitle_service.dart';
 /// underneath, real transport state driving the overlay. The chrome itself
 /// knows nothing about libVLC — it is handed a [PlaybackStatus] — so the same
 /// screen would work over a different engine without changing a widget.
+/// One line in the player's episode list.
+///
+/// A record rather than the bare label this used to be, because a flat list
+/// of forty episodes tells a viewer nothing about where season two starts.
+/// The season is a label and not a number: a provider that files a show flat
+/// gives none, and the sheet has to draw that list with no headings rather
+/// than inventing them.
+typedef EpisodeEntry = ({String label, String? season});
+
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
@@ -71,7 +80,7 @@ class PlayerScreen extends StatefulWidget {
   /// Labels rather than rows: the player has never known what an episode is,
   /// and giving it one now would put the catalogue inside the one screen that
   /// has managed without it.
-  final List<String> episodes;
+  final List<EpisodeEntry> episodes;
 
   /// Which of them is playing, so the list can say so.
   final int? episodeIndex;
@@ -560,12 +569,13 @@ class _PlayerScreenState extends State<PlayerScreen>
       case _Sheet.episodes:
         return TrackSheet(
           title: 'Episodes',
-          note: 'Everything in this series. The one playing is marked.',
+          note: 'Everything in this series. It opens at the one playing.',
           options: [
             for (var i = 0; i < widget.episodes.length; i++)
               SheetOption(
                 id: '$i',
-                label: widget.episodes[i],
+                label: widget.episodes[i].label,
+                section: widget.episodes[i].season,
                 selected: i == widget.episodeIndex,
               ),
           ],

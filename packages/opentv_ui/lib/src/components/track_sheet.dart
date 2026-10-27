@@ -83,7 +83,7 @@ enum AspectMode {
 /// of choosing an audio track is to hear the difference — covering the
 /// picture to pick one would hide the thing being judged. The video keeps
 /// playing behind it for the same reason.
-class TrackSheet extends StatelessWidget {
+class TrackSheet extends StatefulWidget {
   const TrackSheet({
     super.key,
     required this.title,
@@ -114,7 +114,48 @@ class TrackSheet extends StatelessWidget {
   final double width;
 
   @override
+  State<TrackSheet> createState() => _TrackSheetState();
+}
+
+class _TrackSheetState extends State<TrackSheet> {
+  /// The chosen row, so it can be scrolled to.
+  ///
+  /// `shrinkWrap` lays every row out, which is what makes this reliable: a
+  /// lazily built list would have no element to scroll to until it had
+  /// already been scrolled to.
+  final _selected = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    // After the first layout, because the list has to exist before anything
+    // in it can be brought into view.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _selected.currentContext;
+      if (context == null || !mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        // A third down rather than at the top: an episode list opened at the
+        // one playing is most useful showing what comes after it and a little
+        // of what came before, not pinned to the ceiling.
+        alignment: 0.3,
+        duration: const Duration(milliseconds: 180),
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final title = widget.title;
+    final note = widget.note;
+    final options = widget.options;
+    final onSelect = widget.onSelect;
+    final width = widget.width;
+    // Focus starts on the current choice, not on whatever happens to be
+    // first. In a list of one season that is the same row; in a list of forty
+    // episodes it is the difference between carrying on and scrolling.
+    final current = options.indexWhere((option) => option.selected);
+    final focused = current < 0 ? 0 : current;
     // A scope of its own, taking focus as it appears.
     //
     // Without this the panel drew correctly and could not be used: it opens
@@ -147,7 +188,7 @@ class TrackSheet extends StatelessWidget {
               Text(title.toUpperCase(), style: OpenTvType.label),
               if (note != null) ...[
                 const SizedBox(height: OpenTvSpace.xs),
-                Text(note!, style: OpenTvType.bodyMuted),
+                Text(note, style: OpenTvType.bodyMuted),
               ],
               const SizedBox(height: OpenTvSpace.sm),
               Flexible(
@@ -156,13 +197,37 @@ class TrackSheet extends StatelessWidget {
                   itemCount: options.length,
                   itemBuilder: (context, index) {
                     final option = options[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: _Row(
-                        option: option,
-                        autofocus: index == 0,
-                        onSelect: () => onSelect(option.id),
-                      ),
+                    final section = option.section;
+                    final starts = section != null &&
+                        (index == 0 || options[index - 1].section != section);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (starts) ...[
+                          if (index != 0)
+                            const SizedBox(height: OpenTvSpace.sm),
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              left: OpenTvSpace.sm,
+                              bottom: OpenTvSpace.xs,
+                            ),
+                            child: Text(
+                              section.toUpperCase(),
+                              style: OpenTvType.label,
+                            ),
+                          ),
+                        ],
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: _Row(
+                            key: index == focused ? _selected : null,
+                            option: option,
+                            autofocus: index == focused,
+                            onSelect: () => onSelect(option.id),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -182,6 +247,7 @@ class SheetOption {
     required this.label,
     this.detail,
     this.selected = false,
+    this.section,
   });
 
   /// Null means "no explicit choice" — off, or automatic.
@@ -190,6 +256,13 @@ class SheetOption {
   final String label;
   final String? detail;
   final bool selected;
+
+  /// The group this belongs to — a season, where the list is episodes.
+  ///
+  /// A header is drawn above the first option carrying a new one, so a flat
+  /// list of forty episodes becomes the four seasons it actually is. Null
+  /// throughout means no headers at all, which is every other sheet.
+  final String? section;
 
   /// Describes a track in the terms a viewer picks by.
   factory SheetOption.track(MediaTrack track) {
@@ -219,6 +292,7 @@ class SheetOption {
 
 class _Row extends StatelessWidget {
   const _Row({
+    super.key,
     required this.option,
     required this.onSelect,
     this.autofocus = false,

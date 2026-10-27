@@ -167,6 +167,7 @@ class Playable {
     this.directUrl,
     this.isLive = false,
     this.number,
+    this.season,
     this.parentRemoteId,
   });
 
@@ -180,6 +181,7 @@ class Playable {
       containerExtension = null,
       streamOptions = row.streamOptions,
       directUrl = row.directUrl,
+      season = null,
       isLive = true,
       number = row.number;
 
@@ -191,6 +193,7 @@ class Playable {
       containerExtension = row.containerExtension,
       streamOptions = row.streamOptions,
       directUrl = row.directUrl,
+      season = null,
       isLive = false,
       number = null;
 
@@ -205,6 +208,7 @@ class Playable {
       streamOptions = null,
       directUrl = row.directUrl,
       isLive = false,
+      season = row.season,
       number = row.episodeNumber;
 
   final XtreamStreamKind kind;
@@ -227,6 +231,12 @@ class Playable {
   final bool isLive;
 
   final int? number;
+
+  /// Which season an episode belongs to, where the provider said.
+  ///
+  /// Null everywhere else, and null for a provider that files everything
+  /// flat — which is common enough that nothing may assume a season exists.
+  final int? season;
 
   /// The catalogue's own vocabulary for this, for favourites and history.
   ///

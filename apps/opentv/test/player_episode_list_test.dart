@@ -80,11 +80,33 @@ void main() {
       isNot(contains('for (final item in _queue) item.title')),
       reason: 'the list shows the provider file name again',
     );
-    expect(player, contains('final List<String> episodes'));
+    // A label and the season it sits under — still what to draw, not what
+    // the catalogue holds. The type changed when the list gained seasons;
+    // what it must not become is a list of rows.
+    expect(player, contains('final List<EpisodeEntry> episodes'));
     expect(
       player,
       isNot(contains('List<Episode> episodes')),
       reason: 'the player now depends on the catalogue types',
+    );
+  });
+
+  test('the episode list opens at the episode playing', () {
+    // It autofocused the first row, so a viewer forty episodes in opened the
+    // list at episode one every time.
+    final sheet = File(
+      '../../packages/opentv_ui/lib/src/components/track_sheet.dart',
+    ).readAsStringSync();
+    expect(
+      sheet,
+      isNot(contains('autofocus: index == 0')),
+      reason: 'the list opens at the top again',
+    );
+    expect(sheet, contains('autofocus: index == focused'));
+    expect(
+      sheet,
+      contains('Scrollable.ensureVisible'),
+      reason: 'the chosen row is focused but never brought into view',
     );
   });
 }

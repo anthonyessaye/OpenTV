@@ -1103,7 +1103,29 @@ class OpenTvDatabase extends _$OpenTvDatabase {
 
       switch (record.scope) {
         case BackupScope.playback:
-          if (record.value == null) continue;
+          // A removal is a record, not an absence — and this scope dropped
+          // one on the floor while the favourite case directly below deleted.
+          // A rule applied to one branch and not its neighbour: taking a show
+          // off Continue watching on the phone left it sitting on the
+          // television, and the next pass from there put it back.
+          if (record.value == null) {
+            final held = await playbackStateFor(
+              sourceId: sourceId,
+              kind: kind,
+              remoteId: remoteId,
+            );
+            // A removal stamped before this device carried on watching loses,
+            // for the same reason a stale position does.
+            if (held != null &&
+                record.stamp.wallClock.isAfter(held.lastWatchedUtc)) {
+              changed += await _deletePlayback(
+                sourceId: sourceId,
+                kind: kind,
+                remoteId: remoteId,
+              );
+            }
+            continue;
+          }
           // A record older than what is already here is dropped. The engine
           // picks a winner among what the other devices said; it cannot know
           // this device carried on watching in the meantime.
@@ -2075,6 +2097,105 @@ class OpenTvDatabase extends _$OpenTvDatabase {
   }
 
   /// Most recently watched items that are not finished, newest first.
+  /// Takes one item off Continue watching, and forgets where it had got to.
+  ///
+  /// There is no separate "dismissed" state to set: the shelf is derived from
+  /// these rows, so the only way off it is to remove what puts it there. That
+  /// is also what a viewer means — they are not asking to hide a position,
+  /// they are asking to be rid of it.
+  Future<int> forgetPlayback({
+    required int sourceId,
+    required ItemKind kind,
+    required String remoteId,
+    DateTime? at,
+  }) async {
+    final removed = await _deletePlayback(
+      sourceId: sourceId,
+      kind: kind,
+      remoteId: remoteId,
+    );
+    // Queued whether or not a row was here, for the reason `removeFavourite`
+    // gives: a device can be asked to forget something another device has
+    // already told it about, and the removal still has to reach the rest.
+    await _queue(
+      scope: BackupScope.playback,
+      sourceId: sourceId,
+      localKey: '${kind.name}/$remoteId',
+      at: at ?? DateTime.now().toUtc(),
+      payload: null,
+    );
+    return removed;
+  }
+
+  /// Takes a whole show off Continue watching.
+  ///
+  /// A series sits on that shelf because of its episodes' rows, so this is
+  /// every one of them. One queued removal each rather than a single record
+  /// saying "the show": the other devices know about episodes, and a scope
+  /// that meant a series on the way out but an episode on the way in would be
+  /// two different things sharing a name.
+  ///
+  /// Returns how many rows went, which is what the screen tells the viewer
+  /// before asking — forgetting twelve episodes is not what somebody expects
+  /// from a button called Remove.
+  Future<int> forgetSeriesPlayback({
+    required int sourceId,
+    required String seriesRemoteId,
+    DateTime? at,
+  }) async {
+    final rows = await (select(playbackStates)
+          ..where((p) =>
+              p.sourceId.equals(sourceId) &
+              p.itemKind.equalsValue(ItemKind.episode) &
+              p.parentRemoteId.equals(seriesRemoteId)))
+        .get();
+
+    var removed = 0;
+    for (final row in rows) {
+      removed += await forgetPlayback(
+        sourceId: sourceId,
+        kind: ItemKind.episode,
+        remoteId: row.itemRemoteId,
+        at: at,
+      );
+    }
+    // The show itself may carry a row too, from a build that recorded one.
+    removed += await forgetPlayback(
+      sourceId: sourceId,
+      kind: ItemKind.series,
+      remoteId: seriesRemoteId,
+      at: at,
+    );
+    return removed;
+  }
+
+  /// How many episode rows a show would lose. Asked before the viewer is.
+  Future<int> watchedEpisodeCount({
+    required int sourceId,
+    required String seriesRemoteId,
+  }) async {
+    final rows = await (select(playbackStates)
+          ..where((p) =>
+              p.sourceId.equals(sourceId) &
+              p.itemKind.equalsValue(ItemKind.episode) &
+              p.parentRemoteId.equals(seriesRemoteId)))
+        .get();
+    return rows.length;
+  }
+
+  Future<int> _deletePlayback({
+    required int sourceId,
+    required ItemKind kind,
+    required String remoteId,
+  }) =>
+      (delete(playbackStates)..where(
+            (p) =>
+                p.sourceId.equals(sourceId) &
+                p.itemKind.equalsValue(kind) &
+                p.itemRemoteId.equals(remoteId),
+          ))
+          .go();
+
   Future<List<PlaybackState>> continueWatching({
     int? sourceId,
     int limit = 20,
