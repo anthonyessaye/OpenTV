@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only the one directory downloaded builds land in. A provider that shared
+    the whole of files/ would hand out the catalogue as well.
+-->
+<paths>
+    <files-path name="updates" path="updates/" />
+</paths>

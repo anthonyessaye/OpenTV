@@ -34,6 +34,7 @@ export 'src/store/tables.dart';
 export 'src/sync/m3u_fetcher.dart';
 export 'src/sync/sync_engine.dart';
 export 'src/sync/transport.dart';
+export 'src/update/app_release.dart';
 export 'src/sync/xtream_fetcher.dart';
 export 'src/setup/setup_server.dart';
 export 'src/setup/setup_submission.dart';

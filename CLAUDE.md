@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 741 core, 141 ui, 276 app.
+Tests: 756 core, 141 ui, 287 app.
 
 ## Two interfaces, one app
 
@@ -733,6 +733,47 @@ accurate word.
 the field is absent there rather than present and useless — a provider that
 requires a VPN needs a system-level WireGuard profile on those devices, which
 is outside this app.
+
+## Updating a copy no store installed
+
+**A sideloaded build on a television has no way to learn a fix exists.** There
+is no browser to go and find an APK with and nothing to say one was published,
+which is the whole reason this is here.
+
+**It is off for a copy Google Play installed, and that is a policy and not a
+preference.** An app distributed through Play may not install packages from
+anywhere else — Device and Network Abuse — and a Play copy has a working
+update path already. `UpdateService.isOffered` asks the platform who installed
+this copy and answers false for `com.android.vending`; About then says nothing
+about updates at all rather than offering a button that refuses. Only Play is
+excluded *by name*: an unknown installer is a sideload, which is what it is.
+
+**`REQUEST_INSTALL_PACKAGES` is declared in the manifest**, which Play reviews
+and may ask about. The honest answer is the paragraph above — it is asked for
+at runtime and the feature refuses to act on a store copy.
+
+**It is not a silent self-update, and cannot be.** The app downloads the build
+and hands it to the system installer, which asks the viewer to confirm.
+Installing without that needs device-owner privileges an ordinary app does not
+have, so a prompt is the ceiling.
+
+**Version comparison is in core because that is the part that goes wrong.**
+`1.2.10` is newer than `1.2.9` and sorts *before* it as text, which is the bug
+every hand-written version check has — `ReleaseFeed.isNewer` compares
+component by component as numbers, and a component that is not a number
+answers false rather than guessing. A test holds that pair.
+
+**A check never throws.** It runs unawaited on the launch path, and an update
+check that can stop the app opening is worse than no update check — the same
+rule a sync pass and a recovery record follow. A release with no `.apk` asset
+is a tag rather than an update, and an `.aab` beside it is not the app.
+
+**The FileProvider covers `files/updates` and nothing else.** One pointed at
+the whole of `files/` would hand out the catalogue along with the build.
+
+**Verified against the live API on the emulator**, which is the only thing
+that shows the parsing is right: About reports *"This is the newest build."*
+against the real releases page at the version this file ships.
 
 ## The handover
 

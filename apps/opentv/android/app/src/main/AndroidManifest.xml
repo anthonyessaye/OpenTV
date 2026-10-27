@@ -19,6 +19,17 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        Updating a copy that did not come from a store.
+
+        Declared because a sideloaded build has no other way to be updated —
+        a television has no browser to fetch an APK with. It is asked for at
+        runtime and the app refuses to offer an update at all when Play
+        installed this copy, which is that policy's requirement rather than a
+        preference.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- IPTV portals overwhelmingly have no usable TLS — the one probed for
          this project rejects a modern handshake outright — so every stream
          URL is plain http. Android has blocked cleartext by default since
@@ -83,6 +94,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!--
+            Hands the downloaded build to the installer, which is a different
+            process and cannot read this app's own storage without one.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

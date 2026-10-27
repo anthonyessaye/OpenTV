@@ -28,6 +28,7 @@ import 'setup_screen.dart';
 import 'source_service.dart';
 import 'subtitle_service.dart';
 import 'stream_resolver.dart';
+import 'update_service.dart';
 import 'vpn_service.dart';
 
 /// The application, in one of two shapes.
@@ -183,6 +184,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   /// The tunnel, held here because it is app-wide and follows the app's own
   /// lifecycle rather than any one screen's.
   final _vpn = VpnService(host: _host);
+  final _updates = UpdateService(host: _host);
 
   /// Whether the catalogue on disk was written by an older build.
   ///
@@ -255,6 +257,12 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     // has to switch on by hand every time is one they will forget to switch
     // on, and the point of it is that it is carrying the traffic.
     _vpn.connectIfConfigured();
+    // Not awaited and deliberately quiet. It answers null for a store copy,
+    // for the Apple platforms, and for no network — none of which is a
+    // failure, and none of which is worth a word on a screen somebody turned
+    // on to watch television. `check` never throws, so an unawaited call here
+    // cannot become an unhandled error nobody sees.
+    _updates.check();
     _checkLink();
     // And anything that arrives afterwards.
     _host.onLink(_takeLink);
@@ -810,6 +818,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     }
 
     return BrowseScreen(
+      updates: _updates,
       onStartHandover: () => setState(() => _offering = true),
       db: db,
       vpn: _vpn,

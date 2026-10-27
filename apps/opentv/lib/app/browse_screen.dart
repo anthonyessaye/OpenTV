@@ -13,6 +13,7 @@ import 'search_screen.dart';
 import 'series_screen.dart';
 import 'source_service.dart';
 import 'subtitle_service.dart';
+import 'update_service.dart';
 import 'vpn_service.dart';
 import 'settings_screen.dart';
 import 'stream_resolver.dart';
@@ -43,6 +44,7 @@ class BrowseScreen extends StatefulWidget {
     this.onStartHandover,
     required this.service,
     required this.vpn,
+    this.updates,
     this.sync,
   });
 
@@ -66,6 +68,10 @@ class BrowseScreen extends StatefulWidget {
   /// One tunnel, owned by the app. Two services would each hold their own
   /// idea of whether it is up, and one of them would be wrong.
   final VpnService vpn;
+
+  /// Passed to settings, which is where a newer build is offered. Null where
+  /// this copy has no business updating itself.
+  final UpdateService? updates;
 
   /// Carries watch state to the viewer's other devices, so the settings panel
   /// can run one on demand and say when the last one was.
@@ -1270,6 +1276,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
         );
       case TvSection.settings:
         return SettingsScreen(
+          updates: widget.updates,
           db: widget.db,
           service: widget.service,
           vpn: widget.vpn,

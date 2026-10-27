@@ -7,6 +7,8 @@ import 'backup_sync.dart';
 import 'host.dart';
 import 'source_service.dart';
 import 'subtitle_service.dart';
+import 'app_version.dart';
+import 'update_service.dart';
 import 'vpn_service.dart';
 
 /// Where a provider is chosen, and where the television is locked.
@@ -26,6 +28,7 @@ class SettingsScreen extends StatefulWidget {
     this.onStartHandover,
     required this.service,
     required this.vpn,
+    this.updates,
     this.sync,
     this.host = const Host(),
   });
@@ -48,6 +51,12 @@ class SettingsScreen extends StatefulWidget {
   /// The app's one tunnel. Not built here: a panel with its own instance
   /// would report a state nothing else agreed with.
   final VpnService vpn;
+
+  /// Looking for a newer build. Null on a copy that has no business doing so
+  /// — a store installed it, or the platform does not allow it — in which
+  /// case About says nothing about updates at all rather than offering a
+  /// button that refuses.
+  final UpdateService? updates;
 
   /// The app's own sync, so a viewer can run one and see what happened rather
   /// than being told it happens sometimes.
@@ -192,6 +201,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _load();
+    _askIfUpdatable();
   }
 
   Future<void> _load() async {
@@ -1884,6 +1894,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _vpnUrlSaved = typed);
   }
 
+  /// Whether this copy can be updated in place.
+  ///
+  /// Answered once when the panel is built rather than awaited in the middle
+  /// of it: the question reaches the platform, and a build method cannot
+  /// wait. False until it answers, which is the right way round — a button
+  /// that appears a moment late is better than one that appears and then
+  /// turns out to be refused.
+  bool _updatable = false;
+
+  Future<void> _askIfUpdatable() async {
+    final service = widget.updates;
+    if (service == null) return;
+    final offered = await service.isOffered();
+    if (mounted && offered != _updatable) {
+      setState(() => _updatable = offered);
+    }
+  }
+
   /// Asks before forgetting a provider.
   ///
   /// Everything cascades — catalogue, favourites, history, and the password
@@ -1981,6 +2009,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('OpenTV', style: OpenTvType.section),
+        const SizedBox(height: OpenTvSpace.xs),
+        Text('Version $appVersion', style: OpenTvType.data),
+        if (_updatable) ...[
+          const SizedBox(height: OpenTvSpace.md),
+          _UpdatePanel(service: widget.updates!),
+        ],
         const SizedBox(height: OpenTvSpace.sm),
         const ContentDisclaimer(width: 1100),
         const SizedBox(height: OpenTvSpace.lg),
@@ -2230,6 +2264,114 @@ class _Fact extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// What About says about a newer build.
+///
+/// Only ever shown on a copy no store installed — see [UpdateService], where
+/// that rule lives. The state is the service's, not this widget's, so leaving
+/// settings and coming back does not forget a download in progress.
+class _UpdatePanel extends StatefulWidget {
+  const _UpdatePanel({required this.service});
+
+  final UpdateService service;
+
+  @override
+  State<_UpdatePanel> createState() => _UpdatePanelState();
+}
+
+class _UpdatePanelState extends State<_UpdatePanel> {
+  bool _checking = false;
+  String? _said;
+
+  Future<void> _check() async {
+    setState(() {
+      _checking = true;
+      _said = null;
+    });
+    final found = await widget.service.check();
+    if (!mounted) return;
+    setState(() {
+      _checking = false;
+      // Said out loud, because a button that does nothing visible when there
+      // is nothing to find reads as a button that does not work.
+      _said = found == null ? 'This is the newest build.' : null;
+    });
+  }
+
+  Future<void> _install(AppRelease release) async {
+    final failure = await widget.service.download(release);
+    if (mounted) setState(() => _said = failure);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AppRelease?>(
+      valueListenable: widget.service.available,
+      builder: (context, release, _) => ValueListenableBuilder<double?>(
+        valueListenable: widget.service.progress,
+        builder: (context, progress, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (release != null) ...[
+              Text('Version ${release.version} is available',
+                  style: OpenTvType.body),
+              if (release.notes case final notes?
+                  when notes.isNotEmpty) ...[
+                const SizedBox(height: OpenTvSpace.xs),
+                SizedBox(
+                  width: 900,
+                  child: Text(
+                    notes,
+                    maxLines: 6,
+                    overflow: TextOverflow.ellipsis,
+                    style: OpenTvType.bodyMuted,
+                  ),
+                ),
+              ],
+            ],
+            if (progress != null) ...[
+              const SizedBox(height: OpenTvSpace.xs),
+              Text(
+                'Downloading — ${(progress * 100).round()}%',
+                style: OpenTvType.data,
+              ),
+            ],
+            if (_said case final said?) ...[
+              const SizedBox(height: OpenTvSpace.xs),
+              Text(said, style: OpenTvType.bodyMuted),
+            ],
+            const SizedBox(height: OpenTvSpace.sm),
+            Row(
+              children: [
+                if (release != null)
+                  PlayerButton(
+                    label: 'INSTALL ${release.version}',
+                    emphasis: true,
+                    onSelect: progress != null ? null : () => _install(release),
+                  ),
+                if (release != null) const SizedBox(width: OpenTvSpace.sm),
+                PlayerButton(
+                  label: _checking ? 'CHECKING…' : 'CHECK FOR UPDATES',
+                  onSelect: _checking || progress != null ? null : _check,
+                ),
+              ],
+            ),
+            const SizedBox(height: OpenTvSpace.xs),
+            const SizedBox(
+              width: 900,
+              child: Text(
+                'Builds come from this project\'s own releases page. A copy '
+                'installed from a store updates through that store instead.',
+                style: OpenTvType.bodyMuted,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

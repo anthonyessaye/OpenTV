@@ -8,6 +8,7 @@ class MainActivity : FlutterActivity() {
 
     private var vpn: VpnChannel? = null
     private var host: HostChannel? = null
+    private var update: UpdateChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -36,6 +37,12 @@ class MainActivity : FlutterActivity() {
         // a dialog the OS shows on behalf of an activity, and its answer comes
         // back through onActivityResult below.
         vpn = VpnChannel(this).also {
+            it.attach(flutterEngine.dartExecutor.binaryMessenger)
+        }
+
+        // The activity again: installing a build is another app's screen,
+        // started on behalf of this one.
+        update = UpdateChannel(this).also {
             it.attach(flutterEngine.dartExecutor.binaryMessenger)
         }
     }
