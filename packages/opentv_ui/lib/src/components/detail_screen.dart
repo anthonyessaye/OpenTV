@@ -91,6 +91,7 @@ class DetailScreen extends StatelessWidget {
     required this.content,
     this.onPlay,
     this.onToggleFavourite,
+    this.onForget,
     this.onBack,
     this.trailing,
     this.sections = const [],
@@ -100,6 +101,13 @@ class DetailScreen extends StatelessWidget {
   final DetailContent content;
   final VoidCallback? onPlay;
   final VoidCallback? onToggleFavourite;
+
+  /// Takes this off Continue watching, where it is on it.
+  ///
+  /// Null when there is no position to forget, which is most of the time —
+  /// the button is absent rather than present and inert, because a disabled
+  /// control on a d-pad is a focus stop that does nothing.
+  final VoidCallback? onForget;
   final VoidCallback? onBack;
 
   /// A single block below the actions. For several, use [sections].
@@ -216,6 +224,7 @@ class DetailScreen extends StatelessWidget {
               content: content,
               onPlay: onPlay,
               onToggleFavourite: onToggleFavourite,
+              onForget: onForget,
               onBack: onBack,
             ),
           ],
@@ -376,12 +385,14 @@ class _Actions extends StatelessWidget {
     required this.content,
     this.onPlay,
     this.onToggleFavourite,
+    this.onForget,
     this.onBack,
   });
 
   final DetailContent content;
   final VoidCallback? onPlay;
   final VoidCallback? onToggleFavourite;
+  final VoidCallback? onForget;
   final VoidCallback? onBack;
 
   @override
@@ -425,6 +436,13 @@ class _Actions extends StatelessWidget {
           label: content.isFavourite ? 'UNFAVOURITE' : 'FAVOURITE',
           onSelect: onToggleFavourite,
         ),
+        // Only where there is something to forget, which is why this reads
+        // off the callback rather than off `hasResume`: the screen that knows
+        // whether a row exists is the one that offered the handler.
+        if (onForget != null) ...[
+          const SizedBox(width: OpenTvSpace.sm),
+          PlayerButton(label: 'FORGET PROGRESS', onSelect: onForget),
+        ],
         const SizedBox(width: OpenTvSpace.sm),
         PlayerButton(label: 'BACK', onSelect: onBack),
       ],

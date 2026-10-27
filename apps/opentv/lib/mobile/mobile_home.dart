@@ -587,6 +587,67 @@ class _MobileHomeState extends State<MobileHome> {
   /// then by number, so the last episode of one season is followed by the
   /// first of the next, which is what somebody watching a series means by
   /// "next".
+  /// What to do with a show offered as something to carry on with.
+  Future<void> _continueChoice(SeriesEntry show, Episode next) async {
+    final watched = await widget.db.watchedEpisodeCount(
+      sourceId: widget.source.id,
+      seriesRemoteId: show.remoteId,
+    );
+    if (!mounted) return;
+
+    final choice = await showTouchChoice(
+      context,
+      title: TitleCleaner.clean(show.name).title,
+      message: 'Where you are in this show.',
+      options: [
+        (
+          id: 'resume',
+          label: 'Carry on',
+          detail: episodeLabel(
+            title: next.title,
+            number: next.episodeNumber,
+            withNumber: true,
+          ),
+          danger: false,
+        ),
+        (
+          id: 'episodes',
+          label: 'All episodes',
+          detail: 'Pick one yourself',
+          danger: false,
+        ),
+        (
+          id: 'forget',
+          label: 'Remove from Continue watching',
+          // Named rather than implied, for the reason the television names
+          // it: removing a show forgets where you were in every episode of
+          // it, and that is not what a button called Remove sounds like.
+          detail: watched == 1
+              ? 'Forgets where you were in 1 episode'
+              : 'Forgets where you were in $watched episodes',
+          danger: true,
+        ),
+      ],
+    );
+    if (!mounted || choice == null) return;
+
+    switch (choice) {
+      case 'resume':
+        await _playEpisode(next);
+      case 'episodes':
+        await _openSeries(show);
+      case 'forget':
+        await widget.db.forgetSeriesPlayback(
+          sourceId: widget.source.id,
+          seriesRemoteId: show.remoteId,
+        );
+        // The shelf is derived from those rows and this screen holds its
+        // lists in its own state, so without a reload the show stays exactly
+        // where it was and the button looks broken.
+        if (mounted) setState(() => _generation++);
+    }
+  }
+
   Future<void> _playEpisode(Episode episode) async {
     // Where the viewer left this episode.
     //
@@ -958,7 +1019,11 @@ class _MobileHomeState extends State<MobileHome> {
                     title: TitleCleaner.clean(show.name).title,
                     imageUrl: show.coverUrl,
                     progress: null,
-                    onTap: () => _playEpisode(row.next),
+                    // The same three answers the television offers. Carrying
+                    // on is the common one and used to be the only one, which
+                    // left no way to open the list of a show you are part-way
+                    // through and no way to be rid of it.
+                    onTap: () => _continueChoice(show, row.next),
                   ),
             ];
           },
@@ -2161,6 +2226,89 @@ class _SettingsTab extends StatelessWidget {
 ///
 /// Written here rather than reached for from Material, which the app does not
 /// use on either device.
+/// One of several, from the bottom of the screen.
+///
+/// Modelled on [showTouchConfirm] next to it rather than on the television's
+/// `TrackSheet`: the two devices ask the same question here and answer it with
+/// the shapes their own viewers expect, which is the rule the rest of this
+/// interface follows. Null means they backed out, which is not any of the
+/// answers.
+Future<String?> showTouchChoice(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required List<({String id, String label, String? detail, bool danger})>
+      options,
+}) {
+  return Navigator.of(context).push<String>(
+    PageRouteBuilder<String>(
+      opaque: false,
+      barrierColor: const Color(0xB3000000),
+      barrierDismissible: true,
+      transitionDuration: OpenTvMotion.fade,
+      pageBuilder: (context, animation, _) => FadeTransition(
+        opacity: animation,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: OpenTvTouchSpace.gutter,
+              right: OpenTvTouchSpace.gutter,
+              bottom: MediaQuery.of(context).padding.bottom +
+                  OpenTvTouchSpace.gutter,
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(OpenTvTouchSpace.xl),
+              decoration: BoxDecoration(
+                color: OpenTvColors.surface,
+                borderRadius: OpenTvRadius.panel,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(title, style: OpenTvTouchType.title),
+                  const SizedBox(height: OpenTvTouchSpace.xs),
+                  Text(message, style: OpenTvTouchType.bodyMuted),
+                  const SizedBox(height: OpenTvTouchSpace.lg),
+                  for (final option in options) ...[
+                    TouchTile(
+                      onTap: () => Navigator.of(context).pop(option.id),
+                      minHeight: 56,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: OpenTvTouchSpace.sm,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              option.label,
+                              style: OpenTvTouchType.section.copyWith(
+                                color: option.danger
+                                    ? OpenTvColors.alert
+                                    : OpenTvColors.ink,
+                              ),
+                            ),
+                            if (option.detail case final detail?)
+                              Text(detail, style: OpenTvTouchType.caption),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: OpenTvTouchSpace.xs),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 Future<bool> showTouchConfirm(
   BuildContext context, {
   required String title,

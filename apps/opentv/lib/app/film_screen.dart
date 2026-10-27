@@ -207,10 +207,28 @@ class _FilmScreenState extends State<FilmScreen> {
           resume ?? Duration.zero,
         ),
         onToggleFavourite: _toggleFavourite,
+        // Offered only where there is a position to be rid of, which is what
+        // puts a film on Continue watching in the first place.
+        onForget: resume == null ? null : _forget,
         onBack: () => Navigator.of(context).maybePop(),
         sections: _sections(details),
       ),
     );
+  }
+
+  /// Takes this film off Continue watching.
+  ///
+  /// The row goes rather than being marked finished: a viewer asking to be
+  /// rid of something is not telling the app they watched it to the end, and
+  /// a finished film still counts as watched everywhere that asks.
+  Future<void> _forget() async {
+    await widget.db.forgetPlayback(
+      sourceId: widget.source.id,
+      kind: ItemKind.movie,
+      remoteId: widget.movie.remoteId,
+    );
+    if (!mounted) return;
+    setState(() => _progress = null);
   }
 
   List<Widget> _sections(TmdbDetails? details) {
