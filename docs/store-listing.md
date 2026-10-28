@@ -83,6 +83,14 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.4 (500)
+
+```
+▶️ Choosing a show from Continue watching now asks whether to carry on, open the episode list, or take it off the shelf — and a film can be forgotten from its own page.
+📺 The player's episode list is divided into seasons and opens at the episode you are watching.
+🔄 Android installs from outside a store now check this project's releases page for newer builds, and can install one.
+```
+
 ## Release notes — 1.2.3 (500)
 
 ```
