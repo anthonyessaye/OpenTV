@@ -172,7 +172,7 @@ void main() {
 
       // A new launch, the same database.
       final next = service();
-      await next.check(force: true);
+      await next.check();
       expect(
         next.prompt.value,
         isNull,
@@ -192,19 +192,19 @@ void main() {
         transport: _Feed(release('v99.9.9')),
         db: db,
       );
-      await newer.check(force: true);
+      await newer.check();
       expect(newer.prompt.value, isNotNull);
     });
 
-    test('a second check inside the interval does not ask again', () async {
+    test('a waking device does not ask on every wake', () async {
       var asked = 0;
       final counting = UpdateService(
         transport: _Counting(release('v99.0.0'), () => asked++),
         db: db,
       );
-      await counting.check();
-      await counting.check();
-      expect(asked, 1, reason: 'a waking television asks on every wake');
+      await counting.check(throttle: true);
+      await counting.check(throttle: true);
+      expect(asked, 1, reason: 'a television asks on every wake');
     });
 
     test('and does once the interval has passed', () async {
@@ -214,20 +214,54 @@ void main() {
         db: db,
         interval: Duration.zero,
       );
-      await counting.check();
-      await counting.check();
+      await counting.check(throttle: true);
+      await counting.check(throttle: true);
       expect(asked, 2);
     });
 
-    test('asking by hand ignores the interval', () async {
+    test('a launch asks even just after one', () async {
+      // Installing a build runs a check, so the launch straight afterwards
+      // used to be inside the interval and never asked — the release
+      // published minutes later was invisible for six hours, on the one
+      // launch most likely to be looking for it. Reported exactly that way.
       var asked = 0;
       final counting = UpdateService(
         transport: _Counting(release('v99.0.0'), () => asked++),
         db: db,
       );
+      await counting.check(throttle: true);
       await counting.check();
-      await counting.check(force: true);
+      expect(asked, 2, reason: 'a launch is silenced by a recent wake');
+    });
+
+    test('asking by hand asks', () async {
+      var asked = 0;
+      final counting = UpdateService(
+        transport: _Counting(release('v99.0.0'), () => asked++),
+        db: db,
+      );
+      await counting.check(throttle: true);
+      await counting.check();
       expect(asked, 2, reason: 'the button in About does nothing for hours');
+    });
+
+    test('a failed check does not start the interval', () async {
+      // A device that launched with no network would otherwise stay silent
+      // for the whole interval after the network came back.
+      final offline = UpdateService(
+        transport: _Feed(Exception('offline')),
+        db: db,
+      );
+      await offline.check(throttle: true);
+
+      var asked = 0;
+      final online = UpdateService(
+        transport: _Counting(release('v99.0.0'), () => asked++),
+        db: db,
+      );
+      await online.check(throttle: true);
+      expect(asked, 1, reason: 'a failed check silenced the next one');
+      expect(online.prompt.value, isNotNull);
     });
   });
 

@@ -87,12 +87,15 @@ void main() {
     final resumed = app.substring(from, after < 0 ? app.length : after);
     expect(
       resumed,
-      contains('_updates.check()'),
-      reason: 'a television slept and woken for weeks never checks',
+      contains('_updates.check(throttle: true)'),
+      reason: 'a television slept and woken for weeks never checks, or asks '
+          'on every wake',
     );
-    // The throttle is what makes that safe to do.
+    // Waking is the only throttled caller. A launch and the button in About
+    // both ask: installing a build runs a check, so a throttled launch is
+    // silent on the one launch most likely to be looking for a release.
     final service = File('lib/app/update_service.dart').readAsStringSync();
-    expect(service, contains('if (!force && !await _due())'));
+    expect(service, contains('if (throttle && !await _due())'));
   });
 
   test('the launch check has a database to read by the time it runs', () {

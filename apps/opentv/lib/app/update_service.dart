@@ -114,16 +114,29 @@ class UpdateService {
   /// Never throws, for the reason a sync pass never does: this runs on the
   /// launch path and an update check that can stop the app opening is worse
   /// than no update check.
-  /// [force] asks regardless of when the last one was, which is what the
-  /// button in About means and what a launch or a wake does not.
-  Future<AppRelease?> check({bool force = false}) async {
+  /// [throttle] is for the one caller that happens often.
+  ///
+  /// Waking is the only one: a television is slept and woken many times a
+  /// day, and asking on each would be a request every time somebody picked up
+  /// the remote. A launch is a deliberate act and a rare one, and the button
+  /// in About is somebody saying *now* — both ask regardless.
+  ///
+  /// It was the other way round, and that is what a viewer saw: installing a
+  /// build runs a check, so the launch straight afterwards was inside the
+  /// interval and never asked. The release published minutes later was
+  /// invisible for six hours, on the one launch most likely to be looking
+  /// for it.
+  Future<AppRelease?> check({bool throttle = false}) async {
     try {
       if (!await isOffered()) return null;
-      if (!force && !await _due()) return available.value;
+      if (throttle && !await _due()) return available.value;
 
       final release = await _feed.fetch();
-      await _note(_lastCheckedKey, DateTime.now().toUtc().toIso8601String());
+      // Only a check that reached the feed counts. Recording one that failed
+      // would let a device that launched with no network stay silent for the
+      // whole interval after the network came back.
       if (release == null) return null;
+      await _note(_lastCheckedKey, DateTime.now().toUtc().toIso8601String());
       if (!ReleaseFeed.isNewer(release.version, appVersion)) return null;
       // A release with no installable file is a tag, not an update.
       if (release.apk == null) return null;

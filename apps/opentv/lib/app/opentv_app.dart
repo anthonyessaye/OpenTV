@@ -355,8 +355,8 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         _vpn.connectIfConfigured();
         // A television is slept and woken far more often than it is started
         // from cold, so a launch-only check is one a box in a living room
-        // might not make for weeks. Throttled inside the service.
-        _updates.check();
+        // might not make for weeks. This is the one caller that is throttled.
+        _updates.check(throttle: true);
         unawaited(_sync?.run());
       case AppLifecycleState.inactive:
         break;

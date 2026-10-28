@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 756 core, 141 ui, 301 app.
+Tests: 756 core, 141 ui, 303 app.
 
 ## Two interfaces, one app
 
@@ -801,6 +801,20 @@ launch, which is how somebody learns to dismiss a message without reading it.
 A *later* version is still offered — declining 1.2.5 says nothing about 1.2.6.
 Deliberately not in the synced safelist: each device updates itself, so a
 decline on the phone has nothing to say to the television.
+
+**Waking is the only throttled caller, and it was the other way round.**
+Installing a build runs a check, so the launch straight afterwards was inside
+the interval and never asked — the release published minutes later was
+invisible for six hours, on the one launch most likely to be looking for it.
+Reported as "it does not know the update exists". A launch is a deliberate act
+and a rare one and asks every time; the button in About is somebody saying
+*now*; only a wake is held back, which is the one that happens dozens of times
+a day.
+
+**A check that did not reach the feed does not start the interval.** The
+timestamp was written before the result was tested, so a device that launched
+with no network went silent for the whole interval after the network came
+back — a throttle on something that never happened.
 
 **It checks on waking as well as on launch, and that needs the throttle.** A
 television is slept and woken far more often than it is started from cold, so
