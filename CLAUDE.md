@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 756 core, 141 ui, 299 app.
+Tests: 756 core, 141 ui, 301 app.
 
 ## Two interfaces, one app
 
@@ -819,6 +819,21 @@ about this is visible in a test or a screenshot**: both faults look like a
 feature working, and it took installing a build that claimed to be 1.2.4
 against a real 1.2.5 release to see the prompt come back after being
 dismissed.
+
+**A sheet pushed before the screen has finished taking focus is one that
+cannot be used.** `CategoryRail` and the shelves carry `autofocus: true` and
+mount when `_loadSection` finishes, which is asynchronous — so an update offer
+pushed from a post-frame in `initState` loses focus to the rail the moment the
+catalogue lands. It draws perfectly, nothing is wrong with it, and every press
+goes to the screen behind: reported as "the focus is below the menu".
+
+**It cannot be reproduced on the test catalogue, and that is the lesson.** One
+channel loads faster than an HTTP call, so the check finished last, the sheet
+was pushed last, and it won — the feature was verified four separate ways on a
+device and this never showed. A real catalogue inverts the two. The offer
+follows the load now, a frame behind it, and `TrackSheet` claims its scope
+back on its first frame as well, which covers the player's sheets opening over
+a screen that is still mounting.
 
 **The releases page had no releases on it.** Four tags were pushed and
 `/releases/latest` answered 404 — a tag is not a release — so the updater

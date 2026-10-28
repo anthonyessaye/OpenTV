@@ -205,7 +205,10 @@ class _BrowseScreenState extends State<BrowseScreen> {
   @override
   void initState() {
     super.initState();
-    _readRegions().then((_) => _loadSection());
+    // The offer waits for this. See [_updateFound].
+    _readRegions()
+        .then((_) => _loadSection())
+        .then((_) => _updateFound());
     _readTmdbKey();
     // Same reason as the phone: what arrives from another device lands in the
     // database, and these shelves were read at launch.
@@ -216,12 +219,29 @@ class _BrowseScreenState extends State<BrowseScreen> {
     // those the offer only ever appears on a check made after the home screen
     // was already up, which on a cold launch is none of them.
     widget.updates?.prompt.addListener(_updateFound);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateFound());
   }
 
+  /// Offers a newer build, once this screen has stopped taking focus.
+  ///
+  /// **Not from a post-frame in `initState`.** The rail and the shelves mount
+  /// when `_loadSection` finishes, which is asynchronous, and they carry
+  /// `autofocus: true` — so a sheet pushed before that lands is a sheet the
+  /// rail takes focus back from the moment the catalogue arrives. It draws
+  /// perfectly and cannot be used, with focus sitting on the screen behind
+  /// it. Reported exactly that way.
+  ///
+  /// It never showed here because the test catalogue is one channel and loads
+  /// faster than an HTTP call: the sheet happened to be pushed last and won.
+  /// A real catalogue inverts that.
+  ///
+  /// A frame after the load, so the rail has mounted and claimed focus before
+  /// the sheet asks for it.
   void _updateFound() {
     final release = widget.updates?.prompt.value;
-    if (release != null && mounted) _offerUpdate(release);
+    if (release == null || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _offerUpdate(release);
+    });
   }
 
   Future<void> _reloadAfterSync() async {

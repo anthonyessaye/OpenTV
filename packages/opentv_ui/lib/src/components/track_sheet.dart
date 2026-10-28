@@ -131,8 +131,16 @@ class _TrackSheetState extends State<TrackSheet> {
     // After the first layout, because the list has to exist before anything
     // in it can be brought into view.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Claim the scope back before anything else. A sheet opens over a
+      // screen whose own widgets may still be mounting, and those carry
+      // `autofocus` — so the row that autofocused here can lose focus to
+      // something behind the moment it appears, leaving a panel that draws
+      // correctly and cannot be used.
+      FocusScope.of(this.context).requestFocus();
+
       final context = _selected.currentContext;
-      if (context == null || !mounted) return;
+      if (context == null) return;
       Scrollable.ensureVisible(
         context,
         // A third down rather than at the top: an episode list opened at the

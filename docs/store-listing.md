@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.7 (500)
+
+```
+🛠 Fixed the "a newer build is available" panel on TV: it appeared but could not be selected, because the remote was still controlling the screen behind it.
+```
+
 ## Release notes — 1.2.6 (500)
 
 ```

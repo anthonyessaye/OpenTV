@@ -125,6 +125,44 @@ void main() {
     );
   });
 
+  test('the offer waits for the screen to stop taking focus', () {
+    // The rail and the shelves carry `autofocus: true` and mount when
+    // `_loadSection` finishes, which is asynchronous. A sheet pushed from a
+    // post-frame in initState is therefore one the rail takes focus back
+    // from the moment the catalogue lands: it draws perfectly and cannot be
+    // used, with focus on the screen behind it. Reported exactly that way.
+    //
+    // It hides on a one-channel catalogue, which loads faster than an HTTP
+    // call — there the sheet is pushed last and wins. A real catalogue
+    // inverts it, which is why this is pinned rather than left to a test
+    // that passes for the wrong reason.
+    final tv = File('lib/app/browse_screen.dart').readAsStringSync();
+    final initFrom = tv.indexOf('  void initState() {');
+    final initTo = tv.indexOf('\n  }', initFrom);
+    final initState = tv.substring(initFrom, initTo);
+
+    expect(
+      initState,
+      isNot(contains('addPostFrameCallback((_) => _updateFound())')),
+      reason: 'the offer is pushed before the rail has taken focus',
+    );
+    expect(
+      initState,
+      contains('.then((_) => _updateFound())'),
+      reason: 'the offer never follows the load, so a cold launch misses it',
+    );
+  });
+
+  test('a sheet claims the focus scope back', () {
+    // Second line of defence, and it covers the player's sheets too: a panel
+    // opens over a screen whose widgets may still be mounting with autofocus
+    // of their own.
+    final sheet = File(
+      '../../packages/opentv_ui/lib/src/components/track_sheet.dart',
+    ).readAsStringSync();
+    expect(sheet, contains('FocusScope.of(this.context).requestFocus()'));
+  });
+
   test('a release without the app is not published as one', () {
     final script = File('../../tool/release.sh').readAsStringSync();
     // The asset is what the updater looks for. A release carrying only notes
