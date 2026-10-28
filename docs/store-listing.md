@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.8 (500)
+
+```
+🔁 No changes. This build exists so a device running 1.2.7 has something to find, confirming that updating works on real hardware.
+```
+
 ## Release notes — 1.2.7 (500)
 
 ```
