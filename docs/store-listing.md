@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.10 (500)
+
+```
+🔁 No changes. Published to check that a cold launch finds a release on its own — and that 1.2.10 is read as newer than 1.2.9, which it is not alphabetically.
+```
+
 ## Release notes — 1.2.9 (500)
 
 ```
