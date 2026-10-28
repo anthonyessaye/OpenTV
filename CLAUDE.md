@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 756 core, 141 ui, 287 app.
+Tests: 756 core, 141 ui, 290 app.
 
 ## Two interfaces, one app
 
@@ -775,6 +775,25 @@ the whole of `files/` would hand out the catalogue along with the build.
 that shows the parsing is right: About reports *"This is the newest build."*
 against the real releases page at the version this file ships.
 
+**Android is not on a store at all now**, which makes the updater the only
+path a build has to a device and makes two things load-bearing that were
+merely tidy before. `docs/android-distribution.md` has the detail; the two
+worth knowing here are that **a release with no `.apk` is a tag** — the app
+declines it and tells nobody, which is indistinguishable from there being no
+update — and that **the signing key is permanent**. Android refuses an update
+signed by a different key and there is no Play App Signing to re-sign through,
+so losing the keystore strands every installed copy: the only way forward is
+an uninstall, which takes the catalogue, the history and every keystore secret
+with it. `tool/release.sh` compares the signer against the one every release
+so far used and refuses a mismatch, which catches the accident and cannot
+recover from the loss.
+
+**The releases page had no releases on it.** Four tags were pushed and
+`/releases/latest` answered 404 — a tag is not a release — so the updater
+would have found nothing for ever, silently, which is exactly the failure it
+is built to avoid. `tool/release.sh` is the fix: notes, version, commit, tag,
+run it.
+
 ## The handover
 
 Two devices exchange a whole setup over the local network. `opentv_core`
@@ -1335,8 +1354,11 @@ no content itself. That is the voice.
 ## Where things stand
 
 `docs/tvos-status.md`, `docs/vpn.md`, `docs/phone-setup.md`,
-`docs/metadata-provider.md`, `docs/mobile-plan.md`, `docs/adding-a-language.md`
-and `docs/store-listing.md` are current. **`docs/feature-gap.md` is stale** and
+`docs/metadata-provider.md`, `docs/mobile-plan.md`, `docs/adding-a-language.md`,
+`docs/android-distribution.md` and `docs/store-listing.md` are current.
+`store-listing.md` keeps its name and its "Release notes" sections are now
+read by `tool/release.sh` as well — Android does not go to a store any more,
+and the notes are still the written ones. **`docs/feature-gap.md` is stale** and
 has been for two releases.
 
 Translation is groundwork only: `flutter_localizations`, an ARB template with
