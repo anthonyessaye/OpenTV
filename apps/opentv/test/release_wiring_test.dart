@@ -95,6 +95,36 @@ void main() {
     expect(service, contains('if (!force && !await _due())'));
   });
 
+  test('the launch check has a database to read by the time it runs', () {
+    // It used to be issued in initState while the database was still being
+    // opened, so it ran with nowhere to read from: the throttle never
+    // applied on launch, and a version somebody had declined was offered
+    // again every launch — the exact thing declining exists to stop. Both
+    // look like a working feature in a screenshot; the device found it.
+    final app = File('lib/app/opentv_app.dart').readAsStringSync();
+
+    // Not "the first check comes after the assignment" — the resume check is
+    // written above it and legitimately so. What matters is that initState
+    // starts none, and that the one on the launch path follows the handover.
+    final initFrom = app.indexOf('  void initState() {');
+    final initTo = app.indexOf('\n  }', initFrom);
+    expect(initFrom, isNot(-1));
+    expect(
+      app.substring(initFrom, initTo),
+      isNot(contains('_updates.check()')),
+      reason: 'the launch check runs before the database it reads from',
+    );
+
+    final assigned = app.indexOf('_updates.db = db;');
+    expect(assigned, isNot(-1), reason: 'the database is never handed over');
+    expect(
+      app.substring(assigned, assigned + 400),
+      contains('_updates.check()'),
+      reason: 'nothing checks once the database is there, so a launch never '
+          'looks at all',
+    );
+  });
+
   test('a release without the app is not published as one', () {
     final script = File('../../tool/release.sh').readAsStringSync();
     // The asset is what the updater looks for. A release carrying only notes

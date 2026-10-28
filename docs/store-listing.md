@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.6 (500)
+
+```
+🔄 Fixed the update check reading nothing on launch, so a version you had said "not now" to was offered again every time you opened the app.
+```
+
 ## Release notes — 1.2.5 (500)
 
 ```

@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 756 core, 141 ui, 298 app.
+Tests: 756 core, 141 ui, 299 app.
 
 ## Two interfaces, one app
 
@@ -808,6 +808,17 @@ launch-only meant a box in a living room might not check for weeks — and
 without a limit, waking-too would be a request every time somebody picked up
 the remote. Six hours, kept in a preference, and the button in About passes
 `force` because somebody who presses it means now.
+
+**And the launch check ran before the database it reads from, which cost two
+of the three.** `_updates.check()` was issued in `initState` while the
+catalogue was still being opened asynchronously, so it always ran with `db`
+null: the throttle never applied on launch, and a version somebody had
+declined was offered again on every launch — the exact thing declining was
+built to stop. It is issued where the database is handed over now. **Nothing
+about this is visible in a test or a screenshot**: both faults look like a
+feature working, and it took installing a build that claimed to be 1.2.4
+against a real 1.2.5 release to see the prompt come back after being
+dismissed.
 
 **The releases page had no releases on it.** Four tags were pushed and
 `/releases/latest` answered 404 — a tag is not a release — so the updater

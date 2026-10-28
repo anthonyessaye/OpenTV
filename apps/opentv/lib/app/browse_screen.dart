@@ -916,7 +916,10 @@ class _BrowseScreenState extends State<BrowseScreen> {
             const SheetOption(
               id: 'later',
               label: 'Not now',
-              detail: 'Settings › About has it when you want it',
+              // Short enough for one line: a sheet row ellipsises, and
+              // half a sentence telling somebody where to find it later
+              // is worse than none.
+              detail: 'In Settings › About later',
             ),
           ],
           onSelect: (id) => Navigator.of(context).pop(id),

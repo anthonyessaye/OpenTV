@@ -257,12 +257,14 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
     // has to switch on by hand every time is one they will forget to switch
     // on, and the point of it is that it is carrying the traffic.
     _vpn.connectIfConfigured();
-    // Not awaited and deliberately quiet. It answers null for a store copy,
-    // for the Apple platforms, and for no network — none of which is a
-    // failure, and none of which is worth a word on a screen somebody turned
-    // on to watch television. `check` never throws, so an unawaited call here
-    // cannot become an unhandled error nobody sees.
-    _updates.check();
+    // The update check is *not* issued here. It needs the database — that is
+    // where it remembers when it last asked and which version was waved away
+    // — and the database is opened asynchronously below, so a check started
+    // in `initState` always runs with nothing to read. It had both: the
+    // throttle never applied on launch, and a version somebody had declined
+    // was offered again on every launch, which is the exact thing the
+    // declining was built to stop. Found on a device, because both faults
+    // look like a working feature in a screenshot.
     _checkLink();
     // And anything that arrives afterwards.
     _host.onLink(_takeLink);
@@ -427,6 +429,9 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         // gets somewhere to remember when it last asked and what was waved
         // away. Until then it simply always asks.
         _updates.db = db;
+        // And only now, with somewhere to read the throttle and the declined
+        // version from. Still unawaited and still quiet: `check` never throws.
+        _updates.check();
         _resolver = StreamResolver(
           db: db,
           host: _host,

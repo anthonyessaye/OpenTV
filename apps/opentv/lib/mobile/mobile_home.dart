@@ -845,7 +845,7 @@ class _MobileHomeState extends State<MobileHome> {
         (
           id: 'later',
           label: 'Not now',
-          detail: 'Settings has it when you want it',
+          detail: 'In Settings later',
           danger: false,
         ),
       ],
