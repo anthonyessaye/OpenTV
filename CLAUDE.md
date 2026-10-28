@@ -841,13 +841,27 @@ pushed from a post-frame in `initState` loses focus to the rail the moment the
 catalogue lands. It draws perfectly, nothing is wrong with it, and every press
 goes to the screen behind: reported as "the focus is below the menu".
 
-**It cannot be reproduced on the test catalogue, and that is the lesson.** One
+**It does not reproduce by waiting for it, and that is the lesson.** One
 channel loads faster than an HTTP call, so the check finished last, the sheet
 was pushed last, and it won — the feature was verified four separate ways on a
-device and this never showed. A real catalogue inverts the two. The offer
-follows the load now, a frame behind it, and `TrackSheet` claims its scope
-back on its first frame as well, which covers the player's sheets opening over
-a screen that is still mounting.
+device and this never showed. A real catalogue inverts the two.
+
+**What did reproduce it was making the timing certain instead of hoping for
+it**: a diagnostic build whose `check` answers instantly with a fake release,
+so `prompt` is always set before the home screen mounts. Before the fix, the
+rail carries the focus ring and the sheet does not; after it, a press moves
+inside the sheet. Same build, same catalogue, one key — which is the only
+form of evidence worth having for a race. The offer follows the load now, a
+frame behind it, and `TrackSheet` claims its scope back on its first frame as
+well, which covers the player's sheets opening over a screen that is still
+mounting.
+
+**The whole of it is confirmed on hardware now**, which took four attempts
+and found two faults nothing else would have. A device on 1.2.9 was left
+alone, found 1.2.10 on a cold launch minutes after installing — so the
+throttle no longer silences a launch — read `1.2.10` as newer than `1.2.9`,
+which it is not alphabetically, showed a sheet that took the remote, and
+installed what it downloaded.
 
 **The releases page had no releases on it.** Four tags were pushed and
 `/releases/latest` answered 404 — a tag is not a release — so the updater
