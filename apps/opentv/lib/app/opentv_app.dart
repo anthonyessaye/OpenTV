@@ -351,6 +351,10 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
         unawaited(_rememberSetup());
       case AppLifecycleState.resumed:
         _vpn.connectIfConfigured();
+        // A television is slept and woken far more often than it is started
+        // from cold, so a launch-only check is one a box in a living room
+        // might not make for weeks. Throttled inside the service.
+        _updates.check();
         unawaited(_sync?.run());
       case AppLifecycleState.inactive:
         break;
@@ -419,6 +423,10 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       setState(() {
         _db = db;
         _service = SourceService(db: db, host: _host, vpn: _vpn);
+        // The service exists before the database does, so this is where it
+        // gets somewhere to remember when it last asked and what was waved
+        // away. Until then it simply always asks.
+        _updates.db = db;
         _resolver = StreamResolver(
           db: db,
           host: _host,
@@ -802,6 +810,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
 
     if (!widget.device.isTelevision) {
       return MobileHome(
+        updates: _updates,
         db: db,
         source: source,
         resolver: _resolver!,

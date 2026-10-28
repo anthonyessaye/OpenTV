@@ -2292,7 +2292,8 @@ class _UpdatePanelState extends State<_UpdatePanel> {
       _checking = true;
       _said = null;
     });
-    final found = await widget.service.check();
+    // Asked for by hand, so the throttle does not apply.
+    final found = await widget.service.check(force: true);
     if (!mounted) return;
     setState(() {
       _checking = false;

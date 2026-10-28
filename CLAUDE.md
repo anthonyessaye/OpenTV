@@ -20,7 +20,7 @@ and tablets, and iOS — from one Flutter codebase and three packages:
   Kotlin and Swift. `lib/mobile/` is the touch interface; everything else in
   `lib/app/` is the ten-foot one.
 
-Tests: 756 core, 141 ui, 290 app.
+Tests: 756 core, 141 ui, 298 app.
 
 ## Two interfaces, one app
 
@@ -787,6 +787,27 @@ an uninstall, which takes the catalogue, the history and every keystore secret
 with it. `tool/release.sh` compares the signer against the one every release
 so far used and refuses a mismatch, which catches the accident and cannot
 recover from the loss.
+
+**A check nobody is told about is half a feature.** The result was written to
+`available` and read in exactly one place — the About panel — so the app
+silently knew there was a newer build and the only person who found out was
+somebody who went to Settings and scrolled. A writer with one buried reader,
+which is the shape this file is mostly about. Both home screens offer it now,
+once, as a sheet: install, or not now.
+
+**"Not now" is remembered against that version**, in a preference and not in
+memory. An app that asked again on the next launch would be asking every
+launch, which is how somebody learns to dismiss a message without reading it.
+A *later* version is still offered — declining 1.2.5 says nothing about 1.2.6.
+Deliberately not in the synced safelist: each device updates itself, so a
+decline on the phone has nothing to say to the television.
+
+**It checks on waking as well as on launch, and that needs the throttle.** A
+television is slept and woken far more often than it is started from cold, so
+launch-only meant a box in a living room might not check for weeks — and
+without a limit, waking-too would be a request every time somebody picked up
+the remote. Six hours, kept in a preference, and the button in About passes
+`force` because somebody who presses it means now.
 
 **The releases page had no releases on it.** Four tags were pushed and
 `/releases/latest` answered 404 — a tag is not a release — so the updater

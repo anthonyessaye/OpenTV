@@ -83,6 +83,13 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.2.5 (500)
+
+```
+🔄 Android builds installed from outside a store now tell you when a newer one is out, instead of waiting to be asked. Say "not now" and that version is not mentioned again.
+🔄 They also look on waking, not only on a cold start — a television that is only ever slept might otherwise go weeks without checking.
+```
+
 ## Release notes — 1.2.4 (500)
 
 ```

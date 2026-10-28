@@ -4,7 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opentv/app/update_service.dart';
+import 'package:drift/native.dart';
 import 'package:opentv_core/opentv_core.dart';
+
+class _Counting extends _Feed {
+  _Counting(super.body, this.onAsk);
+  final void Function() onAsk;
+  @override
+  Future<Object?> getJson(Uri url, {Map<String, String>? headers}) {
+    onAsk();
+    return super.getJson(url, headers: headers);
+  }
+}
 
 class _Feed implements Transport {
   _Feed(this.body);
@@ -125,6 +136,99 @@ void main() {
     // It runs on the launch path. A convenience that can stop the app opening
     // is worse than not having it.
     expect(await service.check(), isNull);
+  });
+
+  group('asking, and not asking again', () {
+    late OpenTvDatabase db;
+
+    setUp(() {
+      installer = null;
+      db = OpenTvDatabase(NativeDatabase.memory());
+    });
+    tearDown(() => db.close());
+
+    UpdateService service({Duration? interval}) => UpdateService(
+          transport: _Feed(release('v99.0.0')),
+          db: db,
+          interval: interval ?? const Duration(hours: 6),
+        );
+
+    test('a found update is offered unprompted', () async {
+      final s = service();
+      await s.check();
+      expect(s.available.value, isNotNull);
+      expect(
+        s.prompt.value,
+        isNotNull,
+        reason: 'nothing would ever tell the viewer',
+      );
+    });
+
+    test('declining it is remembered across a restart', () async {
+      final first = service();
+      await first.check();
+      await first.decline(first.prompt.value!);
+      expect(first.prompt.value, isNull);
+
+      // A new launch, the same database.
+      final next = service();
+      await next.check(force: true);
+      expect(
+        next.prompt.value,
+        isNull,
+        reason: 'they are asked again every launch, which teaches them to '
+            'dismiss without reading',
+      );
+      // Still reachable for somebody who changes their mind.
+      expect(next.available.value, isNotNull);
+    });
+
+    test('a later version is offered even after declining this one', () async {
+      final declined = service();
+      await declined.check();
+      await declined.decline(declined.prompt.value!);
+
+      final newer = UpdateService(
+        transport: _Feed(release('v99.9.9')),
+        db: db,
+      );
+      await newer.check(force: true);
+      expect(newer.prompt.value, isNotNull);
+    });
+
+    test('a second check inside the interval does not ask again', () async {
+      var asked = 0;
+      final counting = UpdateService(
+        transport: _Counting(release('v99.0.0'), () => asked++),
+        db: db,
+      );
+      await counting.check();
+      await counting.check();
+      expect(asked, 1, reason: 'a waking television asks on every wake');
+    });
+
+    test('and does once the interval has passed', () async {
+      var asked = 0;
+      final counting = UpdateService(
+        transport: _Counting(release('v99.0.0'), () => asked++),
+        db: db,
+        interval: Duration.zero,
+      );
+      await counting.check();
+      await counting.check();
+      expect(asked, 2);
+    });
+
+    test('asking by hand ignores the interval', () async {
+      var asked = 0;
+      final counting = UpdateService(
+        transport: _Counting(release('v99.0.0'), () => asked++),
+        db: db,
+      );
+      await counting.check();
+      await counting.check(force: true);
+      expect(asked, 2, reason: 'the button in About does nothing for hours');
+    });
   });
 
   test('the manifest and the provider agree on one directory', () {

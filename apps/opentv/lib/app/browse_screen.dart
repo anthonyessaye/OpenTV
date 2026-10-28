@@ -210,6 +210,18 @@ class _BrowseScreenState extends State<BrowseScreen> {
     // Same reason as the phone: what arrives from another device lands in the
     // database, and these shelves were read at launch.
     widget.sync?.revision.addListener(_reloadAfterSync);
+
+    // The launch check may well have finished before this screen existed, so
+    // the current value is read as well as listened for. Without the first of
+    // those the offer only ever appears on a check made after the home screen
+    // was already up, which on a cold launch is none of them.
+    widget.updates?.prompt.addListener(_updateFound);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateFound());
+  }
+
+  void _updateFound() {
+    final release = widget.updates?.prompt.value;
+    if (release != null && mounted) _offerUpdate(release);
   }
 
   Future<void> _reloadAfterSync() async {
@@ -234,6 +246,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   @override
   void dispose() {
     widget.sync?.revision.removeListener(_reloadAfterSync);
+    widget.updates?.prompt.removeListener(_updateFound);
     _transport.close();
     super.dispose();
   }
@@ -872,6 +885,68 @@ class _BrowseScreenState extends State<BrowseScreen> {
     // a setState over a list held in this screen's own state would redraw
     // exactly what was there before.
     await _loadSection();
+  }
+
+  /// Says once, per version, that there is a newer build.
+  ///
+  /// A sheet rather than a line on the screen: a television has no corner a
+  /// viewer's eye goes to, and a notice nobody can act on is one nobody
+  /// reads. "Not now" is remembered against that version, so this is the
+  /// only time it is said — an app that asked again on every launch is how
+  /// somebody learns to dismiss a message without reading it.
+  Future<void> _offerUpdate(AppRelease release) async {
+    final service = widget.updates;
+    if (service == null || service.promptShown) return;
+    service.promptShown = true;
+
+    final choice = await Navigator.of(context).push<String>(
+      PageRouteBuilder<String>(
+        opaque: false,
+        barrierColor: const Color(0x99000000),
+        pageBuilder: (context, _, _) => TrackSheet(
+          title: 'OpenTV ${release.version}',
+          note: 'A newer build is on the releases page.',
+          options: [
+            const SheetOption(
+              id: 'install',
+              label: 'Install it',
+              detail: 'Downloads, then asks you to confirm',
+              selected: true,
+            ),
+            const SheetOption(
+              id: 'later',
+              label: 'Not now',
+              detail: 'Settings › About has it when you want it',
+            ),
+          ],
+          onSelect: (id) => Navigator.of(context).pop(id),
+          onDismiss: () => Navigator.of(context).pop('later'),
+        ),
+      ),
+    );
+    if (!mounted) return;
+
+    if (choice == 'install') {
+      final failure = await service.download(release);
+      if (!mounted || failure == null) return;
+      // Reported where it was offered. The alternative is a download that
+      // stops with nothing said, which reads as a button that does nothing.
+      await Navigator.of(context).push<void>(
+        PageRouteBuilder<void>(
+          opaque: false,
+          barrierColor: const Color(0x99000000),
+          pageBuilder: (context, _, _) => TrackSheet(
+            title: 'That did not install',
+            note: failure,
+            options: const [SheetOption(id: 'ok', label: 'OK', selected: true)],
+            onSelect: (_) => Navigator.of(context).pop(),
+            onDismiss: () => Navigator.of(context).pop(),
+          ),
+        ),
+      );
+    } else {
+      await service.decline(release);
+    }
   }
 
   Future<void> _openInner(_Item item) async {

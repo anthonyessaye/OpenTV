@@ -23,8 +23,12 @@ const _repository = 'OpenTV';
 /// a television has no browser to go and find an APK with, and nothing to
 /// tell it a fix has shipped.
 class UpdateService {
-  UpdateService({Transport? transport, this.host = const Host()})
-      : _feed = ReleaseFeed(
+  UpdateService({
+    Transport? transport,
+    this.host = const Host(),
+    this.db,
+    this.interval = const Duration(hours: 6),
+  }) : _feed = ReleaseFeed(
           owner: _owner,
           repository: _repository,
           transport: transport ?? HttpTransport(),
@@ -35,8 +39,50 @@ class UpdateService {
   final ReleaseFeed _feed;
   final Host host;
 
-  /// The newest build, once a check has found one worth offering.
+  /// Where the throttle and the declined version are kept.
+  ///
+  /// Preferences rather than the keystore — neither is a secret — and
+  /// deliberately **not** in the synced safelist. Each device updates itself,
+  /// so declining 1.2.5 on the phone has nothing to say to the television,
+  /// and a check made here is not a check made there.
+  ///
+  /// Assignable because the app has an update service before it has a
+  /// database — the launch check can run while the catalogue is still being
+  /// opened, and a check with nowhere to write its throttle simply always
+  /// asks, which is the safe way round.
+  OpenTvDatabase? db;
+
+  /// How long a check is good for.
+  ///
+  /// Asked on launch and on waking, which on a television that is only ever
+  /// slept and woken could otherwise be several times an hour. Six hours is
+  /// far more often than this project publishes and far less often than a box
+  /// gets turned on.
+  final Duration interval;
+
+  static const _lastCheckedKey = 'update.last-checked';
+  static const _declinedKey = 'update.declined';
+
+  /// Whether the offer has already been put in front of somebody this run.
+  ///
+  /// A home screen rebuilds for reasons that have nothing to do with this —
+  /// switching provider, returning from the player — and a prompt that
+  /// reappeared on each of them would be the worst thing in the app.
+  bool promptShown = false;
+
+  /// The newest build, once a check has found one. Read by About.
+  ///
+  /// Set even for a version somebody has declined: they said not now, which
+  /// is not the same as never, and the panel they would go to on changing
+  /// their mind has to have something to show.
   final available = ValueNotifier<AppRelease?>(null);
+
+  /// The newest build somebody has not already said no to.
+  ///
+  /// This is what a home screen offers unprompted. Null where there is no
+  /// update, and null once declined — which is the whole difference between
+  /// telling somebody once and nagging them.
+  final prompt = ValueNotifier<AppRelease?>(null);
 
   /// What went wrong, in a sentence, or null.
   final problem = ValueNotifier<String?>(null);
@@ -68,21 +114,68 @@ class UpdateService {
   /// Never throws, for the reason a sync pass never does: this runs on the
   /// launch path and an update check that can stop the app opening is worse
   /// than no update check.
-  Future<AppRelease?> check() async {
+  /// [force] asks regardless of when the last one was, which is what the
+  /// button in About means and what a launch or a wake does not.
+  Future<AppRelease?> check({bool force = false}) async {
     try {
       if (!await isOffered()) return null;
+      if (!force && !await _due()) return available.value;
 
       final release = await _feed.fetch();
+      await _note(_lastCheckedKey, DateTime.now().toUtc().toIso8601String());
       if (release == null) return null;
       if (!ReleaseFeed.isNewer(release.version, appVersion)) return null;
       // A release with no installable file is a tag, not an update.
       if (release.apk == null) return null;
 
       available.value = release;
+      // Offered unprompted only if this is not the one they waved away.
+      final declined = await _read(_declinedKey);
+      if (declined != release.version) prompt.value = release;
       return release;
     } on Object catch (error) {
       problem.value = '$error';
       return null;
+    }
+  }
+
+  /// Not now, and not again for this version.
+  ///
+  /// Remembered rather than held in memory: an app that asked again on the
+  /// next launch would be asking every launch, which is how somebody learns
+  /// to dismiss a message without reading it.
+  Future<void> decline(AppRelease release) async {
+    prompt.value = null;
+    promptShown = true;
+    await _note(_declinedKey, release.version);
+  }
+
+  /// Whether enough time has passed to ask again.
+  ///
+  /// A device with no database to remember in is simply always due, which is
+  /// the safe way round — asking too often costs one request.
+  Future<bool> _due() async {
+    final last = await _read(_lastCheckedKey);
+    if (last == null) return true;
+    final at = DateTime.tryParse(last);
+    if (at == null) return true;
+    return DateTime.now().toUtc().difference(at) >= interval;
+  }
+
+  Future<String?> _read(String key) async {
+    try {
+      return await db?.preference(key);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<void> _note(String key, String value) async {
+    try {
+      await db?.setPreference(key, value);
+    } on Object {
+      // A throttle that cannot be written is a throttle that does not apply.
+      // Not a reason to fail a check.
     }
   }
 

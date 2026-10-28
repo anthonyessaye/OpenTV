@@ -11,6 +11,7 @@ import '../app/host.dart';
 import '../app/source_service.dart';
 import '../app/subtitle_service.dart';
 import '../app/stream_resolver.dart';
+import '../app/update_service.dart';
 import '../app/vpn_service.dart';
 import 'channel_row.dart';
 import '../app/backup_sync.dart';
@@ -47,6 +48,7 @@ class MobileHome extends StatefulWidget {
     required this.service,
     required this.sources,
     required this.vpn,
+    this.updates,
     this.sync,
     required this.onSwitchSource,
     required this.onAddSource,
@@ -60,6 +62,9 @@ class MobileHome extends StatefulWidget {
   final StreamResolver resolver;
   final SourceService service;
   final List<Source> sources;
+  /// Looking for a newer build, where this copy may do so.
+  final UpdateService? updates;
+
   final VpnService vpn;
 
   /// Carries watch state to the viewer's other devices. The phone has always
@@ -804,7 +809,64 @@ class _MobileHomeState extends State<MobileHome> {
     // television sat there unseen until the next launch — the sync worked and
     // looked exactly as though it had not.
     widget.sync?.revision.addListener(_reloadAfterSync);
+    // The same for an update: the launch check often finishes before this
+    // screen exists, so the current value is read as well as listened for.
+    widget.updates?.prompt.addListener(_updateFound);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateFound());
     _loadRegions();
+  }
+
+  void _updateFound() {
+    final release = widget.updates?.prompt.value;
+    if (release != null && mounted) _offerUpdate(release);
+  }
+
+  /// Says once, per version, that there is a newer build.
+  ///
+  /// "Not now" is remembered against that version — an app that asked again
+  /// on every launch is how somebody learns to dismiss a message without
+  /// reading it.
+  Future<void> _offerUpdate(AppRelease release) async {
+    final service = widget.updates;
+    if (service == null || service.promptShown) return;
+    service.promptShown = true;
+
+    final choice = await showTouchChoice(
+      context,
+      title: 'OpenTV ${release.version}',
+      message: 'A newer build is on the releases page.',
+      options: const [
+        (
+          id: 'install',
+          label: 'Install it',
+          detail: 'Downloads, then asks you to confirm',
+          danger: false,
+        ),
+        (
+          id: 'later',
+          label: 'Not now',
+          detail: 'Settings has it when you want it',
+          danger: false,
+        ),
+      ],
+    );
+    if (!mounted) return;
+
+    if (choice == 'install') {
+      final failure = await service.download(release);
+      if (mounted && failure != null) {
+        await showTouchConfirm(
+          context,
+          title: 'That did not install',
+          message: failure,
+          confirmLabel: 'OK',
+        );
+      }
+    } else {
+      // Backing out of the sheet is "not now" as well. Somebody who dismissed
+      // it has answered, and asking again next launch ignores that.
+      await service.decline(release);
+    }
   }
 
   Future<void> _loadRegions() async {
@@ -821,6 +883,7 @@ class _MobileHomeState extends State<MobileHome> {
   @override
   void dispose() {
     widget.sync?.revision.removeListener(_reloadAfterSync);
+    widget.updates?.prompt.removeListener(_updateFound);
     _noticeTimer?.cancel();
     super.dispose();
   }
