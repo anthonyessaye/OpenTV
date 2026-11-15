@@ -496,6 +496,37 @@ black `View` above the surface, hidden on `onRenderedFirstFrame`, is what
 `PlayerView` itself does, and `player_contract_test` now fails if `lockCanvas`
 comes back.
 
+**One platform view puts the whole window into hybrid composition, and the
+renderer has to get that right.** The browse screen holds one — the Live
+hero's preview — and that alone is enough to make Flutter split its own
+drawing into overlay surfaces around the SurfaceView. On an Android TV box
+(`G10`, "Smart TV Pro", 32-bit armeabi-v7a, Android 12) Impeller sizes one of
+those overlays wrong: everything below roughly a quarter of the way down the
+screen is not painted at all, so the browse screen is a tab bar, one row of
+the category rail, and black, with a visible tear where the overlay ends.
+Android builds ask for Skia in the manifest. **Proven by elimination on the
+device rather than reasoned about** — three builds, one variable each: as
+shipped it is sliced; with the preview removed it renders perfectly and the
+feature is gone; with the preview back and Impeller off it renders perfectly
+and the feature is kept. A layout bug and a renderer bug look identical in a
+screenshot, and the only thing that separates them is changing one at a time.
+
+**`screencap` does not capture the video.** The player's surface is composited
+by the display hardware — `composition type=DEVICE` in `dumpsys
+SurfaceFlinger` — and `adb shell screencap` reads back the composited GPU
+framebuffer, which that plane is not in. So a black rectangle where the
+picture should be is the *normal* appearance of a working player in a
+screenshot. That cost a wrong diagnosis here: a black hero box was read as a
+decoder that could not manage 4K, on the strength of `r:0 … drop frame` in the
+log beside it. `r:0` is a frame released *without being rendered*, which is
+exactly what happens to frames decoded into a surface nothing is presenting —
+a symptom of the overlay fault above rather than a limit of the hardware. The
+decoder's own counters are what to read instead: `QIB` and `ROB` per second in
+logcat, which on the fixed build sat at thirty of each with nothing dropped,
+and a viewer confirmed the picture. **Neither the screenshot nor the log line
+meant what it appeared to; the device had to be asked a question only it could
+answer.**
+
 **A stream can open, report no error, and never show anything.** VLC does not
 call that a failure: it sits in playing or buffering with no frames, for ever,
 and the chrome spins. The player screen notices no picture after twelve

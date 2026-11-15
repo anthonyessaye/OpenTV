@@ -96,6 +96,34 @@
             android:value="2" />
 
         <!--
+            Skia rather than Impeller, which is Flutter's Android default now.
+
+            The browse screen holds one platform view — the Live hero's
+            preview — and a platform view puts Flutter into hybrid
+            composition, where it splits its own drawing into overlay
+            surfaces around the SurfaceView. On an Android TV box
+            (G10_4K_GB, 32-bit armeabi-v7a, Android 12) Impeller sizes one
+            of those overlays wrong: everything below roughly a quarter of
+            the way down the screen is simply not painted, so the browse
+            screen is a tab bar, one row of the category rail, and black,
+            with a visible tear where the overlay ends.
+
+            Proven on that device rather than reasoned about. Three builds,
+            one variable each: with the preview removed the screen renders
+            perfectly and the feature is gone; with the preview back and
+            Impeller off it renders perfectly and the feature is kept. The
+            fault is the renderer, not the preview and not the layout.
+
+            Android only — the Apple platforms do not read this. It is the
+            renderer Flutter shipped on Android until recently, so this is
+            a step back to the better-tested one rather than anything
+            exotic.
+        -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
+        <!--
             Hands the downloaded build to the installer, which is a different
             process and cannot read this app's own storage without one.
         -->
