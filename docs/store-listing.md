@@ -83,6 +83,12 @@ Set the app up once and give it to your other devices. The television shows a co
 Source and issues: github.com/anthonyessaye/OpenTV
 ```
 
+## Release notes — 1.3.0 (500)
+
+```
+📺 Fixed a television drawing only the top of the browse screen — the tab bar, one row of categories, and black below it. The Live preview sits on a surface of its own, and the renderer Flutter now ships on Android was sizing that surface wrongly on some boxes. Android builds use the older renderer, which gets it right, and the preview is kept.
+```
+
 ## Release notes — 1.2.10 (500)
 
 ```
